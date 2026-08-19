@@ -226,13 +226,10 @@ DELETE /api/v1/tasks/:id
 ไม่ต้องเขียน `@Column({ name: '...' })` ทีละฟิลด์ — ตั้ง naming strategy ครั้งเดียวทั้งโปรเจกต์
 
 ```ts
-// data-source.ts
-import { SnakeNamingStrategy } from 'typeorm-naming-strategies'
+// src/database/data-source.options.ts
+import { SnakeNamingStrategy } from './snake-naming.strategy'
 
-new DataSource({
-  namingStrategy: new SnakeNamingStrategy(),
-  // ...
-})
+buildDataSourceOptions(url) // → { namingStrategy: new SnakeNamingStrategy(), ... }
 ```
 
 ```ts
@@ -243,6 +240,10 @@ new DataSource({
 
 - ถ้าต้อง override ค่อยใช้ `@Column({ name: '...' })` เฉพาะฟิลด์นั้น
 - Raw query / migration ต้องเขียน `snake_case` เอง
+
+> เดิมตั้งใจใช้ `typeorm-naming-strategies` แต่ **เขียนเองใน repo แทน** — package นั้น peer range ยังค้างที่ `^0.2.0 || ^0.3.0` (โปรเจกต์ใช้ TypeORM 1.1) และ import `typeorm/util/StringUtils` ซึ่งเป็น internal path ไม่ใช่ public API · โค้ดที่เขียนเองใช้อัลกอริทึม `snakeCase` ตัวเดียวกันเป๊ะ มี test คุมไว้ที่ `snake-naming.strategy.spec.ts`
+>
+> จุดที่ต้องระวัง: `externalChannelIDs` → `external_channel_i_ds` (acronym + พหูพจน์) — เจอเคสแบบนี้ให้ระบุ `@Column({ name })` ตรง ๆ
 
 ### Permission Hierarchy
 

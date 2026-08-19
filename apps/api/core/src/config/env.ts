@@ -5,8 +5,8 @@ import { z } from 'zod'
  *
  * Add new variables here as they are introduced — a missing or malformed
  * value must fail the process on startup, never surface as `undefined`
- * halfway through a request. Phase 0 adds DATABASE_URL, the MinIO keys,
- * the JWT secrets and the Resend key to this schema.
+ * halfway through a request. Phase 0 still adds the MinIO keys, the JWT
+ * secrets and the Resend key to this schema.
  */
 export const envSchema = z.object({
   NODE_ENV: z
@@ -16,6 +16,14 @@ export const envSchema = z.object({
   LOG_LEVEL: z
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
     .default('info'),
+  // No default on purpose: a fallback like localhost would let a
+  // misconfigured deployment boot and quietly talk to the wrong database.
+  DATABASE_URL: z
+    .string()
+    .min(1)
+    .refine((value) => /^postgres(ql)?:\/\//.test(value), {
+      message: 'must be a postgres:// or postgresql:// connection string',
+    }),
 })
 
 export type Env = z.infer<typeof envSchema>

@@ -119,6 +119,15 @@ This is a Turborepo monorepo. Workspaces are declared as `apps/*/*` and `package
 
 **`apps/api/core`** — NestJS 11 API. Entry point is `src/main.ts`: bootstraps with `nestjs-pino` for logging (pretty-printed outside `NODE_ENV=production`, level via `LOG_LEVEL`) and Swagger docs mounted at `/docs`. Listens on `PORT` env var (default 3001). Every environment variable is declared and validated by a zod schema in `src/config/env.ts`, wired through `ConfigModule.forRoot({ validate })` — a missing or malformed value fails the process at boot rather than surfacing as `undefined` mid-request, so **add new variables there** rather than reading `process.env` directly. `src/health/` holds `@nestjs/terminus` health checks at `/health`, `/health/live`, and `/health/ready` — when adding a dependency (database, cache, upstream API), register its indicator in the **readiness** list in `health.controller.ts`, never in liveness, since a failing dependency should stop traffic rather than restart the container.
 
+`src/database/` holds the TypeORM wiring. `data-source.options.ts` builds the options and has no side effects; `data-source.ts` constructs the `DataSource` the CLI needs and reads `process.env` at import time, so **nothing in the running app may import it** — `database.module.ts` builds its options from `ConfigService` instead. `synchronize` is permanently `false` and every migration is handwritten, because `synchronize` cannot emit partitions, partial indexes, `COLLATE "C"` or extensions, all of which this schema depends on. Entities are registered explicitly in `entities.ts` rather than by glob, so the list behaves the same under `nest build` and under Vitest's SWC transform. Migrations run against the compiled output:
+
+```bash
+yarn workspace @api/core migration:create MyMigration   # empty timestamped file
+yarn workspace @api/core migration:run                  # nest build, then apply
+yarn workspace @api/core migration:revert
+yarn workspace @api/core migration:show
+```
+
 **`packages/ui`** (`@repo/ui`) — Shared React component library built on `@base-ui/react` primitives + `class-variance-authority` + Tailwind. Each component lives in its own directory under `src/components/<name>/index.tsx` and is exported individually via the package's `exports` map (`./components/*` → `./src/components/*/index.tsx`), not as a single barrel file — import components by their specific path, not from a package root. Also exports `./globals.css`, `./hooks/*`, and `./lib/*`.
 
 **`packages/shared`** (`@repo/shared`) — Framework-free code shared by the API and the web client: zod schemas, types, enums, constants. Unlike `@repo/ui`, it has a real build step (`tsc` → `dist/`), because NestJS compiles with `tsc` and cannot consume raw `.ts` from a workspace the way Next transpiles it. A `no-restricted-imports` rule in its `eslint.config.mjs` blocks `@nestjs/*`, `typeorm`, `react`, and `next` — it ships to both runtimes, so it must depend on neither.

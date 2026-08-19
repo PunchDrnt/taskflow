@@ -29,7 +29,7 @@
 | `chat`         | identities, channels _(Phase 2)_                                                         | `chat/`         |
 | `notify`       | outbox                                                                                   | `notify/`       |
 | `billing`      | plans, subscriptions, ai_wallet, ai_usage _(ตารางว่าง เผื่ออนาคต)_                          | —               |
-| `public`       | ว่าง / extension เท่านั้น                                                                    | —               |
+| `public`       | extension + `migrations` (สมุดบันทึกของ TypeORM CLI) เท่านั้น — ห้ามมีตารางของ module            | —               |
 
 **หลักการตั้งชื่อ**
 

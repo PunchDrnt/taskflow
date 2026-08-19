@@ -71,7 +71,24 @@ The API exposes [Terminus](https://docs.nestjs.com/recipes/terminus)-backed heal
 | `GET /health/live`  | Liveness: is the process running? Deliberately checks no dependencies, so a transient outage can't get the container restarted |
 | `GET /health/ready` | Readiness: can this instance serve traffic? Add database/cache indicators here as you add them                                 |
 
-Indicators live in [apps/api/core/src/health/health.controller.ts](apps/api/core/src/health/health.controller.ts) — currently heap and RSS memory thresholds.
+Indicators live in [apps/api/core/src/health/health.controller.ts](apps/api/core/src/health/health.controller.ts) — currently heap and RSS memory thresholds plus a database ping on `/health` and `/health/ready`.
+
+### Database
+
+TypeORM is wired up in [apps/api/core/src/database/](apps/api/core/src/database/). `data-source.options.ts` builds the connection options and has no side effects; `data-source.ts` constructs the `DataSource` instance the TypeORM CLI needs and reads `process.env` when imported, so nothing in the running application should import it — `database.module.ts` builds the same options from `ConfigService` instead.
+
+`synchronize` is permanently `false` and every migration is written by hand. `synchronize` cannot emit partitioned tables, partial indexes, `COLLATE "C"` or extensions, so it would quietly produce a schema that does not match the one that was designed.
+
+```bash
+yarn workspace @api/core migration:create MyMigration   # empty timestamped file
+yarn workspace @api/core migration:run                  # nest build, then apply
+yarn workspace @api/core migration:revert
+yarn workspace @api/core migration:show
+```
+
+Migrations run against the compiled output in `dist/`, which needs no TypeScript loader and is the same artefact that ships. TypeORM's own bookkeeping table is `public.migrations`.
+
+Entities are registered explicitly in `entities.ts` rather than discovered by glob — a `*.entity.js` glob resolves differently under `nest build` than under Vitest's SWC transform, and the difference shows up as an "entity metadata not found" error in one runner but not the other. Entity properties are camelCase and mapped to snake_case columns by `snake-naming.strategy.ts`, so `@Column({ name })` is only needed to override.
 
 ## Scripts
 

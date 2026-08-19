@@ -23,13 +23,20 @@
 
 ## 1. Database — ต่อ DB ให้ติดก่อน
 
-- [ ] ติดตั้ง TypeORM + `pg` + `typeorm-naming-strategies`
-- [ ] `data-source.ts` — `SnakeNamingStrategy` (ไม่เขียน `@Column({ name })` ทีละฟิลด์)
-- [ ] 🔒 **`synchronize: false` ถาวร** — `synchronize` สร้าง partition / partial index / `COLLATE "C"` / extension ให้ไม่ได้ ทุก migration เขียนมือ
-- [ ] เพิ่ม `DATABASE_URL` เข้า zod schema ใน `apps/api/core/src/config/env.ts`
-- [ ] Health check `/health/ready` เพิ่ม DB indicator (**readiness เท่านั้น ห้ามใส่ liveness**)
+- [x] ติดตั้ง TypeORM 1.1 + `pg` + `@nestjs/typeorm` — **ไม่ใช้ `typeorm-naming-strategies`** (peer range ค้างที่ `^0.3.0` และ deep-import `typeorm/util/StringUtils` ซึ่งเป็น internal) เขียนเองที่ `src/database/snake-naming.strategy.ts` อัลกอริทึมเดียวกันเป๊ะ
+- [x] `data-source.options.ts` — `SnakeNamingStrategy` (ไม่เขียน `@Column({ name })` ทีละฟิลด์)
+  - [x] แยก `data-source.ts` (instance สำหรับ CLI) ออกจาก `data-source.options.ts` (ฟังก์ชันเปล่า) — ไฟล์เดียวกันทำให้ Nest import แล้วอ่าน `process.env` ตั้งแต่ตอน import ก่อน `ConfigModule` โหลด `.env` ทัน
+- [x] 🔒 **`synchronize: false` ถาวร** — `synchronize` สร้าง partition / partial index / `COLLATE "C"` / extension ให้ไม่ได้ ทุก migration เขียนมือ
+- [x] เพิ่ม `DATABASE_URL` เข้า zod schema ใน `apps/api/core/src/config/env.ts` (ไม่มี default — ตั้งผิดแล้วไม่ boot)
+  - [x] `ConfigModule` ชี้ `envFilePath` มาที่ `.env` ราก repo — เดิม resolve จาก cwd จึงหาไม่เจอตอน `yarn dev`
+- [x] Health check `/health/ready` เพิ่ม DB indicator (**readiness เท่านั้น ห้ามใส่ liveness**)
+  - [x] ยืนยันแล้วด้วยการ stop postgres: `/health/live` → 200 · `/health/ready` → 503 `database: down`
 
 ## 2. Migration ชุดแรก — ลำดับสำคัญ
+
+> CLI ต่อติดแล้ว — `yarn workspace @api/core migration:create|run|revert|show`
+> รันกับ `dist/` ที่ `nest build` ออกมา ไม่ต้องมี TS loader และเป็น artefact ตัวเดียวกับที่ deploy
+> ตาราง `migrations` ของ TypeORM อยู่ schema `public` (ที่เดียวที่ public มีตาราง)
 
 - [ ] `001` extension: `citext`, `pgcrypto` — ต้องมาก่อนตารางที่ใช้
 - [ ] `002` สร้าง schema ทั้ง 11 ตัว: `identity` `organization` `project` `task` `audit` `discussion` `field` `view` `notify` `billing` (+ `public` ว่างไว้)

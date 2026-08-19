@@ -4,6 +4,7 @@ import {
   HealthCheck,
   HealthCheckService,
   MemoryHealthIndicator,
+  TypeOrmHealthIndicator,
 } from '@nestjs/terminus'
 
 const HEAP_LIMIT_BYTES = 512 * 1024 * 1024
@@ -15,6 +16,7 @@ export class HealthController {
   constructor(
     private readonly health: HealthCheckService,
     private readonly memory: MemoryHealthIndicator,
+    private readonly db: TypeOrmHealthIndicator,
   ) {}
 
   @Get()
@@ -24,6 +26,7 @@ export class HealthController {
     return this.health.check([
       () => this.memory.checkHeap('memory_heap', HEAP_LIMIT_BYTES),
       () => this.memory.checkRSS('memory_rss', RSS_LIMIT_BYTES),
+      () => this.db.pingCheck('database'),
     ])
   }
 
@@ -44,6 +47,10 @@ export class HealthController {
   ready() {
     return this.health.check([
       () => this.memory.checkHeap('memory_heap', HEAP_LIMIT_BYTES),
+      // A database this instance cannot reach means it cannot serve traffic.
+      // It belongs here and never in `live()` — a transient blip should pull
+      // the instance out of the load balancer, not restart the container.
+      () => this.db.pingCheck('database'),
     ])
   }
 }
