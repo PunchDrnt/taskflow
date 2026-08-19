@@ -5,6 +5,7 @@
     "types": ["node"],
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
+    "useDefineForClassFields": false,
     "noUncheckedIndexedAccess": false,
     "sourceMap": true
   }
