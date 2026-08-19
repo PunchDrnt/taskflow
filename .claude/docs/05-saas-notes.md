@@ -1,0 +1,283 @@
+# SaaS Notes
+
+บันทึกความคิดเผื่ออนาคต — Phase 7-8, pricing, billing, AI ที่ใช้ LLM
+
+> [← Overview](./00-overview.md)
+>
+> ❓ **ยังไม่ตัดสินทั้งไฟล์** — ไม่มีอะไรในนี้ผูกมัด Phase 0-6
+
+> **นี่ไม่ใช่แผนที่ต้องทำ**
+>
+> เอกสารนี้เขียนไว้เพื่อตอบสองคำถาม:
+>
+> 1. ถ้าวันหนึ่งจะขายเป็น SaaS — มันทำได้ไหม และจะออกไปทางไหน
+> 2. ถ้าจะไปทางนั้น — ใน Phase 1-6 ต้องเตรียมอะไรไว้บ้าง เพื่อไม่ต้องรื้อทั้งระบบ
+>
+> **คำตอบคือ: เตรียมไว้หมดแล้ว** (ดู [What Phase 0-6 Must Prepare](#what-phase-0-6-must-prepare) ด้านล่าง)
+>
+> ทำก็ต่อเมื่อ Phase 1-6 มีคนในบริษัทใช้จริงต่อเนื่อง และมีคนนอกถามหา
+> เอกสารหลัก: [`00-overview.md`](./00-overview.md)
+
+## Contents
+
+1. [What Phase 0-6 Must Prepare](#what-phase-0-6-must-prepare) ← อ่านแค่หัวข้อนี้ก็พอถ้ายังอยู่ Phase 0-6
+2. [Phase Plan (If We Actually Do It)](#phase-plan-if-we-actually-do-it)
+3. [Phase 7 — SaaS + AI `v3.0.0`](#phase-7--saas--ai-v300)
+4. [Phase 8 — Top-up token `v3.1.0`](#phase-8--top-up-token-v310)
+5. [Pricing Model](#pricing-model) — ราคา, token, quota, schema
+6. [Optional — SaaS and Selling](#optional--saas-and-selling)
+7. [Selling Points](#selling-points)
+
+---
+
+## What Phase 0-6 Must Prepare
+
+สี่อย่างนี้เท่านั้นที่ SaaS บังคับให้ต้องทำล่วงหน้า — เพราะเติมทีหลังต้องรื้อทั้งระบบ
+
+| ต้องทำ                                                        | ถ้าไม่ทำ                                            |
+| ------------------------------------------------------------ | ------------------------------------------------- |
+| `org_id` ทุกตาราง + บังคับกรองผ่าน Guard/Interceptor             | ต้องแตะทุกตาราง ทุก query ทุก permission check พร้อมกัน |
+| `FeatureService.can(org, feature)` (return `true` เสมอ)      | ต้องไล่แก้ทุก controller                              |
+| ตาราง `plans` / `subscriptions` / `ai_wallet` (ว่างไว้ ไม่มีโค้ด) | เพิ่มตารางไม่เจ็บ แต่มีไว้แล้วชัดเจนกว่า                    |
+| Role เก็บเป็น string ไม่ใช่ enum ใน DB                           | เพิ่ม `billing` ต้อง migrate                         |
+
+**ที่เหลือทั้งหมดในเอกสารนี้เป็นชั้นบนของ schema** — ราคา, FIFO, วันหมดอายุ, ใบกำกับ, deferred revenue ไม่มีอันไหนบังคับให้ต้องทำอะไรใน Phase 1-6
+
+---
+
+## Phase Plan (If We Actually Do It)
+
+| Phase | Version  | เนื้อหา                          |
+| ----- | -------- | ------------------------------ |
+| 7     | `v3.0.0` | SaaS + AI (LLM) + Subscription |
+| 8     | `v3.1.0` | Top-up token                   |
+
+---
+
+## Phase 7 — SaaS + AI `v3.0.0`
+
+**Onboarding & account**
+
+- หน้าสมัคร + สร้าง org เอง
+- Invite flow ทางอีเมล
+- Onboarding
+- Role เพิ่ม `billing` ระดับ org (`owner` มีตั้งแต่ Phase 1 แล้ว)
+
+**Billing (subscription เท่านั้น — top-up อยู่ Phase 8)**
+
+- `plans` + `subscriptions` ตาม tier
+- Plan quota AI (×1 / ×3 / ×9) รีเซ็ตรายสัปดาห์
+- Free grant ก้อนเริ่มต้นตอนสร้าง org แรก
+- Usage limit + เตือนเมื่อเกินจำนวน user
+
+**AI feature ที่ใช้ LLM**
+
+- Chat → Task, สรุป comment thread, สรุป sprint
+- รอถึง phase นี้เพราะมีค่าใช้จ่ายต่อการเรียก ควรมี billing รองรับก่อน
+- ต้องมี setting ระดับ org เปิด/ปิด — ลูกค้าบางรายไม่ยอมให้ข้อมูลผ่าน AI
+- ถ้าข้อมูลห้ามออกนอกประเทศ → พิจารณา self-host model (Gemma 3 27B ~16GB VRAM, Phi-4 14B ~8GB, Qwen รุ่นเล็ก) แต่ต้องทดสอบภาษาไทยเองก่อน benchmark ส่วนใหญ่วัดด้วยภาษาอังกฤษ
+
+**Owner กับ billing เมื่อเป็น SaaS**
+
+Phase 1-6 ใช้โมเดล owner หลายคนแบบ GitHub ซึ่งแก้ปัญหา "owner หายไป" ไปแล้ว แต่พอมี billing จะมีประเด็นเพิ่ม:
+
+- **เปิด public register** — `FeatureService.can(org, 'public_registration')` ที่ดักไว้ตั้งแต่ Phase 1 ค่อยเปลี่ยนเป็น `true`
+- **Role `billing` แยกจาก `owner`** — คนดูแลการเงินมักไม่ใช่คนสร้าง org และมีได้หลายคน
+- **บังคับให้มี billing contact ที่ active อย่างน้อย 1 คน** — ถ้าคนสุดท้ายถูก deactivate ให้เตือน org owner ตั้งคนใหม่
+- **แจ้งเตือนก่อนบัตรหมดอายุ 30 / 7 / 1 วัน** ส่งหา billing contact ทุกคน + owner ทุกคน
+- **Auto-downgrade ต้องไม่ล็อกข้อมูล** — จ่ายเงินไม่ได้ก็ยังต้องเข้าถึงและ export ข้อมูลได้
+- **Owner recovery ผ่าน support** — ตอนเป็น SaaS มีเราเป็นคนกลางแล้ว ทำแบบ Slack ได้: admin ยื่นเรื่อง + ยืนยันด้วย domain อีเมลบริษัท (ไม่รับอีเมลส่วนตัว) + review ก่อนอนุมัติ
+- **แนะนำลูกค้าใช้อีเมลกลางของทีม** เป็น owner แทนอีเมลส่วนบุคคล (Slack แนะนำแบบนี้)
+
+**Enterprise**
+
+- Custom domain / SSO
+- **Back-office / System admin** — เปิดใช้ตาราง system RBAC ที่สร้างไว้ตั้งแต่ Phase 0
+  - `/admin/*` + `SystemAdminGuard` · รวมใน app เดียว แยก route
+  - ทุก action ลง activity log ระบุว่าเป็นระดับ system
+  - Support ใช้ **impersonate** ดีกว่าเปิด API อ่านข้าม org
+  - บังคับ 2FA สำหรับคนที่มี system role
+  - `@SkipOrgScope()` ต้องประกาศชัดทุกที่ที่ข้าม org scope
+- Report รายคน / KPI (ถ้าลูกค้าองค์กรขอ)
+- **ทดสอบ multi-tenant isolation อย่างจริงจัง** — `org_id` scoping ที่วางไว้ตั้งแต่ Phase 0 จะได้พิสูจน์ตัวเอง
+
+> ตาราง `ai_wallet` และ logic หักแบบ FIFO เขียนตั้งแต่ Phase 7 เลย เพราะ free grant ใช้ตารางเดียวกัน — Phase 8 แค่เพิ่ม `source = 'purchased'` ไม่ต้องแก้อะไร
+
+ทั้งหมดเป็นชั้นบนของ schema เพิ่มได้โดยไม่ต้องรื้อ
+
+---
+
+## Phase 8 — Top-up token `v3.1.0`
+
+- เติม token แบบจ่ายครั้งเดียว (แยกจาก subscription)
+- Wallet + FIFO ตาม `expires_at`
+- วันหมดอายุ 12 เดือน + แจ้งเตือนล่วงหน้า 30 วัน
+- Auto-reload (เหลือต่ำกว่า X → ตัดบัตร Y บาท)
+- เสนอ upgrade เมื่อซื้อซ้ำบ่อย
+- ใบกำกับภาษีสำหรับการเติมเงิน
+
+> แยกจาก Phase 7 เพราะมีของที่ต้องทำเยอะกว่าที่เห็น — payment ครั้งเดียวคนละ flow กับ subscription, wallet, วันหมดอายุ, แจ้งเตือน, auto-reload, ใบกำกับ
+
+**ระหว่าง Phase 7:** ถ้าใครใช้ AI หมดโควตา ทางเลือกเดียวคืออัปเกรด tier — ซึ่งอาจดีต่อรายได้ด้วยซ้ำ
+
+---
+
+## Pricing Model
+
+### Price Structure
+
+| Tier           | User   | ราคา/เดือน | AI/สัปดาห์        |
+| -------------- | ------ | --------- | --------------- |
+| **Free**       | ≤10    | 0         | ก้อนเริ่มต้นครั้งเดียว |
+| **Starter**    | ≤15    | 990       | **×1**          |
+| **Team**       | ≤40    | 2,490     | **×3**          |
+| **Business**   | ≤120   | 6,900     | **×9**          |
+| **Enterprise** | ไม่จำกัด | ติดต่อ      | ต่อรอง           |
+
+- `BASE_QUOTA` = จำนวนหน่วยของ ×1 (กำหนดตอนรู้ต้นทุน token จริง)
+- รายปีลด 15-17%
+- AI ต่อบาทดีขึ้นทุกขั้น — Team คุ้มกว่า Starter 19%, Business คุ้มกว่า 29%
+- เทียบตลาดสากล: Notion Plus ≈ 350 บาท/คน, Jira Standard ≈ 280 บาท/คน → ราคานี้อยู่ที่ราว 1/6
+
+### Two Kinds of Token
+
+|        | Plan quota | Wallet                 |
+| ------ | ---------- | ---------------------- |
+| ที่มา    | ตาม tier   | free grant + top-up    |
+| รีเซ็ต   | ทุกสัปดาห์    | ✗                      |
+| ทบ     | ✗          | ✓                      |
+| หมดอายุ | สิ้นสัปดาห์    | **12 เดือนนับจากวันได้รับ** |
+
+**ลำดับหัก:** plan quota → wallet เรียงตาม `expires_at` ใกล้หมดก่อน (ใช้ของที่จะหายก่อนเสมอ)
+
+**นับ 12 เดือนแยกแต่ละก้อน** ไม่รีเซ็ตทั้งกระเป๋าตอนเติมใหม่ — ไม่งั้นจะกลายเป็นไม่มีวันหมดอายุโดยปริยาย
+
+ต้องมี: แจ้งเตือนก่อนหมดอายุ 30 วัน · แสดงวันหมดอายุใกล้สุดใน UI · job ล้าง (soft mark ไม่ลบ เก็บไว้ดูบัญชี)
+
+### Free Grant
+
+| เงื่อนไข            | ผล                 |
+| ----------------- | ------------------ |
+| User สร้าง org แรก | org นั้นได้ก้อนเริ่มต้น   |
+| ลบแล้วสร้างใหม่      | ไม่ได้อีก             |
+| Member เข้ามาเพิ่ม   | ไม่มีผล              |
+| Free org ต่อ user  | 1 อัน (นับรวมที่ลบแล้ว) |
+
+```
+users
+  has_claimed_free_credits   boolean default false   -- ไม่ reset แม้ org ถูกลบ
+  free_org_count             int default 0
+```
+
+> ตั้งใจให้เป็นก้อนคงที่ ไม่แปรตามจำนวน member — เพราะถ้าแปรตาม จะเปิดช่องให้แต่ละคนสร้าง org แล้วเชิญกันไปมาเพื่อเก็บ credits ซึ่งไล่ปิดยากและใช้คนจริงได้ทั้งหมด
+
+### Top-up (Phase 8)
+
+- **1,180 บาท = ×1** เท่ากันทุก tier (ไม่ผูกกับ tier ที่ใช้อยู่)
+- ขั้นต่ำ **290 บาท** เติมเท่าไหร่ก็ได้เหนือขั้นต่ำ คำนวณตามสัดส่วน
+- ปุ่มลัด 590 / 1,180 / 2,950
+- Auto-reload ตั้งได้
+- **ตั้งใจให้แพงกว่าอัปเกรด** — top-up มีไว้สำหรับคนใช้เกินเป็นครั้งคราว ถ้าซื้อซ้ำบ่อยระบบเสนอ upgrade แทน
+
+### Account Model
+
+1. User สมัครฟรีเสมอ
+2. สร้าง org → ได้ Free tier
+3. ซื้อ pack ตาม org (แบบ GitHub)
+4. คนเดียวอยู่หลาย org ได้ แต่ละ org จ่ายแยก
+5. เฉพาะ `owner` / `billing` ที่จ่ายเงินได้
+6. โอน ownership ได้
+
+### AI Quota
+
+- **สองชั้น:** เพดานรายวัน (กันพีค) + โควตารายสัปดาห์ (ยืดหยุ่นกับ sprint)
+- ระดับ org + rate limit ต่อคนซ้อนอีกชั้น
+- แสดงตัวที่เหลือน้อยกว่าเป็นหลัก
+- เตือน 20% → 5% → 0% (บอกเวลารีเซ็ต ไม่ใช่แค่ error)
+
+```
+โควตาสัปดาห์นี้   ███░░░░░  22%   รีเซ็ตวันจันทร์
+Token คงเหลือ     ≈ 340 ครั้ง    หมดอายุ ส.ค. 2027
+```
+
+โควตาประจำแสดงเป็น % (มีเพดานให้เทียบ) · wallet แสดงเป็นจำนวนครั้งโดยประมาณ คำนวณจากค่าเฉลี่ยของ org นั้นเอง
+
+**ไม่ใช้คำว่า token กับผู้ใช้** — คนทั่วไปเดาไม่ได้ว่าเหลือพอทำอะไร
+
+### Downgrade / Cancel
+
+Token ใน wallet **ยังอยู่** · โควตาตาม plan ปรับตาม tier ใหม่ทันที
+
+### Technical Rules
+
+- **เช็คโควตาก่อนเรียก API เสมอ** ไม่ใช่จ่ายค่า API ไปแล้วค่อยบอกว่าเต็ม
+- เก็บ `tokens_in` / `tokens_out` จริงเสมอ แม้แสดงเป็น % — ใช้ตรวจว่าราคาที่ตั้งยังกำไร
+- 1 หน่วย ผูกกับ token จริงแบบมี buffer (เช่น 1 หน่วย = 2,000 token) action ที่กินหนักหักหลายหน่วย → ไม่ขาดทุนกับ input ยาว โดยไม่ต้องจำกัดความยาวแบบแข็ง
+- หักข้ามหลายแถวใน transaction เดียว + `SELECT FOR UPDATE` กันหักพร้อมกัน
+- **นับ user = ทุกคนที่ยังอยู่ใน org** รวมคนที่ถูก deactivate ด้วย
+  - ถ้าไม่อยากจ่ายค่า seat ให้ **remove ออกจาก org** ไปเลย
+  - ถ้านับเฉพาะ active จะเปิดช่องให้ deactivate ทุกคนเพื่อเลี่ยงค่าใช้จ่ายแต่ยังเก็บข้อมูลไว้
+- เกินจำนวน user → เตือน 14 วันก่อนจำกัด feature **ไม่ล็อกข้อมูล**
+
+### Schema
+
+```
+plans (id, name, max_users, price_monthly, price_yearly,
+       ai_multiplier, ai_daily_limit, features_json)
+
+subscriptions (id, org_id, plan_id, status,
+               current_period_end, seats_used)
+
+ai_wallet (id, org_id, source, units_granted, units_used,
+           period_key, expires_at, created_at)
+           -- source: 'plan' | 'free_grant' | 'purchased'
+
+ai_usage (org_id, user_id, period_day, period_week,
+          tokens_in, tokens_out, feature)
+```
+
+`source` เก็บไว้แม้ logic การหักไม่สนใจ (ดูแค่ `expires_at`) — จำเป็นสำหรับบัญชี (deferred revenue vs ต้นทุนการตลาด), การคืนเงิน, และวิเคราะห์ว่า free grant กระตุ้นยอดซื้อจริงไหม
+
+### Prerequisites for Phase 7
+
+**`FeatureService.can(org, feature)`** — Phase 1-6 return `true` เสมอ Phase 7 ค่อยเช็คจาก plan จริง
+
+ถ้าไม่ทำ พอถึงเวลาต้องไล่แก้ทุก controller — หลักเดียวกับ permission layer
+
+### To Check With an Accountant
+
+- เงินเติมที่ยังไม่ใช้ = deferred revenue ไม่ใช่รายได้ทันที
+- VAT กับจังหวะออกใบกำกับ
+- Token ที่หมดอายุแล้วไม่ได้ใช้ รับรู้รายได้ยังไง
+
+---
+
+## Optional — SaaS and Selling
+
+| Feature             | ใช้ทำอะไร                                  | เงื่อนไขที่จะทำ               |
+| ------------------- | ----------------------------------------- | ------------------------- |
+| AI (LLM)            | Chat→Task, สรุป comment thread, สรุป sprint | มี billing รองรับ           |
+| Top-up token        | เติม AI เพิ่มเมื่อโควตาหมด                     | คนใช้หมดโควตาบ่อย           |
+| Report รายคน        | รายงานผลงานรายบุคคลสำหรับ KPI               | ลูกค้า SaaS ขอ              |
+| Custom domain / SSO | ใช้โดเมนตัวเองและ login ผ่านระบบองค์กร        | ลูกค้า enterprise ขอ        |
+| On-premise          | ติดตั้งในเซิร์ฟเวอร์ของลูกค้าเอง                  | บริษัทที่ห้ามข้อมูลออกนอกองค์กรขอ |
+
+---
+
+## Selling Points
+
+เรียงตามที่แข็งที่สุด:
+
+1. **ราคา** — 990 บาท/15 คน = 66 บาท/คน เทียบ Notion 350, Jira 280 → ถูกกว่า 4-5 เท่า และคิดเป็น tier ตามจำนวนคนแทน per-seat ทำให้ SME ไทยตั้งงบได้
+2. **ข้อมูลอยู่ในไทย** — Bangmod + PDPA เรียบร้อย เจ้าใหญ่ให้ไม่ได้ เป็นคำถามแรกของลูกค้าองค์กรสายการเงิน/ราชการ/โรงพยาบาล
+3. **Chat integration (Line/Discord)** — ลอกยากกว่าราคา เจ้าใหญ่ไม่ทำ Line ดีเพราะไม่ใช่ตลาดเขา
+4. **AI ที่ไม่แพงจนน่าตกใจ** — ให้ทุก tier รวม Free และ token ที่ซื้อทบได้ ไม่หายทุกเดือน
+5. **เข้าใจวิธีทำงานแบบไทย** — ค้นด้วยชื่อเล่น, UI ไทยที่ไม่ใช่แปลด้วยเครื่อง
+6. **Support ภาษาไทย เวลาไทย**
+7. **On-premise ได้** — Docker ทั้งชุด · Jira Data Center ราคาหลักล้าน/ปี และจะ EOL ปี 2029 ตลาดนี้กำลังจะว่าง
+
+**ข้อควรระวัง** — ถ้าแข่งด้วยราคาอย่างเดียว มีคนทำถูกกว่าได้เสมอ สิ่งที่ลอกยากกว่าคือข้อมูลในไทย + chat integration + support ไทย
+
+**อย่า position ตัวเองว่าเป็น "ทางเลือกแทน Notion"** — เป็นการวางตัวในเงาคนอื่นโดยไม่จำเป็น ควรเป็น "ระบบจัดการงานสำหรับทีมไทย ราคาที่จ่ายไหว ข้อมูลอยู่ในไทย"
+
+**ตลาดที่ควรโฟกัส** — SME ไทย 10-50 คน ที่ยังใช้ Line/Excel อยู่ ไม่ใช่บริษัทที่ใช้ Jira อยู่แล้ว (ย้ายยากมาก)
