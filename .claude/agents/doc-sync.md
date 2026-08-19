@@ -56,8 +56,14 @@ depends on which was crossed:
 - **Stale cross-references.** Files were renamed to a numbered set; any surviving
   `architecture.md`, `database.md`, `phases.md`, `roadmap.md`, `saas-notes.md`, or
   `README.md` reference inside `.claude/docs` is stale.
-- **Broken anchors.** Headings are English so they slugify predictably. Every
-  `](./NN-name.md#anchor)` must point at a heading that exists.
+- **Broken anchors.** Every `](./NN-name.md#anchor)` must point at a heading that
+  exists. Slugify the way GitHub does — lowercase, drop punctuation and emoji,
+  then turn **every remaining space** into a hyphen. Two consecutive spaces make
+  two hyphens, which is why `## Retention — each kind` is `#retention--each-kind`.
+  A heading that _ends_ in an emoji (`## Stale Detection ⭐`) leaves the space in
+  front of it behind and slugifies to `#stale-detection-`, with a trailing hyphen
+  nobody writes in the link. Report the heading, not the link: markers like ⭐
+  belong in the roadmap tables, not in a heading.
 - **Env vars.** A variable added to `apps/api/core/src/config/env.ts` should also
   appear in `.env.example`, and vice versa.
 - **Phase scope creep.** Work that the roadmap places in a later phase, landing now.

@@ -443,7 +443,7 @@ task.tasks
 
 [ดู schema เต็ม](./02-database.md#schema-project)
 
-#### Chat Integration — Discord ⭐
+#### Chat Integration — Discord
 
 **ฟีเจอร์ดาวเด่น** — อย่าลากคนออกจากแชทเข้าเว็บ ให้ระบบไปหาเขาแทน
 
@@ -576,7 +576,7 @@ project.projects
 - Tag / Label
 - **Chat Integration — Line** (adapter ที่สองบนโครงเดียวกับ Discord)
 
-#### Stale Detection ⭐
+#### Stale Detection
 
 ตรวจเองว่างานไหนค้างผิดปกติ แล้วเตือนคนที่ควรรู้
 
@@ -675,7 +675,7 @@ view.columns (
 - Group by / Sort ยืดหยุ่น
 - Export Excel / PDF
 
-#### Handover Mode ⭐
+#### Handover Mode
 
 พนักงานลาออก / ลาคลอด / ย้ายแผนก → กดปุ่มเดียวเห็นงานทั้งหมดของคนนั้น
 
