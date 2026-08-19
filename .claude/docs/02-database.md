@@ -9,7 +9,7 @@
 1. [Schema Map](#1-schema-map) — ตารางไหนอยู่ schema ไหน
 2. [Foreign Key Rules](#2-foreign-key-rules) — ทิศทางเดียว, polymorphic
 3. [Multi-tenancy](#3-multi-tenancy) 🔒
-4. [Other Notes](#4-other-notes) — migration, DB user, connection pool
+4. [Other Notes](#4-other-notes) — migration, DB user, connection pool, [CHECK vs enum](#check-vs-enum)
 5. [Full Schema](#5-full-schema) ← ดูฟิลด์ทุกตารางที่นี่
 
 ---
@@ -100,6 +100,24 @@ CREATE INDEX ON discussion.comments (org_id, entity_type, entity_id, created_at)
 - อย่าแยกเป็นคนละ database (จะเสีย transaction ข้าม module)
 - Connection pool ตัวเดียวพอ
 
+### CHECK vs enum
+
+**ไม่ใช้ `enum` type ของ Postgres ที่ไหนเลย** — เพิ่มค่าใหม่ต้องแยก migration สองรอบ (ค่าที่เพิ่งเพิ่มใช้ใน transaction เดียวกันไม่ได้) ลบค่าต้องสร้าง type ใหม่ทั้งตัว · ใช้ `text` ธรรมดา แล้วใส่ `CHECK` เอาถ้าจำเป็น — แก้ทีหลังแค่ drop constraint แล้ว add ใหม่
+
+ใส่ `CHECK` เฉพาะคอลัมน์ที่**มี partial index พึ่งค่ามันอยู่** เพราะค่าที่พิมพ์ผิดจะหลุดจาก index ไปเงียบ ๆ — insert ผ่าน ไม่มี error แต่ข้อจำกัดที่ตั้งใจไว้หายไป ตอนนี้มี 3 ตัว:
+
+| คอลัมน์ | index ที่พึ่งมัน |
+| --- | --- |
+| `identity.users.status` | unique email `WHERE status != 'deleted'` |
+| `project.sprints.status` | unique `(project_id) WHERE status = 'active'` |
+| `notify.outbox.status` | คิวของ worker `WHERE status = 'pending'` |
+
+คอลัมน์ค่าจำกัดตัวอื่น (`role`, `priority`, `platform`, `assignee_type`, `type` ฯลฯ) ปล่อยเป็น `text` ให้ application คุม — เพิ่ม `CHECK` ทีหลังได้ตลอดถ้าเจอปัญหาจริง
+
+**ห้ามใส่** `CHECK` กับคอลัมน์ที่ค่าโตตามฟีเจอร์ — `audit.logs.entity_type` / `audit.logs.action` / `discussion.comments.entity_type` / `notify.outbox.template` / `view.columns.column_key` · ทุกฟีเจอร์ใหม่จะกลายเป็น migration แถม และ `audit.logs` เป็นตาราง partition ที่ไม่เคยลบ → `VALIDATE` แพงขึ้นเรื่อย ๆ
+
+> ⚠️ `CHECK` ใน DB กับ union type ใน `@repo/shared` ไม่มีอะไร sync ให้ — แก้ที่ไหนต้องแก้อีกที่ด้วย
+
 ---
 
 ## 5. Full Schema
@@ -185,6 +203,7 @@ users
 
   -- users ไม่มี org_id (1 user อยู่ได้หลาย org ผ่าน organization.members)
   -- citext เป็น case-insensitive อยู่แล้ว จึงไม่ต้องพันด้วย lower() ซ้ำ
+  CHECK (status IN ('active', 'deactivated', 'pending_deletion', 'deleted'))
   CREATE UNIQUE INDEX ON identity.users (email) WHERE status != 'deleted';
 
 sessions                                 -- 1 แถว = 1 การ login จาก 1 เครื่อง
@@ -317,6 +336,7 @@ sprints                                          (Phase 2)
   status              text  'planned' | 'active' | 'completed'
   sort_order          text COLLATE "C"
 
+  CHECK (status IN ('planned', 'active', 'completed'))
   CREATE UNIQUE INDEX ON project.sprints (project_id) WHERE status = 'active';
 ```
 
@@ -469,6 +489,7 @@ outbox
   attempts            int    default 0
   sent_at             timestamptz  null
   last_error          text   null
+  CHECK (status IN ('pending', 'sent', 'failed'))
   CREATE INDEX ON notify.outbox (status, created_at) WHERE status = 'pending';
 ```
 

@@ -49,6 +49,11 @@
 - [ ] Partial unique index เพื่อบังคับ "at most one" ผ่าน DB ไม่ใช่ app เท่านั้น:
   - [ ] `project.statuses`: `(project_id) WHERE is_default = true`
   - [ ] `project.sprints`: `(project_id) WHERE status = 'active'`
+- [ ] `CHECK` บนคอลัมน์ที่ partial index อ่านค่ามันตรง ๆ ([เหตุผล](../docs/02-database.md#check-vs-enum)) — พิมพ์ผิดแล้วแถวหลุด index เงียบ ๆ ไม่มี error:
+  - [ ] `identity.users.status`
+  - [ ] `project.sprints.status`
+  - [ ] `notify.outbox.status`
+- [ ] ไม่มี `CREATE TYPE ... AS ENUM` ที่ไหนเลย — `grep -rn "AS ENUM" migrations/` ต้องไม่เจอ
 
 ## 3. Base entity + org scoping
 

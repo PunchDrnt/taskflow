@@ -90,6 +90,25 @@ Flag any `synchronize: true`. It cannot produce partitions, partial indexes,
 collations, or extensions, so it will silently generate a schema that does not match
 these rules.
 
+**9. No Postgres `enum` types, and three status columns carry a `CHECK`**
+
+Constrained-value columns are plain `text`. Flag any `CREATE TYPE ... AS ENUM` or
+TypeORM `@Column({ type: 'enum' })`.
+
+Three columns must have a `CHECK` because a partial index reads their literal value —
+a typo silently drops the row out of the index, so the insert succeeds and the
+constraint it was meant to enforce quietly stops applying:
+
+| column                   | allowed values                                         |
+| ------------------------ | ------------------------------------------------------ |
+| `identity.users.status`  | `active`, `deactivated`, `pending_deletion`, `deleted` |
+| `project.sprints.status` | `planned`, `active`, `completed`                       |
+| `notify.outbox.status`   | `pending`, `sent`, `failed`                            |
+
+A `CHECK` on `audit.logs.entity_type`/`action`, `discussion.comments.entity_type`,
+`notify.outbox.template`, or `view.columns.column_key` is also a finding — those sets
+grow with every feature.
+
 ## Two ordering traps worth checking
 
 - **Extensions before use.** `citext` and `pgcrypto` must be created in an earlier
