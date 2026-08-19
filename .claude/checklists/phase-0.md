@@ -1,0 +1,115 @@
+# Phase 0 — Foundation `v0.1.0`
+
+ไล่ตามลำดับที่ทำได้จริง (ไม่ใช่ลำดับ priority ใน [`03-roadmap.md`](../docs/03-roadmap.md)) — ข้อล่างพึ่งข้อบน
+
+> **สถานะไฟล์นี้:** ของชั่วคราว ลบทิ้งได้เมื่อ Phase 0 จบ · ไม่ใช่ spec
+> ตัวสเปกจริงอยู่ที่ [`.claude/docs/`](../docs/) — ถ้าขัดกัน ให้เชื่อ docs
+>
+> 🔒 = [binding decision](../docs/00-overview.md#binding-decisions) ผิดแล้วแก้ย้อนหลังไม่ได้
+
+---
+
+## 0. เสร็จแล้ว (จาก session เตรียมของ)
+
+- [x] Monorepo (Yarn 4 Berry + Turborepo) · เปลี่ยนชื่อเป็น taskflow
+- [x] `packages/shared` — zod/type/constant ใช้ร่วมสองฝั่ง + lint กันไม่ให้ import framework
+- [x] Env validation ด้วย zod ผ่าน `ConfigModule` — ค่าผิดล้มตอน boot (exit 1)
+- [x] `useDefineForClassFields: false` — ต้องมีก่อนเขียน entity ตัวแรก
+- [x] Vitest + `unplugin-swc` (esbuild emit decorator metadata ไม่ได้)
+- [x] `docker-compose.yml` — `postgres` + `postgres-test` (tmpfs)
+- [x] เอกสารทั้งชุดจัดใหม่ + marker 🔒 / ❓
+
+---
+
+## 1. Database — ต่อ DB ให้ติดก่อน
+
+- [ ] ติดตั้ง TypeORM + `pg` + `typeorm-naming-strategies`
+- [ ] `data-source.ts` — `SnakeNamingStrategy` (ไม่เขียน `@Column({ name })` ทีละฟิลด์)
+- [ ] 🔒 **`synchronize: false` ถาวร** — `synchronize` สร้าง partition / partial index / `COLLATE "C"` / extension ให้ไม่ได้ ทุก migration เขียนมือ
+- [ ] เพิ่ม `DATABASE_URL` เข้า zod schema ใน `apps/api/core/src/config/env.ts`
+- [ ] Health check `/health/ready` เพิ่ม DB indicator (**readiness เท่านั้น ห้ามใส่ liveness**)
+
+## 2. Migration ชุดแรก — ลำดับสำคัญ
+
+- [ ] `001` extension: `citext`, `pgcrypto` — ต้องมาก่อนตารางที่ใช้
+- [ ] `002` สร้าง schema ทั้ง 11 ตัว: `identity` `organization` `project` `task` `audit` `discussion` `field` `view` `notify` `billing` (+ `public` ว่างไว้)
+- [ ] 🔒 **`003` seed system user** — base entity บังคับ `created_by NOT NULL` ทุกตาราง**รวม `identity.users` เอง** แถวแรกต้อง insert โดยชี้ `created_by` มาที่ id ตัวเอง (Postgres ทำได้ใน INSERT เดียว แต่ต้องวางลำดับให้ถูก)
+- [ ] 🔒 `audit.logs` — `PARTITION BY RANGE (occurred_at)` + **`PRIMARY KEY (id, occurred_at)`** (Postgres บังคับให้ partition key อยู่ใน PK · `PRIMARY KEY (id)` เฉยๆ สร้างไม่ผ่าน)
+- [ ] Job สร้าง partition เดือนถัดไปล่วงหน้า
+- [ ] ตารางที่เหลือตาม [`02-database.md`](../docs/02-database.md#5-full-schema) — **ครบทุกตารางตั้งแต่รอบนี้** ยกเว้น `chat.*` (Phase 2)
+
+**ตรวจก่อนปิดข้อนี้**
+
+- [ ] 🔒 ทุก column วันเวลาเป็น `timestamptz` — `grep -rn "timestamp[^t]" migrations/` ต้องไม่เจอ
+- [ ] 🔒 ทุกตารางมี `org_id` ยกเว้น schema `identity` และ `billing.plans`
+- [ ] 🔒 unique constraint ของตารางที่ soft delete เป็น **partial index** (`WHERE deleted_at IS NULL`) ไม่ใช่ `UNIQUE (...)` ธรรมดา
+- [ ] 🔒 `created_by` / `updated_by` / `completed_by` เป็น `RESTRICT`
+- [ ] 🔒 `sort_order` เป็น `text COLLATE "C"`
+- [ ] Composite index ขึ้นต้นด้วย `org_id` เสมอ
+
+## 3. Base entity + org scoping
+
+- [ ] `shared/base.entity.ts` — 🔒 UUID pk, `org_id`, `created_at/by`, `updated_at/by`, `deleted_at/by`
+  - [ ] `audit.logs` เป็นตารางเดียวที่ **ไม่ใช้ base entity ตรงๆ** (composite PK)
+- [ ] TypeORM subscriber เติม `createdBy` / `updatedBy` / `deletedBy` จาก request context
+- [ ] `shared/request-context.ts` — `AsyncLocalStorage<{ orgId, userId }>`
+- [ ] Guard ใส่ค่า context ตอนต้น request
+- [ ] `OrgScopedRepository<T>` — ทุก service ใช้ตัวนี้ ห้าม inject `Repository<T>` ตรง
+- [ ] ESLint rule ห้าม inject `Repository<T>` ธรรมดา
+- [ ] `@SkipOrgScope()` decorator สำหรับ endpoint ที่ต้องข้ามจริงๆ
+- [ ] 🔒 **Integration test: query จาก org A ต้องมองไม่เห็นข้อมูล org B** — รันกับ `postgres-test` ข้อนี้ไม่มีข้อยกเว้น
+
+> ❓ RLS **ไม่ทำใน phase นี้** — เลื่อนไป Phase 2 พร้อมเรื่อง transaction strategy
+
+## 4. Soft delete
+
+- [ ] `@DeleteDateColumn` — TypeORM กรอง `deleted_at IS NULL` ให้อัตโนมัติ
+- [ ] จุดที่ TypeORM **ไม่ครอบคลุม** ต้องทำเอง: raw query / QueryBuilder · relation ที่ join มา · unique constraint · `deleted_by`
+- [ ] Cascade soft delete เขียนใน service เอง (`ON DELETE CASCADE` ทำงานกับ hard delete เท่านั้น)
+
+## 5. Permission + Activity log
+
+- [ ] `can(user, action, resource)` ด้วย CASL — โครงเปล่าพอ ยังไม่ต้องมี rule ครบ
+- [ ] Test: แต่ละ role ทำอะไรได้/ไม่ได้
+- [ ] 🔒 **`AuditService` เขียน audit row ใน transaction เดียวกับ business logic** ไม่ผ่าน event emitter ([เหตุผล](../docs/01-architecture.md#how-the-activity-log-is-written))
+- [ ] `@nestjs/event-emitter` ติดตั้งไว้ใช้กับ **notification เท่านั้น**
+- [ ] `AuditService` เปิด method เฉพาะ ตั้งชื่อเป็นภาษาของ audit (`getRecentActorTargets` ไม่ใช่ `getRecentAssignees`)
+
+## 6. Service wrapper
+
+- [ ] `EmailService` ห่อ Resend + `notify.outbox` + worker (retry 3 ครั้ง exponential backoff → mark failed + Sentry)
+- [ ] `StorageService` ห่อ MinIO — bucket **private** เข้าผ่าน presigned URL เท่านั้น
+- [ ] `FeatureService.can(org, feature)` — return `true` เสมอ (Phase 1 ใช้ดัก `public_registration`)
+- [ ] เพิ่ม `minio` เข้า `docker-compose.yml` (volume แยกจาก DB)
+
+## 7. Deploy — อย่าเลื่อน
+
+- [ ] เพิ่ม `api` / `web` / `caddy` เข้า `docker-compose.yml`
+- [ ] `Dockerfile` ทั้งสอง app (multi-stage)
+- [ ] CI: `lint` + `check-types` + `test` + `build`
+- [ ] **Deploy ขึ้น Bangmod ได้จริง แม้เป็นหน้าเปล่า**
+- [ ] Sentry ทั้งสองฝั่ง
+- [ ] Backup: DB กับ MinIO **แยกกัน** (ไฟล์หายกู้จาก DB ไม่ได้)
+- [ ] DB user ของ app **ไม่ใช่ superuser**
+
+> pipeline ที่ทำทีหลังมักกลายเป็นคอขวด — ข้อนี้เป็น 🔴 ทั้งที่ไม่มีฟีเจอร์ให้ดู
+
+## 8. ปิด Phase 0
+
+- [ ] Seed script สำหรับ dev/demo
+- [ ] Seed permission key ของ RBAC ระดับระบบ (**ไม่มีโค้ดอ่าน** — back-office มา Phase 7)
+- [ ] `yarn build` / `lint` / `check-types` / `test` ผ่านหมด
+- [ ] Tag `v0.1.0`
+
+---
+
+## ดักไว้ก่อน — จุดที่เสียเวลาแน่ถ้าไม่รู้
+
+| จุด | เรื่อง |
+|---|---|
+| Postgres 18 | data dir ย้ายไป subdirectory ที่มีเลขเวอร์ชัน · mount ที่ `/var/lib/postgresql` ไม่ใช่ `/var/lib/postgresql/data` (เจอมาแล้วตอนตั้ง compose) |
+| Port 5432 | เครื่อง dev มี Postgres รันอยู่แล้ว → ตั้ง `POSTGRES_PORT` ใน `.env` |
+| Partitioned table | PK ต้องมี partition key อยู่ด้วย → `audit.logs` เป็น composite PK |
+| `SET LOCAL` | รับ parameter ไม่ได้ ถ้าต่อ string = SQL injection · ใช้ `set_config(..., $1, true)` (เรื่องของ Phase 2 แต่จำไว้) |
+| `FORCE ROW LEVEL SECURITY` | `ENABLE` เฉยๆ ไม่กันเจ้าของตาราง และ**เงียบสนิทไม่มี error** (Phase 2) |
+| Estimate เวลา | roadmap เขียน ~2 สัปดาห์ · ของในลิสต์นี้ทำนอกเวลาน่าจะเกิน ถ้าจะตัดให้ตัด Sentry / CI ก่อน อย่าตัด deploy กับ isolation test |

@@ -15,6 +15,8 @@ Taskflow is an internal task-tracking system for a ~100-person Thai company (~20
 | Detailed spec for each feature                           | [`docs/04-features.md`](./docs/04-features.md)         |
 | SaaS, billing, pricing, LLM features — **not committed** | [`docs/05-saas-notes.md`](./docs/05-saas-notes.md)     |
 
+Working checklists live in [`.claude/checklists/`](./checklists/) — [`phase-0.md`](./checklists/phase-0.md) tracks the current phase in dependency order, and [`definition-of-done.md`](./checklists/definition-of-done.md) is the per-change gate. They are scratch state, not spec: when a checklist and the docs disagree, the docs win.
+
 **The docs are guidelines by default.** Deviate when there's a good reason — just say that you did. The exception is a short list of binding decisions, marked 🔒 in the docs, where deviating means a full-table migration, a cross-org data leak, or history that cannot be reconstructed.
 
 ### Change protocol

@@ -14,5 +14,6 @@ pnp.*
 # but Thai vowels and tone marks are zero-width combining characters, so it
 # over-pads every cell containing them and the alignment comes out worse.
 .claude/docs
+.claude/checklists
 
 yarn.lock
