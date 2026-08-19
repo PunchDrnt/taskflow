@@ -1,0 +1,47 @@
+# Local development services.
+#
+# Phase 0 adds the api, web, minio and caddy services here. For now this
+# provides the two databases: one that survives restarts for development,
+# and a throwaway one for the integration suite.
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app}
+      POSTGRES_DB: ${POSTGRES_DB:-app}
+    ports:
+      - '${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      # Postgres 18 keeps its data in a versioned subdirectory, so the mount
+      # goes at /var/lib/postgresql — not /var/lib/postgresql/data as in <=17.
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-app}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  postgres-test:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: app_test
+    ports:
+      - '${POSTGRES_TEST_PORT:-5433}:5432'
+    # Ephemeral on purpose: the integration suite recreates schema on every
+    # run, and losing this data costs nothing.
+    tmpfs:
+      - /var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U app']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres-data:
