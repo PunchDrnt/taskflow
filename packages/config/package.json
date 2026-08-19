@@ -1,0 +1,41 @@
+{
+  "name": "@repo/config",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./eslint/base": "./eslint/base.js",
+    "./eslint/next": "./eslint/next.js",
+    "./eslint/nestjs": "./eslint/nestjs.js",
+    "./eslint/react-library": "./eslint/react-library.js",
+    "./typescript/base": "./typescript/base.json",
+    "./typescript/nextjs": "./typescript/nextjs.json",
+    "./typescript/nestjs": "./typescript/nestjs.json",
+    "./typescript/react-library": "./typescript/react-library.json",
+    "./prettier": "./prettier/index.js",
+    "./tailwind/theme.css": "./tailwind/theme.css"
+  },
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "dependencies": {
+    "@eslint/js": "^10.0.1",
+    "@ianvs/prettier-plugin-sort-imports": "^4.7.1",
+    "@next/eslint-plugin-next": "^16.2.11",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.7.0",
+    "prettier-plugin-tailwindcss": "^0.8.1",
+    "typescript-eslint": "^8.65.0"
+  },
+  "peerDependencies": {
+    "eslint": "^10.7.0",
+    "prettier": "^3.9.6",
+    "typescript": "^6.0.3"
+  },
+  "devDependencies": {
+    "eslint": "^10.7.0",
+    "prettier": "^3.9.6",
+    "typescript": "^6.0.3"
+  }
+}

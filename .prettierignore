@@ -1,0 +1,12 @@
+node_modules
+.next
+dist
+build
+.turbo
+.yarn
+pnp.*
+*.tsbuildinfo
+
+# vendored claude code skills - don't reformat third-party content
+.claude/skills
+yarn.lock
