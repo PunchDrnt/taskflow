@@ -59,6 +59,7 @@ CREATE INDEX ON discussion.comments (org_id, entity_type, entity_id, created_at)
 | FK                                                                                          | Action                    |
 | ------------------------------------------------------------------------------------------- | ------------------------- |
 | `project.statuses.project_id` · `project.members.project_id` · `project.sprints.project_id` | `CASCADE`                 |
+| `chat.channels.project_id` · `field.definitions.project_id` · `view.views.project_id`       | `CASCADE`                 |
 | `task.assignees.task_id` · `task.tasks.parent_task_id`                                      | `CASCADE`                 |
 | `organization.members.org_id` · `organization.team_members.team_id`                         | `CASCADE`                 |
 | `identity.sessions.user_id` · `password_reset_tokens.user_id`                               | `CASCADE`                 |
@@ -67,6 +68,7 @@ CREATE INDEX ON discussion.comments (org_id, entity_type, entity_id, created_at)
 | `chat.channels.default_assignee_id` · `identity.user_roles.granted_by`                      | `SET NULL`                |
 | `task.tasks.project_id` · `task.tasks.status_id`                                            | `RESTRICT`                |
 | `organization.members.user_id` · `team_members.user_id`                                     | `RESTRICT`                |
+| `organization.organizations.owner_id`                                                       | `RESTRICT`                |
 | `*.created_by` · `*.updated_by` · `task.tasks.completed_by`                                 | `RESTRICT`                |
 
 **`created_by` เป็น `RESTRICT` ไม่ใช่ `SET NULL`** — เพราะการลบ user คือ _anonymize_ (แถวยังอยู่) ไม่ใช่ hard delete FK จึงยังชี้ได้ ประวัติไม่พัง และคง `NOT NULL` ได้
@@ -255,7 +257,7 @@ user_roles
 organizations
   name                text
   slug                text     unique
-  owner_id            uuid     คนสร้าง (ไม่ใช่สิทธิ์ — สิทธิ์อยู่ที่ organization.members.role)
+  owner_id            uuid     FK → identity.users · RESTRICT · คนสร้าง (ไม่ใช่สิทธิ์ — สิทธิ์อยู่ที่ organization.members.role)
 
 members                                  -- สมาชิกของ org
   user_id             uuid  FK → identity.users
@@ -304,6 +306,8 @@ statuses
   is_cancelled_type   boolean  นับเป็น "ยกเลิก" — ตัดออกจากตัวหารของ progress
   -- is_done_type กับ is_cancelled_type เป็น true พร้อมกันไม่ได้
 
+  CREATE UNIQUE INDEX ON project.statuses (project_id) WHERE is_default = true;
+
 sprints                                          (Phase 2)
   project_id          uuid  FK
   name                text
@@ -312,7 +316,8 @@ sprints                                          (Phase 2)
   end_date            date         วันที่ล้วน ไม่มีเวลา
   status              text  'planned' | 'active' | 'completed'
   sort_order          text COLLATE "C"
-  -- 1 project มี status='active' ได้แค่ 1 แถว (บังคับที่ application)
+
+  CREATE UNIQUE INDEX ON project.sprints (project_id) WHERE status = 'active';
 ```
 
 ### Schema `task`
@@ -384,7 +389,7 @@ logs
 comments                                         (Phase 3)
   entity_type         text   'task' | ...
   entity_id           uuid   ไม่มี FK
-  parent_comment_id   uuid   null · thread แบบ Slack
+  parent_comment_id   uuid   null · FK → discussion.comments (self) · ON DELETE CASCADE · thread แบบ Slack
   body                text
   edited_at           timestamptz  null
   CREATE INDEX ON discussion.comments (org_id, entity_type, entity_id, created_at);

@@ -46,6 +46,9 @@
 - [ ] 🔒 `created_by` / `updated_by` / `completed_by` เป็น `RESTRICT`
 - [ ] 🔒 `sort_order` เป็น `text COLLATE "C"`
 - [ ] Composite index ขึ้นต้นด้วย `org_id` เสมอ
+- [ ] Partial unique index เพื่อบังคับ "at most one" ผ่าน DB ไม่ใช่ app เท่านั้น:
+  - [ ] `project.statuses`: `(project_id) WHERE is_default = true`
+  - [ ] `project.sprints`: `(project_id) WHERE status = 'active'`
 
 ## 3. Base entity + org scoping
 
@@ -71,6 +74,9 @@
 
 - [ ] `can(user, action, resource)` ด้วย CASL — โครงเปล่าพอ ยังไม่ต้องมี rule ครบ
 - [ ] Test: แต่ละ role ทำอะไรได้/ไม่ได้
+- [ ] Test: invariant ที่ app บังคับ (DB ไม่ได้) — ต้องมีใน Phase 1:
+  - [ ] org ต้องมี role='owner' ≥1 แถวเสมอ
+  - [ ] project ต้องมี status.is_done_type=true ≥1 อัน
 - [ ] 🔒 **`AuditService` เขียน audit row ใน transaction เดียวกับ business logic** ไม่ผ่าน event emitter ([เหตุผล](../docs/01-architecture.md#how-the-activity-log-is-written))
 - [ ] `@nestjs/event-emitter` ติดตั้งไว้ใช้กับ **notification เท่านั้น**
 - [ ] `AuditService` เปิด method เฉพาะ ตั้งชื่อเป็นภาษาของ audit (`getRecentActorTargets` ไม่ใช่ `getRecentAssignees`)
