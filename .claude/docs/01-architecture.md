@@ -23,7 +23,7 @@ Stack, การแบ่ง module, และ convention ที่ทุก mod
 | Validation     | Zod (`packages/shared` ใช้ร่วมสองฝั่ง)                                |
 | Auth           | JWT + refresh token                                               |
 | Database       | PostgreSQL (แยก schema ตาม module)                                |
-| Storage        | MinIO (S3-compatible)                                             |
+| Storage        | Garage (S3-compatible) — [ทำไมไม่ใช่ MinIO](#object-storage)         |
 | Deploy         | Docker + Caddy บน Bangmod                                         |
 | Error tracking | Sentry                                                            |
 
@@ -54,7 +54,7 @@ packages/
 ├─ web             Next.js 16
 ├─ postgres        + volume แยก
 ├─ postgres-test   ephemeral (tmpfs) สำหรับ integration test
-├─ minio           + volume แยก
+├─ garage          + volume แยก (meta/data) + init container
 └─ caddy           reverse proxy + SSL อัตโนมัติ
 ```
 
@@ -82,12 +82,37 @@ apps/api/core/src/
 │   ├─ view/          views, view columns          (Phase 4)
 │   ├─ chat/          chat adapters                (Phase 2)
 │   ├─ notify/        email + outbox worker
-│   └─ storage/       MinIO wrapper (ไม่มี schema ของตัวเอง)
+│   └─ storage/       S3 wrapper (ไม่มี schema ของตัวเอง)
 ├─ shared/            base entity, decorators, guards, interceptors
 └─ main.ts
 ```
 
 **Module ↔ schema เป็น 1:1** — ยกเว้น `storage/` ที่ไม่มี schema
+
+#### Object storage
+
+**MinIO community edition ถูก archive ไปแล้ว 25 เม.ย. 2026** ไม่มี official image ใหม่อีก · image ตัวสุดท้ายคือ `RELEASE.2025-09-07` ซึ่งจะไม่ได้ security patch ตลอดไป
+
+ลองจริงสามตัวด้วยเกณฑ์เดียวกัน (สร้าง bucket · presigned PUT/GET · ตัด signature ต้องโดนปฏิเสธ · URL หมดอายุ · ลบ):
+
+| | Garage 2.3.0 | RustFS | SeaweedFS |
+| --- | --- | --- | --- |
+| License | AGPL-3.0 | Apache 2.0 | Apache 2.0 |
+| Image | **66 MB** | 195 MB | 248 MB |
+| RAM ตอนว่าง | **3.8 MB** | 72 MB | 68 MB |
+| ตั้งค่า | toml + init 4 ขั้น | env 2 ตัว | s3.json + flags |
+| ผ่านเกณฑ์ | 5/6 | 6/6 | 6/6 |
+
+**เลือก Garage** — เบาที่สุดชัดเจน (RAM น้อยกว่า MinIO 28 เท่า) · production มาตั้งแต่ 2020 · ยังพัฒนาอยู่จริง · ค่า init จ่ายครั้งเดียวใน init container
+
+ข้อที่ Garage ตกไม่ใช่รูรั่ว — URL หมดอายุแล้วมันตอบ `400 Date is too old` แทน `403` · test เลยเช็คว่าโดนปฏิเสธ ไม่เช็ครหัสตรง ๆ
+
+**สองอย่างที่ต้องรู้ ไม่งั้นเสียเวลาหาสาเหตุนาน**
+
+- **region ต้องตรงกัน** Garage default เป็น `garage` ส่วน AWS SDK เป็น `us-east-1` · ไม่ตรงกันจะพังทุกคำสั่งด้วย `Authorization header malformed` ซึ่งอ่านแล้วเหมือนปัญหา credential
+- **ปิด checksum ของ SDK** AWS SDK v3 ใส่ CRC32 ให้ทุก upload โดยอัตโนมัติ · บน presigned URL มันคือ header ที่ browser ไม่ได้ส่ง ทำให้ store ตอบ `InvalidDigest` · ต้องตั้ง `requestChecksumCalculation: 'WHEN_REQUIRED'`
+
+**Client เป็น `@aws-sdk/client-s3` ไม่ใช่ client ของยี่ห้อไหน** — โค้ดไม่รู้จักคำว่า Garage เลย ตัวแปรก็ชื่อ `S3_*` เปลี่ยน server ทีหลังคือแก้ compose อย่างเดียว
 
 **Phase 1 ทำแค่ 6 module:** `identity`, `organization`, `project`, `task`, `notify`, `storage`
 

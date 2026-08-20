@@ -3,7 +3,7 @@ import { z } from 'zod'
 /**
  * Every environment variable the API reads, validated once at boot. Add new
  * ones here: a bad value must stop the process, not surface as `undefined`
- * mid-request. Still to come in Phase 0: `MINIO_*`, `JWT_*`, `RESEND_API_KEY`.
+ * mid-request. Still to come in Phase 0: `JWT_*`.
  */
 export const envSchema = z
   .object({
@@ -27,14 +27,19 @@ export const envSchema = z
     // second container is already covered by the advisory lock.
     JOBS_ENABLED: z.stringbool().default(true),
 
-    // MinIO. No defaults, for the same reason DATABASE_URL has none: a
-    // deployment pointed at the wrong bucket should not start.
-    MINIO_ENDPOINT: z.string().min(1),
-    MINIO_PORT: z.coerce.number().int().positive().default(9000),
-    MINIO_USE_SSL: z.stringbool().default(false),
-    MINIO_ACCESS_KEY: z.string().min(1),
-    MINIO_SECRET_KEY: z.string().min(1),
-    MINIO_BUCKET: z.string().min(1),
+    // Object storage. Named for the protocol rather than the server, which is
+    // a deployment choice — Garage in docker-compose.yml, and nothing in the
+    // code knows that. No defaults, for the reason DATABASE_URL has none.
+    S3_ENDPOINT: z.string().min(1),
+    S3_PORT: z.coerce.number().int().positive().default(3900),
+    S3_USE_SSL: z.stringbool().default(false),
+    S3_ACCESS_KEY: z.string().min(1),
+    S3_SECRET_KEY: z.string().min(1),
+    S3_BUCKET: z.string().min(1),
+    // Must match the server's. Garage defaults to "garage" and the AWS SDK to
+    // "us-east-1"; a mismatch fails every request as a malformed
+    // Authorization header, which does not read like a region problem.
+    S3_REGION: z.string().min(1).default('us-east-1'),
 
     // Optional, unlike the rest — a developer has no Resend account, and
     // without a key EmailService writes the message to the log instead of

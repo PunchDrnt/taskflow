@@ -7,20 +7,20 @@ import { StorageService } from '../src/modules/storage/storage.service'
  * URL that expires. That is the claim the whole storage design rests on, and
  * the code cannot assert it about itself — it has to be tried.
  *
- * Skips when MinIO is not configured, the same bargain the database suites
- * make — and like them, configured-but-unreachable is a failure, not a skip.
- * A suite that passes without asserting is worse than no suite.
+ * Skips when object storage is not configured, the same bargain the database
+ * suites make — and like them, configured-but-unreachable is a failure, not a
+ * skip. A suite that passes without asserting is worse than no suite.
  */
 const storage = new StorageService({
   get: (key: string) => {
     const raw = process.env[key]
-    if (key === 'MINIO_PORT') return Number(raw ?? 9000)
-    if (key === 'MINIO_USE_SSL') return raw === 'true'
+    if (key === 'S3_PORT') return Number(raw ?? 3900)
+    if (key === 'S3_USE_SSL') return raw === 'true'
     return raw
   },
 } as never)
 
-const configured = Boolean(process.env.MINIO_ENDPOINT)
+const configured = Boolean(process.env.S3_ENDPOINT)
 
 describe.skipIf(!configured)('storage', () => {
   const key = `test-org/task/${crypto.randomUUID()}/hello.txt`
@@ -56,7 +56,13 @@ describe.skipIf(!configured)('storage', () => {
     const url = await storage.presignedUpload(key, 1)
     await new Promise((resolve) => setTimeout(resolve, 1500))
 
-    expect((await fetch(url, { method: 'PUT', body })).status).toBe(403)
+    const response = await fetch(url, { method: 'PUT', body })
+
+    // Rejected, not 403 specifically: Garage answers 400 "Date is too old"
+    // where MinIO answered 403. Pinning the code would tie the suite to one
+    // implementation of a thing every S3 server does differently.
+    expect(response.ok).toBe(false)
+    expect(response.status).toBeGreaterThanOrEqual(400)
   })
 })
 

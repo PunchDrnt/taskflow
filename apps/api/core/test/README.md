@@ -6,11 +6,11 @@ code they cover as `src/**/*.spec.ts` and need nothing running.
 ## Running them
 
 ```bash
-docker compose up -d postgres-test minio
+docker compose up -d postgres-test garage garage-init
 yarn test
 ```
 
-`storage.spec.ts` needs MinIO and skips without `MINIO_ENDPOINT`; everything
+`storage.spec.ts` needs object storage and skips without `S3_ENDPOINT`; everything
 else needs only `postgres-test`.
 
 `postgres-test` is the ephemeral service in `docker-compose.yml` — it stores

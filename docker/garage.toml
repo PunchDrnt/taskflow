@@ -1,0 +1,28 @@
+# Garage, the object store behind StorageService. One node, one zone: this is
+# a single box in Bangmod, not a cluster.
+#
+# rpc_secret and admin_token are deliberately absent — they come from
+# GARAGE_RPC_SECRET and GARAGE_ADMIN_TOKEN in .env, so no secret lives in the
+# repository. Garage reads both from the environment.
+
+metadata_dir = "/var/lib/garage/meta"
+data_dir = "/var/lib/garage/data"
+db_engine = "sqlite"
+
+# One node holds the only copy. Anything higher needs more nodes to place it
+# on, and the backup is what protects this data, not replication.
+replication_factor = 1
+
+rpc_bind_addr = "[::]:3901"
+rpc_public_addr = "127.0.0.1:3901"
+
+[s3_api]
+# Has to match what the client signs with. The AWS SDK defaults to us-east-1
+# and Garage defaults to "garage"; a mismatch fails every request with
+# "Authorization header malformed", which reads like a credentials problem.
+s3_region = "us-east-1"
+api_bind_addr = "[::]:3900"
+root_domain = ".s3.garage.localhost"
+
+[admin]
+api_bind_addr = "[::]:3903"
