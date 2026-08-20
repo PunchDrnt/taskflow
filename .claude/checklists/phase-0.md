@@ -77,7 +77,10 @@
 - [x] `@SkipOrgScope()` decorator สำหรับ endpoint ที่ต้องข้ามจริงๆ
 - [x] 🔒 **Integration test: query จาก org A ต้องมองไม่เห็นข้อมูล org B** — [`test/org-isolation.spec.ts`](../../apps/api/core/test/org-isolation.spec.ts) 10 เคส
   - [x] โครง integration test — [`test/database.ts`](../../apps/api/core/test/database.ts) reset DB แล้วรัน migration ให้เองทุกครั้ง
-- [ ] Entity ที่เหลือ — ตอนนี้มีแค่ `Organization` + `Project` (พอให้ isolation test กับ drift test ทำงาน)
+- [x] Entity ครบทั้ง 28 ตาราง (ยกเว้น `chat.*` ที่เป็น Phase 2) — drift test คุมทั้ง schema แล้ว
+  - เจอ 10 จุดตอนใส่ครบ **ไม่มีข้อไหนเป็นชื่อหรือ type ผิดเลย** ทั้งหมดเป็นเรื่อง `DEFAULT` ที่ entity ไม่ได้ประกาศให้ตรง
+  - `jsonb` ใช้ `{ default: {} }` ไม่ใช่ `() => "'{}'::jsonb"` · คอลัมน์ที่ DB มี default ต้องประกาศฝั่ง entity ด้วย
+  - `audit.logs.id` ต้องเป็น `@PrimaryGeneratedColumn('uuid')` คู่กับ `@PrimaryColumn` ของ `occurred_at` — ถ้าใส่ `@PrimaryColumn` + default เอง schema builder จะเสนอ drop-then-set วนไม่จบ
 
 > ❓ RLS **ไม่ทำใน phase นี้** — เลื่อนไป Phase 2 พร้อมเรื่อง transaction strategy
 
