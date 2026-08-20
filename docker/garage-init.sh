@@ -12,11 +12,7 @@ set -eu
 
 ADMIN="http://garage:3903"
 
-# Layout weights, not settings anyone needs to choose. Garage only acts on a
-# zone when it has several nodes to spread replicas across, and this deployment
-# is one node at replication_factor = 1 — so the name is a label nothing reads,
-# and capacity only ever competes with itself. Both are here rather than in
-# .env to keep a deployment's location out of a file people copy.
+# Defaulted here as well as in compose, so the script still runs on its own.
 ZONE="${GARAGE_ZONE:-dc1}"
 CAPACITY="${GARAGE_CAPACITY:-10000000000}"
 

@@ -89,6 +89,8 @@ services:
         condition: service_started
     environment:
       GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN}
+      GARAGE_ZONE: ${GARAGE_ZONE:-dc1}
+      GARAGE_CAPACITY: ${GARAGE_CAPACITY:-10000000000}
       S3_ACCESS_KEY: ${S3_ACCESS_KEY}
       S3_SECRET_KEY: ${S3_SECRET_KEY}
       S3_BUCKET: ${S3_BUCKET}
