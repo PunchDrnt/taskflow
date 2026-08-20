@@ -5,6 +5,11 @@ import { type MigrationInterface, type QueryRunner } from 'typeorm'
  * independent of teams and its own set of statuses — closer to a Slack channel
  * than to a department.
  *
+ * Every FK into another org-scoped table is composite — `(fk_id, org_id)` —
+ * so a child row's org_id cannot disagree with its parent's. Without it,
+ * OrgScopedRepository filters on org_id alone and would hand org A a row that
+ * belongs to org B.
+ *
  * See .claude/docs/02-database.md#schema-project
  */
 export class CreateProject1787188376828 implements MigrationInterface {
@@ -35,6 +40,12 @@ export class CreateProject1787188376828 implements MigrationInterface {
           CHECK ((deleted_at IS NULL) = (deleted_by IS NULL))
       )
     `)
+    // id alone is already unique; this exists so children can point at the
+    // pair and inherit the org constraint from Postgres rather than from code.
+    await queryRunner.query(`
+      ALTER TABLE project.projects
+        ADD CONSTRAINT projects_id_org_unique UNIQUE (id, org_id)
+    `)
     await queryRunner.query(`
       CREATE UNIQUE INDEX projects_org_name_unique
         ON project.projects (org_id, name) WHERE deleted_at IS NULL
@@ -43,9 +54,9 @@ export class CreateProject1787188376828 implements MigrationInterface {
     await queryRunner.query(`
       CREATE TABLE project.members (
         id          uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
-        org_id      uuid        NOT NULL REFERENCES organization.organizations(id) ON DELETE CASCADE,
+        org_id      uuid        NOT NULL,
 
-        project_id  uuid        NOT NULL REFERENCES project.projects(id) ON DELETE CASCADE,
+        project_id  uuid        NOT NULL,
         user_id     uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
         role        text        NOT NULL,
 
@@ -57,7 +68,11 @@ export class CreateProject1787188376828 implements MigrationInterface {
         deleted_by  uuid        REFERENCES identity.users(id) ON DELETE RESTRICT,
 
         CONSTRAINT project_members_deleted_pair_check
-          CHECK ((deleted_at IS NULL) = (deleted_by IS NULL))
+          CHECK ((deleted_at IS NULL) = (deleted_by IS NULL)),
+
+        CONSTRAINT project_members_project_fkey
+          FOREIGN KEY (project_id, org_id)
+          REFERENCES project.projects (id, org_id) ON DELETE CASCADE
       )
     `)
     await queryRunner.query(`
@@ -73,9 +88,9 @@ export class CreateProject1787188376828 implements MigrationInterface {
     await queryRunner.query(`
       CREATE TABLE project.statuses (
         id                 uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
-        org_id             uuid        NOT NULL REFERENCES organization.organizations(id) ON DELETE CASCADE,
+        org_id             uuid        NOT NULL,
 
-        project_id         uuid        NOT NULL REFERENCES project.projects(id) ON DELETE CASCADE,
+        project_id         uuid        NOT NULL,
         name               text        NOT NULL,
         -- A palette token, not a hex value, so themes can restyle without a
         -- data migration.
@@ -100,8 +115,17 @@ export class CreateProject1787188376828 implements MigrationInterface {
         CONSTRAINT statuses_done_xor_cancelled_check
           CHECK (NOT (is_done_type AND is_cancelled_type)),
         CONSTRAINT statuses_deleted_pair_check
-          CHECK ((deleted_at IS NULL) = (deleted_by IS NULL))
+          CHECK ((deleted_at IS NULL) = (deleted_by IS NULL)),
+
+        CONSTRAINT statuses_project_fkey
+          FOREIGN KEY (project_id, org_id)
+          REFERENCES project.projects (id, org_id) ON DELETE CASCADE
       )
+    `)
+    // task.tasks.status_id will point at the pair.
+    await queryRunner.query(`
+      ALTER TABLE project.statuses
+        ADD CONSTRAINT statuses_id_org_unique UNIQUE (id, org_id)
     `)
     await queryRunner.query(`
       CREATE UNIQUE INDEX statuses_project_name_unique
@@ -121,9 +145,9 @@ export class CreateProject1787188376828 implements MigrationInterface {
     await queryRunner.query(`
       CREATE TABLE project.sprints (
         id          uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
-        org_id      uuid        NOT NULL REFERENCES organization.organizations(id) ON DELETE CASCADE,
+        org_id      uuid        NOT NULL,
 
-        project_id  uuid        NOT NULL REFERENCES project.projects(id) ON DELETE CASCADE,
+        project_id  uuid        NOT NULL,
         name        text        NOT NULL,
         goal        text,
         -- Plain dates: a sprint runs for whole days, and giving it a time
@@ -147,8 +171,17 @@ export class CreateProject1787188376828 implements MigrationInterface {
         CONSTRAINT sprints_dates_ordered_check
           CHECK (end_date >= start_date),
         CONSTRAINT sprints_deleted_pair_check
-          CHECK ((deleted_at IS NULL) = (deleted_by IS NULL))
+          CHECK ((deleted_at IS NULL) = (deleted_by IS NULL)),
+
+        CONSTRAINT sprints_project_fkey
+          FOREIGN KEY (project_id, org_id)
+          REFERENCES project.projects (id, org_id) ON DELETE CASCADE
       )
+    `)
+    // task.tasks.sprint_id will point at the pair.
+    await queryRunner.query(`
+      ALTER TABLE project.sprints
+        ADD CONSTRAINT sprints_id_org_unique UNIQUE (id, org_id)
     `)
     await queryRunner.query(`
       CREATE UNIQUE INDEX sprints_single_active_unique

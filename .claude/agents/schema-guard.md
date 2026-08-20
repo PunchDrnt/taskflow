@@ -46,13 +46,44 @@ grep -rn "DateColumn()" --include=*.ts .        # missing explicit type
 **2. `org_id` on every table**
 
 Exceptions, and only these: the whole `identity` schema (users, sessions,
-password_reset_tokens, roles, permissions, role_permissions, user_roles) and
-`billing.plans`. Everything else, including polymorphic tables, needs it.
+password_reset_tokens, roles, permissions, role_permissions, user_roles),
+`billing.plans`, and `organization.organizations`, whose `org_id` would always
+equal its own `id` — OrgScopedRepository scopes that one table on `id`.
+Everything else, including polymorphic tables, needs it.
+
+Also flag a column that repeats what the base entity already records:
+`joined_at` / `granted_at` / `assigned_at` are `created_at`, and an `owner_id`
+meaning "who created this" is `created_by`. `user_roles.granted_by` is the one
+sanctioned duplicate — it is `SET NULL` where `created_by` is `RESTRICT`.
+
+Every soft-deleted table needs `CHECK ((deleted_at IS NULL) = (deleted_by IS
+NULL))`. Tables that already carry a state column meaning "no longer usable"
+(`sessions.revoked_at`, `password_reset_tokens.used_at`, `outbox.status`) must
+have neither column — two delete markers on one table can disagree.
 
 Composite indexes must lead with `org_id`. An index like `(project_id, status_id)`
 that omits it is a finding.
 
-**3. Unique constraints on soft-deleted tables must be partial**
+**3. A FK between two org-scoped tables must be composite**
+
+A child carrying `org_id` alongside a foreign key to another org-scoped table
+must reference the pair, not the id alone:
+
+```sql
+-- correct: Postgres proves the child's org matches the parent's
+FOREIGN KEY (team_id, org_id) REFERENCES organization.teams (id, org_id)
+-- wrong: org_id is free to disagree, and OrgScopedRepository filters on it
+team_id uuid REFERENCES organization.teams (id)
+```
+
+The parent needs `UNIQUE (id, org_id)` to be a valid target. Flag a single-column
+FK from any table that has `org_id` into another table that has `org_id` — this
+is the rule that makes the isolation guarantee real rather than intended.
+
+Not a finding when the FK points at `organization.organizations(id)` itself, or
+into schema `identity`, neither of which is org-scoped.
+
+**4. Unique constraints on soft-deleted tables must be partial**
 
 ```sql
 -- correct
@@ -63,13 +94,13 @@ UNIQUE (project_id, name)
 
 Any table with `deleted_at` and a plain `UNIQUE` is a finding.
 
-**4. `created_by` / `updated_by` / `completed_by` are `RESTRICT`**
+**5. `created_by` / `updated_by` / `completed_by` are `RESTRICT`**
 
 Deleting a user is anonymisation — the row survives — so the FK stays valid and the
 column stays `NOT NULL`. `SET NULL` on a `NOT NULL` column also fails at runtime
 rather than at table creation, so it will not be caught by a migration that "ran fine".
 
-**5. `audit.logs` is partitioned, and its PK is composite**
+**6. `audit.logs` is partitioned, and its PK is composite**
 
 `PARTITION BY RANGE (occurred_at)` with `PRIMARY KEY (id, occurred_at)`. Postgres
 requires the partition key in every unique constraint, so a plain `PRIMARY KEY (id)`
@@ -77,20 +108,20 @@ will not create. On the TypeORM side this means two `@PrimaryColumn()`s — it i
 one table that does not use the base entity directly. `audit.logs` rows are never
 deleted; flag any `DELETE FROM audit.logs`.
 
-**6. `sort_order` is `text COLLATE "C"`**
+**7. `sort_order` is `text COLLATE "C"`**
 
 Without the collation, ordering differs across machines and locales. An `integer`
 sort_order is a finding — the design depends on fractional indexing.
 
-**7. UUID primary keys**
+**8. UUID primary keys**
 
-**8. `synchronize` stays false**
+**9. `synchronize` stays false**
 
 Flag any `synchronize: true`. It cannot produce partitions, partial indexes,
 collations, or extensions, so it will silently generate a schema that does not match
 these rules.
 
-**9. No Postgres `enum` types, and three status columns carry a `CHECK`**
+**10. No Postgres `enum` types, and three status columns carry a `CHECK`**
 
 Constrained-value columns are plain `text`. Flag any `CREATE TYPE ... AS ENUM` or
 TypeORM `@Column({ type: 'enum' })`.

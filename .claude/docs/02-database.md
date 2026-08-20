@@ -41,6 +41,28 @@ TypeORM กำหนดที่ entity: `@Entity({ schema: 'task', name: 'tasks
 
 ## 2. Foreign Key Rules
 
+> 🔒 **ต้องทำ** — ตารางที่มี `org_id` **และ** มี FK ไปตารางที่ scope ด้วย org เหมือนกัน → FK นั้นต้องเป็น **composite `(fk_id, org_id)`**
+
+```sql
+-- ตารางแม่: id เป็น PK อยู่แล้วจึง unique อยู่ดี · index นี้มีไว้ให้ลูกชี้เท่านั้น
+ALTER TABLE organization.teams ADD CONSTRAINT teams_id_org_unique UNIQUE (id, org_id);
+
+-- ตารางลูก: ชี้เป็นคู่ ไม่ใช่ชี้ทีละคอลัมน์
+FOREIGN KEY (team_id, org_id) REFERENCES organization.teams (id, org_id) ON DELETE CASCADE
+```
+
+**ทำไมถึงเป็น 🔒** — `org_id` ที่ลูกถือเป็นค่า denormalize ถ้าไม่มีอะไรผูก มันขัดกับแม่ได้ แล้ว `OrgScopedRepository` ที่กรองด้วย `org_id` อย่างเดียวจะคืนแถวนั้นออกมา = **ข้อมูลข้าม org รั่ว จากคอลัมน์ที่มีไว้กันรั่วเอง**
+
+```
+team_members.org_id = Org A     แต่     teams.org_id = Org B
+ไม่มี composite FK →  INSERT ผ่าน · repository ของ Org A เห็นแถวนี้     (ทดสอบแล้ว)
+มี composite FK    →  INSERT ถูกปฏิเสธ                                 (ทดสอบแล้ว)
+```
+
+ผลข้างเคียงที่ตั้งใจ: **ย้าย team/project ข้าม org ทั้งที่ยังมีลูกอยู่ไม่ได้** ต้องย้ายลูกไปพร้อมกันใน transaction เดียว
+
+**ไม่ต้องทำ composite** ถ้า FK ชี้ตรงไป `organization.organizations(id)` (เช่น `teams.org_id`, `projects.org_id`) เพราะคอลัมน์เดียวขัดกับตัวเองไม่ได้ · และถ้าชี้ไป schema `identity` ซึ่งไม่มี org
+
 - FK ข้าม schema ได้ **ทิศทางเดียว**: `task → project → organization → identity`
 - Schema ระดับล่างห้ามมี FK ชี้ขึ้นไปหาระดับบน — `identity` ต้องไม่รู้จัก `task`
 - Schema กลาง (`audit`, `discussion`, `field`, `view`) ไม่ชี้ไปไหนเลย (polymorphic)

@@ -73,6 +73,7 @@
 - [ ] 🔒 `created_by` / `updated_by` / `completed_by` เป็น `RESTRICT`
 - [ ] 🔒 `sort_order` เป็น `text COLLATE "C"`
 - [ ] Composite index ขึ้นต้นด้วย `org_id` เสมอ
+- [ ] 🔒 FK ระหว่างสองตารางที่ scope ด้วย org เป็น **composite `(fk_id, org_id)`** ไม่ใช่คอลัมน์เดียว ([เหตุผล](../docs/02-database.md#2-foreign-key-rules)) — ตารางแม่ต้องมี `UNIQUE (id, org_id)` ให้ลูกชี้
 - [ ] Partial unique index เพื่อบังคับ "at most one" ผ่าน DB ไม่ใช่ app เท่านั้น:
   - [ ] `project.statuses`: `(project_id) WHERE is_default = true`
   - [ ] `project.sprints`: `(project_id) WHERE status = 'active'`
