@@ -60,9 +60,12 @@
 - [ ] Job สร้าง partition เดือนถัดไปล่วงหน้า
   - [x] ฝั่ง DB พร้อมแล้ว — `audit.ensure_month_partition(date)` เรียกซ้ำได้ไม่มีผลข้างเคียง เหลือแค่ตัวตั้งเวลามาเรียก
   - [ ] Alert เมื่อ `audit.logs_default` มีแถว — แปลว่า partition ขาด และเดือนนั้นจะสร้าง partition ไม่ได้จนกว่าจะย้ายออก
-- [ ] ตารางที่เหลือตาม [`02-database.md`](../docs/02-database.md#5-full-schema) — **ครบทุกตารางตั้งแต่รอบนี้** ยกเว้น `chat.*` (Phase 2)
+- [x] ตารางที่เหลือตาม [`02-database.md`](../docs/02-database.md#5-full-schema) — **ครบทุกตารางตั้งแต่รอบนี้** ยกเว้น `chat.*` (Phase 2)
+  - 28 ตาราง 10 schema · 12 migration · revert ทั้งหมดแล้วเหลือ 0 ตาราง 0 schema 0 extension แล้ว run ใหม่ได้ 28 ตารางเท่าเดิม
+  - `task` มี composite FK 4 จุด — `sprint_id` ต้องใช้ `ON DELETE SET NULL (sprint_id)` ระบุคอลัมน์ ไม่งั้น Postgres จะ null `org_id` ไปด้วยซึ่งเป็น NOT NULL
+  - ไม่ทำ GIN index บน `task.tasks.custom_fields` — ยกไป Phase 4 ตอนที่มีคนอ่านจริง ตอนนี้มีแต่ทำให้ write ช้า
 
-**ตรวจก่อนปิดข้อนี้**
+**ตรวจก่อนปิดข้อนี้** — query ตรวจทั้งชุดรันแล้ว ผ่านหมด
 
 - [ ] 🔒 ทุก column วันเวลาเป็น `timestamptz` — `grep -rn "timestamp[^t]" migrations/` ต้องไม่เจอ
 - [ ] 🔒 ทุกตารางมี `org_id` ยกเว้น schema `identity`, `billing.plans` และ `organization.organizations` (org_id = id เสมอ → `OrgScopedRepository` scope ตารางนี้ด้วย `id`)

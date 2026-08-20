@@ -26,6 +26,22 @@ fresh checkout can run `yarn test` without Docker. CI must set it. A suite that
 silently skips is worse than no suite, and the cross-org isolation test in
 particular is mandatory — see `.claude/checklists/phase-0.md` §3.
 
+## The database is reset on every run
+
+`createMigratedTestDataSource` drops every schema and the migrations table
+before applying migrations, so each run builds the schema from nothing.
+
+This is not tidiness. A migration already recorded in the migrations table
+never runs again, so editing one — which Phase 0 does freely, since nothing is
+deployed — leaves this database on the old definition while the development one
+has been rebuilt. The suite then fails against a schema that no longer exists
+anywhere, and the error points at the migration rather than at the stale
+database.
+
+Because it drops schemas, it refuses to run unless the database name ends in
+`_test`. Pointing `DATABASE_URL_TEST` at the development database fails with
+`Refusing to reset "app"` rather than emptying it.
+
 ## Sharing one database
 
 Every file connects to the same database, so `vitest.config.mts` pins

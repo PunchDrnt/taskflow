@@ -92,7 +92,9 @@ CREATE UNIQUE INDEX ON project.statuses (project_id, name) WHERE deleted_at IS N
 UNIQUE (project_id, name)
 ```
 
-Any table with `deleted_at` and a plain `UNIQUE` is a finding.
+Any table with `deleted_at` and a plain `UNIQUE` is a finding, with one
+exception: `UNIQUE (id, org_id)`, which exists only so a child can reference the
+pair (rule 3). It reserves nothing, because `id` never repeats.
 
 **5. `created_by` / `updated_by` / `completed_by` are `RESTRICT`**
 
