@@ -92,7 +92,9 @@ yarn workspace @repo/ui lint
 
 Workspace names: `@web/client` (apps/web/client), `@api/core` (apps/api/core), `@repo/ui` (packages/ui), `@repo/shared` (packages/shared), `@repo/config` (packages/config).
 
-Tests run on **Vitest**, configured only in `@api/core` so far (`vitest.config.mts`). It uses `unplugin-swc` rather than Vitest's default esbuild, because esbuild cannot emit decorator metadata and both NestJS DI and TypeORM depend on it. Integration tests run against the `postgres-test` service in `docker-compose.yml` and are pinned to `fileParallelism: false` since they share one database.
+Tests run on **Vitest**, configured only in `@api/core` so far (`vitest.config.mts`). It uses `unplugin-swc` rather than Vitest's default esbuild, because esbuild cannot emit decorator metadata and both NestJS DI and TypeORM depend on it. Unit tests sit beside the code as `src/**/*.spec.ts`; integration tests live in `test/` (see `test/README.md`), run against the `postgres-test` service in `docker-compose.yml`, and are pinned to `fileParallelism: false` since they share one database. They read `DATABASE_URL_TEST` — deliberately absent from `src/config/env.ts`, since the API must never connect to the test database — and skip when it is unset, so CI has to set it.
+
+`test/schema-drift.spec.ts` guards the gap `synchronize: false` leaves open: nothing reconciles entities against the database, so it applies every migration and asserts TypeORM's schema builder has no statement left to run. Note that `migration:create` emits `import { MigrationInterface, QueryRunner }` as a value import — both are types only and TypeORM's ESM entry does not export them, so it passes `nest build` and throws under Vitest. `apps/api/core/eslint.config.mjs` turns on `consistent-type-imports` for `src/database/migrations/*.ts` only, so lint-staged fixes it on commit — the same rule applied repo-wide would rewrite NestJS constructor injection, whose DI reads the `design:paramtypes` metadata that `import type` erases.
 
 ## Commit conventions
 

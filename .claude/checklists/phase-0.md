@@ -37,6 +37,8 @@
 > CLI ต่อติดแล้ว — `yarn workspace @api/core migration:create|run|revert|show`
 > รันกับ `dist/` ที่ `nest build` ออกมา ไม่ต้องมี TS loader และเป็น artefact ตัวเดียวกับที่ deploy
 > ตาราง `migrations` ของ TypeORM อยู่ schema `public` (ที่เดียวที่ public มีตาราง)
+>
+> ⚠️ `migration:create` ออกไฟล์มาเป็น `import { MigrationInterface, QueryRunner }` ซึ่ง**พังใน ESM** — สองตัวนี้เป็น type ล้วน ไม่มีใน `typeorm/index.mjs` · ผ่าน `nest build` (CommonJS) แต่ Vitest ตายตอน import · eslint rule `consistent-type-imports` (เปิดเฉพาะโฟลเดอร์ `migrations/` — เปิดทั้ง repo จะไปลบ metadata ที่ NestJS DI ใช้) แก้ให้อัตโนมัติตอน commit
 
 - [ ] `001` extension: `citext`, `pgcrypto` — ต้องมาก่อนตารางที่ใช้
 - [ ] `002` สร้าง schema ทั้ง 11 ตัว: `identity` `organization` `project` `task` `audit` `discussion` `field` `view` `notify` `billing` (+ `public` ว่างไว้)
@@ -61,6 +63,10 @@
   - [ ] `project.sprints.status`
   - [ ] `notify.outbox.status`
 - [ ] ไม่มี `CREATE TYPE ... AS ENUM` ที่ไหนเลย — `grep -rn "AS ENUM" migrations/` ต้องไม่เจอ
+- [x] Test กัน entity หลุดจาก migration — `test/schema-drift.spec.ts`
+  - `synchronize: false` แปลว่า TypeORM ไม่เช็คให้เลยว่า entity ตรงกับ DB มั้ย (ต่างจาก Prisma ที่มี schema เดียวเป็นความจริง) · test นี้ให้ schema builder คำนวณว่า `synchronize` "จะรันอะไร" กับ DB ที่ migrate แล้ว — ถ้ามีอะไรให้รัน แปลว่าหลุดกัน
+  - พิสูจน์แล้วสองทาง: entity มีคอลัมน์เกิน → จับได้ (`ADD "forgotten_column"`) · migration มีคอลัมน์เกิน → จับได้ (`DROP COLUMN "undeclared"`)
+  - ⚠️ พอถึง partition / partial index / `COLLATE "C"` จะมี false positive เพราะ schema builder แทนค่าพวกนี้ไม่ได้ — แก้ด้วยการ ignore เฉพาะจุดพร้อมคอมเมนต์ **ห้ามผ่อน assertion**
 
 ## 3. Base entity + org scoping
 
@@ -73,6 +79,7 @@
 - [ ] ESLint rule ห้าม inject `Repository<T>` ธรรมดา
 - [ ] `@SkipOrgScope()` decorator สำหรับ endpoint ที่ต้องข้ามจริงๆ
 - [ ] 🔒 **Integration test: query จาก org A ต้องมองไม่เห็นข้อมูล org B** — รันกับ `postgres-test` ข้อนี้ไม่มีข้อยกเว้น
+  - [x] โครง integration test พร้อมแล้ว — `test/database.ts` + `test/README.md` · ต่อ `postgres-test` แล้วรัน migration ให้เอง
 
 > ❓ RLS **ไม่ทำใน phase นี้** — เลื่อนไป Phase 2 พร้อมเรื่อง transaction strategy
 

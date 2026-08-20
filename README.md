@@ -88,6 +88,10 @@ yarn workspace @api/core migration:show
 
 Migrations run against the compiled output in `dist/`, which needs no TypeScript loader and is the same artefact that ships. TypeORM's own bookkeeping table is `public.migrations`.
 
+`migration:create` emits `import { MigrationInterface, QueryRunner } from 'typeorm'`. Both are types only, and TypeORM's ESM entry point does not export them — so that import compiles fine under `nest build` and throws at load time under Vitest. `consistent-type-imports` is enabled for `src/database/migrations/*.ts` and nowhere else, so lint-staged rewrites it on commit; enabling it repo-wide would strip the constructor metadata NestJS DI resolves providers from.
+
+Because `synchronize` is off, nothing reconciles the entities against the database — an entity can describe a column no migration ever created and nothing complains until a query fails. [test/schema-drift.spec.ts](apps/api/core/test/schema-drift.spec.ts) closes that gap: it applies every migration to the test database and asserts the schema builder has nothing left to do. It catches drift in both directions.
+
 Entities are registered explicitly in `entities.ts` rather than discovered by glob — a `*.entity.js` glob resolves differently under `nest build` than under Vitest's SWC transform, and the difference shows up as an "entity metadata not found" error in one runner but not the other. Entity properties are camelCase and mapped to snake_case columns by `snake-naming.strategy.ts`, so `@Column({ name })` is only needed to override.
 
 ## Scripts
@@ -110,7 +114,7 @@ Each workspace also exposes its own scripts if you want to target one package di
 
 Vitest, configured in `@api/core` ([vitest.config.mts](apps/api/core/vitest.config.mts)). It compiles with `unplugin-swc` rather than Vitest's default esbuild, because esbuild cannot emit decorator metadata and both NestJS DI and TypeORM depend on it.
 
-Integration tests run against the `postgres-test` service in [docker-compose.yml](docker-compose.yml) — ephemeral, backed by tmpfs — and are pinned to `fileParallelism: false` since they share one database.
+Unit tests sit next to the code as `src/**/*.spec.ts`. Integration tests live in [apps/api/core/test/](apps/api/core/test/) and run against the `postgres-test` service in [docker-compose.yml](docker-compose.yml) — ephemeral, backed by tmpfs — pinned to `fileParallelism: false` since they share one database. They read `DATABASE_URL_TEST` and **skip when it is unset**, so a fresh checkout can run `yarn test` without Docker; CI must set it. See [test/README.md](apps/api/core/test/README.md).
 
 Two suites are non-negotiable once the schema exists: cross-org isolation (a query from org A must never see org B's rows) and the permission layer.
 

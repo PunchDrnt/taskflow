@@ -1,5 +1,15 @@
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 import swc from 'unplugin-swc'
 import { defineConfig } from 'vitest/config'
+
+// Vitest does not read .env the way Nest's ConfigModule does, and the repo
+// keeps a single .env at its root. Load it so integration tests can find
+// DATABASE_URL_TEST; without it they skip rather than fail (see test/README.md).
+const rootEnvFile = join(import.meta.dirname, '..', '..', '..', '.env')
+if (existsSync(rootEnvFile)) {
+  process.loadEnvFile(rootEnvFile)
+}
 
 export default defineConfig({
   test: {

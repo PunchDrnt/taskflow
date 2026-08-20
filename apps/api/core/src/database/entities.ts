@@ -10,6 +10,9 @@ import type { DataSourceOptions } from 'typeorm'
  * cost is one line per entity; the benefit is that the list is greppable
  * and behaves identically everywhere.
  *
+ * `test/schema-drift.spec.ts` asserts this list matches what the migrations
+ * built, so an entity that is added here but not migrated fails the suite.
+ *
  * Add each entity here as it lands.
  */
 export const entities: NonNullable<DataSourceOptions['entities']> = []
