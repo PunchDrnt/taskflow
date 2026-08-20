@@ -34,6 +34,13 @@ export class CreateIdentityUsers1787186718550 implements MigrationInterface {
         has_claimed_free_credits  boolean     NOT NULL DEFAULT false,
         free_org_count            integer     NOT NULL DEFAULT 0,
 
+        -- When this person asked to be deleted, which starts the thirty-day
+        -- window they can still change their mind in. deleted_at cannot serve
+        -- here: it marks the far end of that window, and it is a
+        -- @DeleteDateColumn, so setting it would hide the row from every
+        -- query during exactly the month it has to stay findable.
+        deletion_requested_at     timestamptz,
+
         created_at                timestamptz NOT NULL DEFAULT now(),
         created_by                uuid        NOT NULL,
         updated_at                timestamptz NOT NULL DEFAULT now(),
@@ -61,7 +68,15 @@ export class CreateIdentityUsers1787186718550 implements MigrationInterface {
         -- A soft delete must record who performed it. Half-set pairs are the
         -- kind of thing nobody notices until someone asks who deleted this.
         CONSTRAINT users_deleted_pair_check
-          CHECK ((deleted_at IS NULL) = (deleted_by IS NULL))
+          CHECK ((deleted_at IS NULL) = (deleted_by IS NULL)),
+
+        -- Same reasoning as the pair above, for the other end of the account
+        -- lifecycle. The retention job counts thirty days from this column,
+        -- so a pending_deletion row without one would never be anonymised,
+        -- and a leftover one on a recovered account would anonymise someone
+        -- who came back. Cleared when the status moves on, either way.
+        CONSTRAINT users_deletion_requested_matches_status_check
+          CHECK ((status = 'pending_deletion') = (deletion_requested_at IS NOT NULL))
       )
     `)
 

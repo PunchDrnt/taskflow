@@ -31,6 +31,18 @@ export class User extends SoftDeletableEntity {
   @Column('text', { default: 'active' })
   status!: string
 
+  /**
+   * When the account holder asked to be deleted. Set exactly while `status`
+   * is `pending_deletion`, enforced by CHECK, and the column the retention
+   * job counts its thirty days from.
+   *
+   * Not `deletedAt`: that one is a @DeleteDateColumn, so it marks the row as
+   * gone from every query — which is the opposite of what the grace period
+   * needs, since recovering the account means finding it first.
+   */
+  @Column({ type: 'timestamptz', nullable: true })
+  deletionRequestedAt!: Date | null
+
   /** Exactly one row may have this set; the database enforces it. */
   @Column('boolean', { default: false })
   isSystem!: boolean

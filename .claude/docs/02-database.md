@@ -235,6 +235,7 @@ users
   nickname                    text     คนไทยเรียกชื่อเล่น — ต้องค้นได้
   avatar_url                  text     null
   status                      text     'active' | 'deactivated' | 'pending_deletion' | 'deleted'
+  deletion_requested_at       timestamptz null · วันที่เจ้าตัวกดลบบัญชี — ตัวนับ 30 วันของ grace period
   is_system                   boolean  default false · true ได้แถวเดียวทั้งตาราง — ดูด้านล่าง
   has_claimed_free_credits    boolean  default false  (SaaS — ไม่ reset แม้ org ถูกลบ)
   free_org_count              int      default 0      (SaaS)
@@ -244,9 +245,18 @@ users
   CHECK (status IN ('active', 'deactivated', 'pending_deletion', 'deleted'))
   CHECK (NOT is_system OR password_hash IS NULL)
   CHECK ((status = 'deleted') = (deleted_at IS NOT NULL))
+  CHECK ((status = 'pending_deletion') = (deletion_requested_at IS NOT NULL))
   CREATE UNIQUE INDEX ON identity.users (email) WHERE status != 'deleted';
   CREATE UNIQUE INDEX ON identity.users (is_system) WHERE is_system;
 ```
+
+**ทำไมต้องมี `deletion_requested_at` ทั้งที่มี `deleted_at` อยู่แล้ว**
+
+สองคอลัมน์นี้อยู่คนละปลายของช่วง 30 วัน — `deletion_requested_at` คือวันที่กดลบ ส่วน `deleted_at` คือวันที่ anonymize เสร็จ (CHECK ผูกไว้กับ `status = 'deleted'` อยู่แล้ว) · retention job ต้องนับจากอันแรก
+
+ใช้ `deleted_at` แทนไม่ได้เพราะมันเป็น `@DeleteDateColumn` — TypeORM กรอง `deleted_at IS NULL` ให้อัตโนมัติทุก query ถ้าเซ็ตตั้งแต่วันกดลบ user จะหายจากระบบทันที ทั้งที่ 30 วันนั้นคือช่วงที่ต้องหาเจอพอดี (login กลับมาปลดล็อก, สมัครใหม่ด้วยอีเมลเดิมแล้วต้องขึ้นว่ารอลบอยู่, ชื่อยังต้องโชว์บนงานเก่า)
+
+CHECK เป็น biconditional เหมือนคู่ `deleted_at`/`deleted_by` — ล้างค่าพร้อมกับตอนเปลี่ยน status ไม่ว่าจะไปทาง `active` (กู้คืน) หรือ `deleted` (ครบกำหนด) · ค่าค้างบนบัญชีที่กู้คืนแล้วแปลว่า job จะ anonymize คนที่กลับมาแล้ว
 
 **System user** — `id` คงที่ `00000000-0000-0000-0000-000000000000`
 

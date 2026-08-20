@@ -132,11 +132,11 @@ export class RetentionService {
    * come back, leaving the row itself in place so everything they created
    * still has an author.
    *
-   * The clock runs from `updated_at`, because the schema has no column saying
-   * when the status last changed. That is imprecise in one direction only: a
-   * user whose row is touched again gets a fresh thirty days, which errs
-   * towards them being able to recover the account. If that ever stops being
-   * good enough the fix is a `status_changed_at` column, not a cleverer query.
+   * The clock runs from `deletion_requested_at`, which exists only while the
+   * status is `pending_deletion` and is set at the moment the person asks.
+   * `deleted_at` marks the other end of the window — it is set here, by this
+   * method — and `updated_at` would restart the countdown every time anything
+   * touched the row.
    *
    * `status = 'deleted'` and `deleted_at` are set together — the table has a
    * CHECK tying them, and another tying `deleted_at` to `deleted_by`. The
@@ -152,12 +152,15 @@ export class RetentionService {
               avatar_url    = NULL,
               password_hash = NULL,
               status        = 'deleted',
+              -- Cleared as the status moves on: the CHECK ties the two, and
+              -- when the request was made is audit.logs' job to remember.
+              deletion_requested_at = NULL,
               deleted_at    = now(),
               deleted_by    = $1,
               updated_at    = now(),
               updated_by    = $1
         WHERE status = 'pending_deletion'
-          AND updated_at < now() - make_interval(days => $2)
+          AND deletion_requested_at < now() - make_interval(days => $2)
           AND NOT is_system`,
       [SYSTEM_USER_ID, RETENTION_DAYS.pendingDeletionUser],
     )) as [unknown[], number]

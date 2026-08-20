@@ -256,13 +256,14 @@ project.statuses
    ↓
 ยืนยันด้วยการพิมพ์อีเมลตัวเอง
    ↓
-status = 'pending_deletion' · เข้าระบบไม่ได้ · ข้อมูลยังอยู่ครบ (ยังไม่ anonymize)
+status = 'pending_deletion' + deletion_requested_at = now()
+   เข้าระบบไม่ได้ · ข้อมูลยังอยู่ครบ (ยังไม่ anonymize)
    ↓
 ภายใน 30 วัน:
-  ├─ login ด้วยรหัสเดิม → ปลดล็อกกลับมาใช้ต่อได้ทันที
+  ├─ login ด้วยรหัสเดิม → ปลดล็อกกลับมาใช้ต่อได้ทันที (ล้าง deletion_requested_at ด้วย)
   └─ สมัครใหม่ด้วยอีเมลเดิม → "บัญชีนี้อยู่ระหว่างรอลบ ต้องการกู้คืนไหม?" → login แทน
    ↓
-ครบ 30 วัน → anonymize จริง (status = 'deleted')
+ครบ 30 วัน → retention job anonymize จริง (status = 'deleted')
    ↓
 งานที่ยัง assign อยู่ → แจ้ง project admin
 ```

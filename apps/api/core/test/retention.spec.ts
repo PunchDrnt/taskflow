@@ -235,20 +235,51 @@ describe.skipIf(!hasTestDatabase)('retention', () => {
   })
 
   describe('users who asked to be deleted', () => {
+    /** `requestedDaysAgo` is ignored unless the status is pending_deletion. */
     const seedUser = async (
       email: string,
       status: string,
-      updatedDaysAgo: number,
+      requestedDaysAgo: number,
     ): Promise<string> => {
+      const requestedAt =
+        status === 'pending_deletion' ? daysAgo(requestedDaysAgo) : 'NULL'
+
       const [user] = (await dataSource.query(
         `INSERT INTO identity.users
-           (email, name, nickname, status, created_by, updated_by, updated_at)
-         VALUES ($1, 'Somchai', 'Som', $2, $3, $3, ${daysAgo(updatedDaysAgo)})
+           (email, name, nickname, status, deletion_requested_at,
+            created_by, updated_by)
+         VALUES ($1, 'Somchai', 'Som', $2, ${requestedAt}, $3, $3)
          RETURNING id`,
         [email, status, SYSTEM_USER_ID],
       )) as { id: string }[]
       return user.id
     }
+
+    it('will not accept a pending_deletion row with no request date', async () => {
+      // The retention job counts from that column, so a row without one would
+      // sit in the grace period forever.
+      await expect(
+        dataSource.query(
+          `INSERT INTO identity.users
+             (email, name, nickname, status, created_by, updated_by)
+           VALUES ('nodate@example.com', 'S', 'S', 'pending_deletion', $1, $1)`,
+          [SYSTEM_USER_ID],
+        ),
+      ).rejects.toThrow(/users_deletion_requested_matches_status_check/)
+    })
+
+    it('will not leave the request date behind on a recovered account', async () => {
+      const id = await seedUser('back@example.com', 'pending_deletion', 5)
+
+      // Logging in during the window clears the status; the date has to go
+      // with it, or the job would anonymise someone who came back.
+      await expect(
+        dataSource.query(
+          `UPDATE identity.users SET status = 'active' WHERE id = $1`,
+          [id],
+        ),
+      ).rejects.toThrow(/users_deletion_requested_matches_status_check/)
+    })
 
     it('anonymises the row instead of deleting it', async () => {
       const id = await seedUser('gone@example.com', 'pending_deletion', 45)
@@ -257,7 +288,7 @@ describe.skipIf(!hasTestDatabase)('retention', () => {
 
       const [user] = (await dataSource.query(
         `SELECT email::text, name, nickname, avatar_url, password_hash,
-                status, deleted_at, deleted_by, updated_by
+                status, deletion_requested_at, deleted_at, deleted_by, updated_by
            FROM identity.users WHERE id = $1`,
         [id],
       )) as Record<string, unknown>[]
@@ -269,6 +300,7 @@ describe.skipIf(!hasTestDatabase)('retention', () => {
       expect(user.name).toBe('Deleted user')
       expect(user.password_hash).toBeNull()
       expect(user.status).toBe('deleted')
+      expect(user.deletion_requested_at).toBeNull()
       expect(user.deleted_at).not.toBeNull()
       // No request context out here, so the job names its actor itself.
       expect(user.deleted_by).toBe(SYSTEM_USER_ID)
@@ -301,7 +333,8 @@ describe.skipIf(!hasTestDatabase)('retention', () => {
     it('never touches the system user', async () => {
       await dataSource.query(
         `UPDATE identity.users
-            SET status = 'pending_deletion', updated_at = ${daysAgo(400)}
+            SET status = 'pending_deletion',
+                deletion_requested_at = ${daysAgo(400)}
           WHERE is_system`,
       )
 
@@ -314,7 +347,9 @@ describe.skipIf(!hasTestDatabase)('retention', () => {
       expect(user.email).not.toContain('deleted.invalid')
 
       await dataSource.query(
-        `UPDATE identity.users SET status = 'active' WHERE is_system`,
+        `UPDATE identity.users
+            SET status = 'active', deletion_requested_at = NULL
+          WHERE is_system`,
       )
     })
   })
