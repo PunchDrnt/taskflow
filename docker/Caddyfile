@@ -1,0 +1,24 @@
+# One origin for both apps, which is what makes SameSite=Lax cookies enough on
+# their own — a separate api.* subdomain would need double-submit CSRF tokens.
+# See .claude/docs/01-architecture.md#csrf
+#
+# SITE_ADDRESS is a hostname in production, so Caddy provisions TLS itself. Set
+# it to :80 locally, where there is no domain to get a certificate for.
+{$SITE_ADDRESS} {
+	log {
+		output stdout
+		format json
+	}
+
+	encode zstd gzip
+
+	# handle_path strips the prefix: /api/health reaches the API as /health.
+	# The API knows nothing about being mounted under a path.
+	handle_path /api/* {
+		reverse_proxy api:3001
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+}

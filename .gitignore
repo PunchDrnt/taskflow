@@ -22,8 +22,11 @@ next-env.d.ts
 .turbo/
 
 # env
-.env
-.env*.local
+# Everything but the examples: `.env` alone would not have covered
+# .env.production, which holds the real database and Resend secrets.
+.env*
+!.env.example
+!.env.production.example
 
 # logs
 *.log
