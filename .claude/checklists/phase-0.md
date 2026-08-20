@@ -40,8 +40,14 @@
 >
 > ⚠️ `migration:create` ออกไฟล์มาเป็น `import { MigrationInterface, QueryRunner }` ซึ่ง**พังใน ESM** — สองตัวนี้เป็น type ล้วน ไม่มีใน `typeorm/index.mjs` · ผ่าน `nest build` (CommonJS) แต่ Vitest ตายตอน import · eslint rule `consistent-type-imports` (เปิดเฉพาะโฟลเดอร์ `migrations/` — เปิดทั้ง repo จะไปลบ metadata ที่ NestJS DI ใช้) แก้ให้อัตโนมัติตอน commit
 
-- [ ] `001` extension: `citext`, `pgcrypto` — ต้องมาก่อนตารางที่ใช้
-- [ ] `002` สร้าง schema ทั้ง 11 ตัว: `identity` `organization` `project` `task` `audit` `discussion` `field` `view` `notify` `billing` (+ `public` ว่างไว้)
+- [x] `001` extension: `citext` — ต้องมาก่อนตารางที่ใช้
+  - **ไม่ลง `pgcrypto`** — `gen_random_uuid()` เป็นของ core มาตั้งแต่ PG 13 (เช็คกับ PG 18 แล้ว: `(core)`) ลงไปก็ไม่มีอะไรเรียกใช้
+  - `citext` เป็น trusted extension → app user ที่ไม่ใช่ superuser ลงได้เอง (เกี่ยวกับข้อ §7)
+- [x] `002` สร้าง schema ทั้ง 11 ตัว: `identity` `organization` `project` `task` `audit` `discussion` `field` `view` `chat` `notify` `billing`
+  - ลิสต์เดิมในไฟล์นี้ตกหล่น `chat` ไป (เขียนว่า 11 แต่นับได้ 10) — ยึดตาม [Schema Map](../docs/02-database.md#1-schema-map)
+  - สร้าง schema ครบทุกตัวตั้งแต่รอบนี้แม้ตารางจะมาทีหลัง — schema ไม่มีต้นทุน และ migration แรกของแต่ละ module จะได้ไม่ต้องจำว่าต้องสร้างบ้านตัวเองก่อน
+  - `public` ไม่ต้องสร้าง (มีอยู่แล้ว) มีแค่ extension + ตาราง `migrations`
+  - `down` ใช้ `DROP SCHEMA` เปล่า ๆ ไม่ใส่ `CASCADE` — ถ้ายังมีตารางค้างต้องพังให้เห็น ไม่ใช่ลบตารางที่ตัวเองไม่ได้สร้างทิ้งเงียบ ๆ
 - [ ] 🔒 **`003` seed system user** — base entity บังคับ `created_by NOT NULL` ทุกตาราง**รวม `identity.users` เอง** แถวแรกต้อง insert โดยชี้ `created_by` มาที่ id ตัวเอง (Postgres ทำได้ใน INSERT เดียว แต่ต้องวางลำดับให้ถูก)
 - [ ] 🔒 `audit.logs` — `PARTITION BY RANGE (occurred_at)` + **`PRIMARY KEY (id, occurred_at)`** (Postgres บังคับให้ partition key อยู่ใน PK · `PRIMARY KEY (id)` เฉยๆ สร้างไม่ผ่าน)
 - [ ] Job สร้าง partition เดือนถัดไปล่วงหน้า
