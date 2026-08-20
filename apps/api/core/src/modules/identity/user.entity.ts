@@ -2,11 +2,7 @@ import { Column, Entity } from 'typeorm'
 
 import { SoftDeletableEntity } from '../../shared/base.entity'
 
-/**
- * A person. Not scoped to an org — one user belongs to many through
- * `organization.members`, which is why the whole identity schema sits outside
- * org scoping.
- */
+/** A person. One belongs to many orgs, which is why identity has no org_id. */
 @Entity({ schema: 'identity', name: 'users' })
 export class User extends SoftDeletableEntity {
   /** citext, so `A@x.com` and `a@x.com` collide without a lower() wrapper. */
@@ -32,13 +28,10 @@ export class User extends SoftDeletableEntity {
   status!: string
 
   /**
-   * When the account holder asked to be deleted. Set exactly while `status`
-   * is `pending_deletion`, enforced by CHECK, and the column the retention
-   * job counts its thirty days from.
-   *
-   * Not `deletedAt`: that one is a @DeleteDateColumn, so it marks the row as
-   * gone from every query — which is the opposite of what the grace period
-   * needs, since recovering the account means finding it first.
+   * Start of the thirty-day grace period; set exactly while `status` is
+   * `pending_deletion`, enforced by CHECK. Not `deletedAt` — that is a
+   * @DeleteDateColumn, so it would hide the row from the queries that
+   * recovering the account depends on.
    */
   @Column({ type: 'timestamptz', nullable: true })
   deletionRequestedAt!: Date | null

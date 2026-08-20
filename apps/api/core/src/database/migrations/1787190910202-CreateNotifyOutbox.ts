@@ -32,9 +32,8 @@ export class CreateNotifyOutbox1787190910202 implements MigrationInterface {
         updated_at    timestamptz NOT NULL DEFAULT now(),
         updated_by    uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
 
-        -- The worker's queue is the partial index below, which reads this
-        -- literal value. A typo would drop the row out of it silently and the
-        -- notification would simply never be sent.
+        -- The partial index below reads this literal. A typo drops the row
+        -- out of the worker's queue silently, and it is never sent.
         CONSTRAINT outbox_status_check
           CHECK (status IN ('pending', 'sent', 'failed'))
       )

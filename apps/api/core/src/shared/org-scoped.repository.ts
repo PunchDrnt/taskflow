@@ -14,47 +14,30 @@ import { requireRequestContext } from './request-context'
 import { OrgQueryBuilders } from './scoped-query-builder'
 
 /**
- * A repository that cannot return another organisation's rows.
+ * A repository that cannot return another organisation's rows. Reads merge the
+ * org into the where clause, writes stamp it, both from the request context
+ * rather than an argument a caller could get wrong.
  *
- * Every read merges `org_id = <current org>` into the where clause and every
- * write stamps it, taking the value from the request context rather than from
- * an argument a caller could get wrong. Services use this instead of injecting
- * `Repository<T>`, which has no such guarantee — an ESLint rule enforces that.
+ * The narrow API is the point: add a missing method here, with scoping
+ * applied, rather than reaching for the underlying repository.
  *
- * The API is deliberately narrow. TypeORM's Repository has dozens of methods
- * and several ways out through raw SQL; wrapping it and exposing only what is
- * safe is the point, so a missing method should be added here with scoping
- * applied rather than worked around by reaching for the underlying repository.
- *
- * See .claude/docs/01-architecture.md#org_id-scoping
+ * See docs/01-architecture.md#org_id-scoping
  */
 export class OrgScopedRepository<T extends ObjectLiteral> {
   constructor(
     private readonly repository: Repository<T>,
-    /**
-     * The column holding the organisation id.
-     *
-     * `organization.organizations` is the one table where this is `id`: its
-     * `org_id` would always equal its own primary key, so the column does not
-     * exist. See .claude/docs/02-database.md#3-multi-tenancy
-     */
+    /** `id` for `organization.organizations`, whose org_id would be its own pk. */
     private readonly scopeColumn: 'orgId' | 'id' = 'orgId',
   ) {
     this.queryBuilder = new OrgQueryBuilders(repository, scopeColumn)
   }
 
   /**
-   * Query builders for anything the methods below cannot express.
+   * For anything the methods below cannot express.
    *
    * ```ts
    * projects.queryBuilder.withOrg('project').andWhere(...)  // scoped
    * users.queryBuilder.base('user')                         // identity has no org
-   * ```
-   *
-   * `withOrg` does not exist on entities without an `orgId` column, so the
-   * first line does not compile for a `User`.
-   *
-   * ```ts
    * ```
    */
   readonly queryBuilder: OrgQueryBuilders<T>
@@ -69,19 +52,12 @@ export class OrgScopedRepository<T extends ObjectLiteral> {
   }
 
   /**
-   * Merges the org condition into a caller's where clause.
+   * Merges the org condition into a caller's where clause. An array is OR in
+   * TypeORM, so it goes into every branch — once beside the array would widen
+   * the query, not narrow it.
    *
-   * An array means OR in TypeORM, so the condition goes into every branch —
-   * adding it once beside the array would widen the query instead of narrowing
-   * it.
-   *
-   * A branch that names the scope column with some other value is dropped
-   * rather than overwritten. Overwriting silently answers a different question
-   * than the one asked: `findById(otherOrgId)` on the id-scoped repository
-   * would have returned the *current* org, and `find({ where: { orgId: b } })`
-   * would have returned org a's rows. Dropping the branch says "no such row",
-   * which is both true and what the caller can act on. `null` means unscoped
-   * and is left alone.
+   * A branch naming another org is dropped, not overwritten: overwriting
+   * answers a different question than the one asked, silently.
    */
   private withScope(
     where: FindOptionsWhere<T> | FindOptionsWhere<T>[] | undefined,
@@ -95,8 +71,7 @@ export class OrgScopedRepository<T extends ObjectLiteral> {
       })
       .map((branch) => ({ ...branch, ...this.scope() }))
 
-    // Every branch asked for a different org, so nothing can match. Returning
-    // null lets callers skip the query entirely.
+    // Every branch asked for another org: nothing can match, skip the query.
     if (scoped.length === 0) return null
 
     return Array.isArray(where) ? scoped : scoped[0]!
@@ -137,11 +112,9 @@ export class OrgScopedRepository<T extends ObjectLiteral> {
   }
 
   /**
-   * The scope to stamp onto a new or saved row.
-   *
-   * Empty for an id-scoped repository: `organizations.id` is a primary key the
-   * database generates, and forcing it to the current org's id would make
-   * every created organisation collide with the one creating it.
+   * Empty for an id-scoped repository: `organizations.id` is generated, and
+   * forcing it to the current org would collide every new organisation with
+   * the one creating it.
    */
   private writeScope(): Partial<T> {
     return this.scopeColumn === 'orgId'
@@ -149,10 +122,7 @@ export class OrgScopedRepository<T extends ObjectLiteral> {
       : ({} as Partial<T>)
   }
 
-  /**
-   * Builds an entity with `org_id` already set, so a caller cannot create a row
-   * belonging to someone else by leaving it out or filling it in wrongly.
-   */
+  /** `org_id` already set, so a caller cannot create a row for someone else. */
   create(data: DeepPartial<T>): T {
     return this.repository.create({
       ...data,
@@ -168,14 +138,12 @@ export class OrgScopedRepository<T extends ObjectLiteral> {
   }
 
   /**
-   * Soft delete, scoped. Returns the number of rows affected, which is 0 when
-   * the id belongs to another organisation — the caller sees "not found"
-   * rather than an error revealing that the row exists elsewhere.
+   * Returns rows affected — 0 for another org's id, so the caller sees "not
+   * found" rather than proof the row exists elsewhere.
    *
-   * Writes `deletedBy` alongside `deletedAt` explicitly. TypeORM's
-   * `softDelete()` builds a query rather than loading the entity, so no
-   * subscriber runs and `deletedBy` would stay null — which every
-   * soft-deletable table rejects with a CHECK. Found by testing it.
+   * `deletedBy` is written explicitly because TypeORM's `softDelete()` builds
+   * a query without loading the entity, so no subscriber runs and the CHECK on
+   * every soft-deletable table rejects the half-set pair. Found by testing.
    */
   async softDeleteById(id: string): Promise<number> {
     const { userId } = requireRequestContext()
@@ -191,9 +159,7 @@ export class OrgScopedRepository<T extends ObjectLiteral> {
   }
 }
 
-/**
- * Builds an OrgScopedRepository for an entity, picking the right scope column.
- */
+/** Builds one for an entity, picking the right scope column. */
 export function createOrgScopedRepository<T extends ObjectLiteral>(
   source: DataSource | EntityManager,
   entity: EntityTarget<T>,

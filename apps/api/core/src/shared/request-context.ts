@@ -1,13 +1,10 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 
 /**
- * Who is making the current request, and on behalf of which organisation.
+ * Who is making the current request, and for which organisation.
  *
- * Carried in AsyncLocalStorage rather than passed down as an argument so that
- * the two places that must never be forgotten — org scoping on every query and
- * `created_by`/`updated_by` on every write — can read it without every service
- * method having to thread it through. A parameter that can be omitted will
- * eventually be omitted, and the failure is a cross-org data leak.
+ * In AsyncLocalStorage rather than an argument: a parameter that can be
+ * omitted eventually is, and here that failure is a cross-org leak.
  */
 export interface RequestContext {
   /** The organisation whose data this request may touch. */
@@ -18,9 +15,7 @@ export interface RequestContext {
 
 const storage = new AsyncLocalStorage<RequestContext>()
 
-/**
- * Runs `fn` with the given context visible to everything it awaits.
- */
+/** Runs `fn` with the context visible to everything it awaits. */
 export function runWithRequestContext<T>(
   context: RequestContext,
   fn: () => T,
@@ -28,20 +23,14 @@ export function runWithRequestContext<T>(
   return storage.run(context, fn)
 }
 
-/**
- * The current context, or `undefined` outside a request — during startup, in a
- * migration, or in a background job that has not established one.
- */
+/** `undefined` outside a request: startup, a migration, a background job. */
 export function getRequestContext(): RequestContext | undefined {
   return storage.getStore()
 }
 
 /**
- * The current context, or a thrown error.
- *
- * Callers that cannot proceed safely without knowing the org must use this
- * rather than defaulting to something. There is no sensible default: guessing
- * an org is how one tenant's data reaches another.
+ * The context, or a thrown error. For callers that cannot proceed without
+ * knowing the org — there is no safe default, guessing is the leak itself.
  */
 export function requireRequestContext(): RequestContext {
   const context = storage.getStore()

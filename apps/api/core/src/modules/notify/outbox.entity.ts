@@ -3,12 +3,9 @@ import { Column, Entity } from 'typeorm'
 import { OrgScopedEntity } from '../../shared/base.entity'
 
 /**
- * A notification waiting to go out. Written inside the business transaction
- * and delivered by a worker afterwards, so a failed send never rolls back the
- * thing it was announcing.
- *
- * Extends OrgScopedEntity: no soft delete, because `status` already tracks its
- * life and retention hard-deletes sent rows after 30 days.
+ * A notification waiting to go out — written inside the business transaction,
+ * delivered by a worker afterwards, so a failed send rolls nothing back. No
+ * soft delete: `status` tracks its life and retention removes sent rows.
  */
 @Entity({ schema: 'notify', name: 'outbox' })
 export class Outbox extends OrgScopedEntity {

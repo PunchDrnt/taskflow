@@ -1,25 +1,20 @@
 import { type MigrationInterface, type QueryRunner } from 'typeorm'
 
 /**
- * The `organization` schema — the customer's top level. Everything below this
- * point carries `org_id`, and every composite index leads with it.
+ * The customer's top level. Everything below carries `org_id` and every
+ * composite index leads with it. `organizations` itself does not — its would
+ * always equal `id`, so OrgScopedRepository scopes this one table on `id`.
  *
- * `organizations` itself does not: its `org_id` would always equal its `id`.
- * OrgScopedRepository therefore scopes this one table on `id` instead, which
- * is a single deliberate case rather than a column every row carries twice.
+ * Every FK into another org-scoped table is composite `(fk_id, org_id)`. A
+ * denormalised `org_id` that can disagree with its parent's is worse than no
+ * column at all: scoping filters on `org_id` alone, so a team_members row
+ * labelled org A but pointing at a team in org B is returned to org A.
+ * Verified — accepted without the composite key, rejected with it.
  *
- * Every FK into another org-scoped table is composite — `(fk_id, org_id)`
- * rather than `(fk_id)`. A denormalised `org_id` that can disagree with its
- * parent's is worse than no column at all: OrgScopedRepository filters on
- * `org_id` alone, so a team_members row labelled org A pointing at a team in
- * org B is returned to org A. Verified that this is accepted without the
- * composite key and rejected with it.
+ * No `owner_id`: it would have meant "who created it, not authority", which is
+ * `created_by`, and permission lives in `members.role`.
  *
- * There is no `owner_id` either. The spec described it as "who created it, not
- * authority" — permission lives in `members.role` — which is exactly what
- * `created_by` already records, with the same ON DELETE RESTRICT.
- *
- * See .claude/docs/02-database.md#schema-organization
+ * See docs/02-database.md#schema-organization
  */
 export class CreateOrganization1787188375356 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
@@ -52,10 +47,8 @@ export class CreateOrganization1787188375356 implements MigrationInterface {
         org_id      uuid        NOT NULL REFERENCES organization.organizations(id) ON DELETE CASCADE,
 
         user_id     uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
-        -- Plain text, not an enum: adding a role later should not need a type
-        -- migration. At least one 'owner' row must exist per org, which no
-        -- single-row constraint can express — the application enforces it and
-        -- a test covers it.
+        -- Text, not an enum, so a new role is not a type migration. "At least
+        -- one owner per org" is app-enforced: no single-row constraint says it.
         role        text        NOT NULL,
 
         -- joined_at is created_at under another name, so it is not repeated.
@@ -99,8 +92,8 @@ export class CreateOrganization1787188375356 implements MigrationInterface {
           CHECK ((deleted_at IS NULL) = (deleted_by IS NULL))
       )
     `)
-    // id alone is already unique, so this adds no restriction. It exists to
-    // give child tables something composite to point at.
+    // No new restriction — id is already unique. It gives child tables
+    // something composite to point at.
     await queryRunner.query(`
       ALTER TABLE organization.teams
         ADD CONSTRAINT teams_id_org_unique UNIQUE (id, org_id)
@@ -129,9 +122,8 @@ export class CreateOrganization1787188375356 implements MigrationInterface {
         CONSTRAINT team_members_deleted_pair_check
           CHECK ((deleted_at IS NULL) = (deleted_by IS NULL)),
 
-        -- Composite, so the row's org_id is provably the team's org_id.
-        -- This also covers org_id → organizations transitively, which is why
-        -- there is no separate FK on it.
+        -- Composite, so this row's org_id is provably the team's. Covers
+        -- org_id → organizations transitively; hence no separate FK.
         CONSTRAINT team_members_team_fkey
           FOREIGN KEY (team_id, org_id)
           REFERENCES organization.teams (id, org_id) ON DELETE CASCADE

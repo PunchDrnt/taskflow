@@ -1,20 +1,12 @@
 import { Column, Entity, PrimaryColumn, PrimaryGeneratedColumn } from 'typeorm'
 
 /**
- * The activity log — a feature name; the table is `audit.logs` and the module
- * is `audit/`.
+ * The activity log. The one entity on no base class: the table is partitioned
+ * by month, and Postgres wants the partition key in every unique constraint,
+ * so the pk is `(id, occurredAt)`. `occurredAt`/`actorId` already say what
+ * `createdAt`/`createdBy` would, and rows are never updated or deleted.
  *
- * The one entity that uses no base class at all. The table is partitioned by
- * month, and Postgres requires the partition key in every unique constraint,
- * so the primary key is `(id, occurredAt)` — a generated id plus a second
- * @PrimaryColumn, rather than one @PrimaryGeneratedColumn on its own.
- *
- * `occurredAt` and `actorId` already record when and by whom, which is what
- * `createdAt`/`createdBy` would have said, and rows are never updated or
- * deleted, which leaves the rest of the base entity meaningless.
- *
- * No foreign keys, `actorId` included: the log has to outlive the rows it
- * describes.
+ * No foreign keys, `actorId` included — the log outlives what it describes.
  */
 @Entity({ schema: 'audit', name: 'logs' })
 export class AuditLog {

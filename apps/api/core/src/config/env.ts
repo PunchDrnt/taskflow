@@ -1,12 +1,9 @@
 import { z } from 'zod'
 
 /**
- * Every environment variable the API reads, validated once at boot.
- *
- * Add new variables here as they are introduced — a missing or malformed
- * value must fail the process on startup, never surface as `undefined`
- * halfway through a request. Phase 0 still adds the MinIO keys, the JWT
- * secrets and the Resend key to this schema.
+ * Every environment variable the API reads, validated once at boot. Add new
+ * ones here: a bad value must stop the process, not surface as `undefined`
+ * mid-request. Still to come in Phase 0: `MINIO_*`, `JWT_*`, `RESEND_API_KEY`.
  */
 export const envSchema = z.object({
   NODE_ENV: z
@@ -24,11 +21,9 @@ export const envSchema = z.object({
     .refine((value) => /^postgres(ql)?:\/\//.test(value), {
       message: 'must be a postgres:// or postgresql:// connection string',
     }),
-  // Retention and audit-log partition upkeep. On by default, because a
-  // deployment that quietly stops deleting personal data is the failure that
-  // matters. Turn it off for a process that should not run them — a second API
-  // container is already covered by the advisory lock, but a developer pointed
-  // at a shared database is not.
+  // On by default: a deployment that quietly stops deleting personal data is
+  // the failure that matters. Off for a dev machine on a shared database — a
+  // second container is already covered by the advisory lock.
   JOBS_ENABLED: z.stringbool().default(true),
 })
 

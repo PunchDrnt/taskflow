@@ -4,11 +4,8 @@ import { DataSource } from 'typeorm'
 import { buildDataSourceOptions } from '../src/database/data-source.options'
 
 /**
- * Connection to the throwaway `postgres-test` service from docker-compose.
- *
- * Deliberately not part of the zod schema in `src/config/env.ts`: that schema
- * describes what the *API* reads at boot, and the API must never open a
- * connection to the test database. Tests read it here instead.
+ * The throwaway `postgres-test` service. Not in `src/config/env.ts`: that
+ * schema is what the API reads at boot, and the API must never connect here.
  */
 export const testDatabaseUrl = process.env.DATABASE_URL_TEST ?? ''
 
@@ -32,13 +29,12 @@ const SCHEMAS = [
 ]
 
 /**
- * Returns the test database to empty so migrations always run from nothing.
+ * Empties the database so migrations always run from nothing.
  *
- * Without this the suite quietly tests a stale schema. A migration already
- * recorded in the migrations table never runs again, so editing one — which
- * Phase 0 does, since nothing is deployed yet — leaves this database on the
- * old definition while the development one has been rebuilt. The failure then
- * looks like a broken migration rather than a stale database.
+ * Without this the suite quietly tests a stale schema: a migration already
+ * recorded never runs again, so editing one — which Phase 0 does freely —
+ * leaves this database behind, and the failure looks like a broken migration
+ * rather than a stale database.
  */
 async function resetTestDatabase(dataSource: DataSource): Promise<void> {
   for (const schema of SCHEMAS) {
@@ -49,9 +45,8 @@ async function resetTestDatabase(dataSource: DataSource): Promise<void> {
 }
 
 /**
- * Opens a connection to the test database with every migration applied to an
- * empty database, so a suite runs against the schema the migrations actually
- * produce rather than one `synchronize` invented. Callers must `destroy()` it.
+ * Connects with every migration applied from empty, so a suite runs against
+ * the schema the migrations produce. Callers must `destroy()` it.
  */
 export async function createMigratedTestDataSource(): Promise<DataSource> {
   if (!hasTestDatabase) {
@@ -61,8 +56,8 @@ export async function createMigratedTestDataSource(): Promise<DataSource> {
     )
   }
 
-  // resetTestDatabase drops every schema it knows about, so it must not be
-  // able to reach the development database however DATABASE_URL_TEST is set.
+  // resetTestDatabase drops schemas, so it must not be able to reach the
+  // development database however DATABASE_URL_TEST is set.
   const databaseName = new URL(testDatabaseUrl).pathname.replace(/^\//, '')
   if (!databaseName.endsWith('_test')) {
     throw new Error(
@@ -73,8 +68,7 @@ export async function createMigratedTestDataSource(): Promise<DataSource> {
 
   const dataSource = new DataSource({
     ...buildDataSourceOptions(testDatabaseUrl),
-    // The runtime options point at compiled migrations in dist/, which is
-    // right for the CLI and wrong here — Vitest runs the TypeScript sources.
+    // The runtime options point at dist/; Vitest runs the TypeScript sources.
     migrations: [
       join(__dirname, '..', 'src', 'database', 'migrations', '*.ts'),
     ],

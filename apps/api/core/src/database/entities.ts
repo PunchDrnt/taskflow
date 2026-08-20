@@ -29,30 +29,19 @@ import { Task } from '../modules/task/task.entity'
 import { ViewColumn } from '../modules/view/view-column.entity'
 import { View } from '../modules/view/view.entity'
 
-/**
- * TypeORM types `entities` as `MixedList<T>`, which is `T[] | Record<string, T>`.
- * The record branch makes `entities.length` an index lookup rather than an array
- * length, so narrow to the array form here — otherwise every consumer has to.
- */
+/** `MixedList<T>` is `T[] | Record<string, T>`; narrow it once, here. */
 type EntityList = Extract<
   NonNullable<DataSourceOptions['entities']>,
   readonly unknown[]
 >
 
 /**
- * Every entity TypeORM should know about, listed explicitly.
+ * Listed explicitly rather than by glob: a `*.entity.js` glob resolves
+ * differently under `nest build` than under Vitest's SWC transform, and the
+ * difference surfaces as "entity metadata not found" in one runner only.
  *
- * A `*.entity.js` glob would be shorter, but it resolves differently under
- * `nest build` (CommonJS, `__dirname` in `dist/`) than under Vitest's SWC
- * transform, which is exactly the kind of difference that shows up as an
- * "entity metadata not found" error in one runner and not the other. The
- * cost is one line per entity; the benefit is that the list is greppable
- * and behaves identically everywhere.
- *
- * `test/schema-drift.spec.ts` asserts this list matches what the migrations
- * built, so an entity that is added here but not migrated fails the suite.
- *
- * One per table, `chat.*` aside — those tables arrive in Phase 2.
+ * `test/schema-drift.spec.ts` holds this list and the migrations together.
+ * One per table, `chat.*` aside — Phase 2.
  */
 export const entities: EntityList = [
   // identity — outside org scoping entirely

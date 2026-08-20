@@ -3,14 +3,9 @@ import { Column, Entity } from 'typeorm'
 import { TimestampedEntity } from '../../shared/base.entity'
 
 /**
- * One login from one device, living for the full refresh window. Rotation
- * changes the token hashes in place rather than inserting a new row.
- *
- * No soft delete: `revokedAt` already says a session is finished with, and
- * retention hard-deletes it after 7 days.
- *
- * `createdBy` is not the same as `userId` — an admin holding
- * `user.impersonate` creates a session for someone else.
+ * One login from one device. Rotation changes the hashes in place. No soft
+ * delete: `revokedAt` says it is finished with and retention removes it after
+ * a week. `createdBy` is not `userId` — an impersonating admin differs.
  */
 @Entity({ schema: 'identity', name: 'sessions' })
 export class Session extends TimestampedEntity {

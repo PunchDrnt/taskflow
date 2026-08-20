@@ -1,25 +1,21 @@
 import { type MigrationInterface, type QueryRunner } from 'typeorm'
 
 /**
- * `identity.users` plus the system user, in one migration because neither is
- * usable without the other: every table's `created_by` is NOT NULL and points
- * here, so the row that rows created by the system point at has to exist
- * before any other table can be created.
+ * `identity.users` and the system user together, because neither is usable
+ * without the other: `created_by` is NOT NULL everywhere and points here.
  *
- * The first row references itself. Postgres allows that in a single INSERT as
- * long as the id is a literal rather than a default — the foreign key is
- * checked after the row lands, so there is nothing to defer.
+ * The first row references itself, which Postgres allows in one INSERT as long
+ * as the id is a literal — the FK is checked after the row lands.
  *
- * See .claude/docs/02-database.md#schema-identity
+ * See docs/02-database.md#schema-identity
  */
 
-/** Fixed so it is recognisable in logs and reproducible across environments. */
+/** Fixed, so it is recognisable in logs and identical in every environment. */
 const SYSTEM_USER_ID = '00000000-0000-0000-0000-000000000000'
 
 export class CreateIdentityUsers1787186718550 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
-    // No org_id: a user belongs to many orgs through organization.members, so
-    // the whole identity schema is outside org scoping.
+    // No org_id: a user belongs to many orgs, so identity is outside scoping.
     await queryRunner.query(`
       CREATE TABLE identity.users (
         id                        uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -51,30 +47,24 @@ export class CreateIdentityUsers1787186718550 implements MigrationInterface {
         CONSTRAINT users_status_check
           CHECK (status IN ('active', 'deactivated', 'pending_deletion', 'deleted')),
 
-        -- The system user must not be able to authenticate. Enforced here
-        -- rather than left to the login code, which is one bug away from
+        -- Enforced here, not in the login code, which is one bug away from
         -- letting someone in as the account that owns every automated write.
         CONSTRAINT users_system_has_no_password_check
           CHECK (NOT is_system OR password_hash IS NULL),
 
-        -- Two delete markers exist on this table: deleted_at from the base
-        -- entity, and status, which drives the real user lifecycle. Tie them
-        -- together so they cannot disagree — a row with deleted_at set but
-        -- status still 'active' would hold its email reserved forever, since
-        -- the unique index below keys off status.
+        -- Two delete markers on one table: deleted_at, and status, which
+        -- drives the real lifecycle. Untied, a row could hold its email
+        -- reserved forever — the unique index below keys off status.
         CONSTRAINT users_deleted_at_matches_status_check
           CHECK ((status = 'deleted') = (deleted_at IS NOT NULL)),
 
-        -- A soft delete must record who performed it. Half-set pairs are the
-        -- kind of thing nobody notices until someone asks who deleted this.
+        -- Nobody notices a half-set pair until they ask who deleted this.
         CONSTRAINT users_deleted_pair_check
           CHECK ((deleted_at IS NULL) = (deleted_by IS NULL)),
 
-        -- Same reasoning as the pair above, for the other end of the account
-        -- lifecycle. The retention job counts thirty days from this column,
-        -- so a pending_deletion row without one would never be anonymised,
-        -- and a leftover one on a recovered account would anonymise someone
-        -- who came back. Cleared when the status moves on, either way.
+        -- The other end of the same lifecycle. Retention counts thirty days
+        -- from here: missing, and the row is never anonymised; left behind on
+        -- a recovered account, and it anonymises someone who came back.
         CONSTRAINT users_deletion_requested_matches_status_check
           CHECK ((status = 'pending_deletion') = (deletion_requested_at IS NOT NULL))
       )
@@ -91,27 +81,22 @@ export class CreateIdentityUsers1787186718550 implements MigrationInterface {
           FOREIGN KEY (deleted_by) REFERENCES identity.users(id) ON DELETE RESTRICT
     `)
 
-    // Partial, not a plain UNIQUE: a deleted account must release its address
-    // so the same person can sign up again. citext is already
-    // case-insensitive, so no lower() wrapper.
+    // Partial, so a deleted account releases its address. citext already
+    // folds case — no lower() wrapper.
     await queryRunner.query(`
       CREATE UNIQUE INDEX users_email_unique
         ON identity.users (email) WHERE status <> 'deleted'
     `)
 
-    // Exactly one system user, enforced by the database rather than by the
-    // seed being written only once.
+    // One system user, enforced by the database, not by the seed running once.
     await queryRunner.query(`
       CREATE UNIQUE INDEX users_single_system_unique
         ON identity.users (is_system) WHERE is_system
     `)
 
-    // ON DELETE RESTRICT does not protect this row. The system user's only
-    // referrer is itself, and deleting it removes that reference in the same
-    // statement, so Postgres allows it — verified, the DELETE succeeds and
-    // takes every future created_by target with it. Other tables' foreign
-    // keys will cover this once they exist, but not before, and not if the
-    // system has yet to create anything.
+    // RESTRICT does not protect this row: its only referrer is itself, and the
+    // DELETE removes that reference in the same statement — verified, it
+    // succeeds. Other tables' FKs only cover it once they have system rows.
     await queryRunner.query(`
       CREATE FUNCTION identity.forbid_system_user_delete() RETURNS trigger
       LANGUAGE plpgsql AS $fn$

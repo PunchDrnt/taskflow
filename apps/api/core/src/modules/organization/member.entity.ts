@@ -12,9 +12,8 @@ export class OrganizationMember extends BaseEntity {
   userId!: string
 
   /**
-   * 'owner' | 'admin' | 'member'. Plain text so adding a role later is not a
-   * type migration. An org must always keep at least one owner, which no
-   * single-row constraint can express — the application enforces it.
+   * 'owner' | 'admin' | 'member'. Text, so a new role is not a type migration.
+   * "at least one owner" is app-enforced: no single-row constraint can say it.
    */
   @Column('text')
   role!: string

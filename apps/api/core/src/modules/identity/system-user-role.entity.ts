@@ -11,10 +11,8 @@ export class SystemUserRole extends SoftDeletableEntity {
   roleId!: string
 
   /**
-   * Kept alongside `createdBy`, which it otherwise duplicates, because the two
-   * differ on delete: `createdBy` is RESTRICT, so an admin who once granted a
-   * role could never be removed, while this is SET NULL and the grant outlives
-   * them.
+   * Duplicates `createdBy` except on delete: that one is RESTRICT, this is SET
+   * NULL, so the grant outlives the admin who made it.
    */
   @Column('uuid', { nullable: true })
   grantedBy!: string | null

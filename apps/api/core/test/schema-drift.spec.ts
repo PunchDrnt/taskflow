@@ -5,14 +5,12 @@ import { entities } from '../src/database/entities'
 import { createMigratedTestDataSource, hasTestDatabase } from './database'
 
 /**
- * Migrations are the source of truth for the schema — `synchronize` is off
- * forever, so TypeORM never reconciles the two. That leaves a gap Prisma does
- * not have: an entity can declare a column no migration ever created, or miss
- * one that exists, and nothing complains until a query fails in production.
+ * `synchronize` is off forever, so nothing reconciles entities against the
+ * database — an entity can declare a column no migration created, and nothing
+ * complains until a query fails in production.
  *
- * This closes it. The schema builder computes exactly what `synchronize` would
- * run against the migrated database, and any statement that touches a column
- * means the entities and the migrations have drifted apart.
+ * This asks the schema builder what `synchronize` would run against the
+ * migrated database. Any statement touching a column means they have drifted.
  */
 
 /**
@@ -24,16 +22,13 @@ const COLUMN_STATEMENT =
 
 /**
  * Constraints, indexes and foreign keys live in migrations and are absent from
- * the entities on purpose, so the schema builder always wants to drop them:
+ * the entities on purpose, so the schema builder always wants to drop them —
+ * no entity declares a relation for `created_by` (that would import identity's
+ * User into every module), and partial indexes and CHECKs are things
+ * `synchronize` cannot express anyway.
  *
- * - No entity declares a relation for `created_by` and friends. Doing so would
- *   import identity's User into every module, which the module boundary rules
- *   forbid — a service wanting a name calls UserService, it does not join.
- * - Partial indexes, CHECK constraints and `UNIQUE (id, org_id)` are things
- *   `synchronize` cannot express, which is why it is off.
- *
- * Ignoring them is not a loosened assertion: what this test exists to catch is
- * a column mismatch, and those are still fatal.
+ * Not a loosened assertion: column mismatches are what this catches, and they
+ * are still fatal.
  */
 function isColumnDrift(query: string): boolean {
   return COLUMN_STATEMENT.test(query)
@@ -56,8 +51,8 @@ describe.skipIf(!hasTestDatabase)('entities match the migrated schema', () => {
       .map((query) => query.query)
       .filter(isColumnDrift)
 
-    // Each entry is a column someone forgot to put in a migration, or an
-    // entity describing a column the migrations never created.
+    // Each entry is a column missing from a migration, or one an entity
+    // describes that no migration created.
     expect(drift).toEqual([])
   })
 

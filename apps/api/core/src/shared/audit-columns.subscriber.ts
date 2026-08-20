@@ -9,20 +9,14 @@ import {
 import { getRequestContext } from './request-context'
 
 /**
- * Fills `createdBy` / `updatedBy` / `deletedBy` from the request context, so
- * no service has to remember to.
+ * Fills the `*By` half of the audit columns from the request context; the
+ * `*At` half is TypeORM's own job.
  *
- * Registered through `subscribers` in the DataSource options rather than as a
- * Nest provider. A provider only exists once Nest has built it, which left the
- * TypeORM CLI and every test writing rows with no `created_by` — a NOT NULL
- * violation, and one that only showed up at runtime.
+ * Registered through the DataSource's `subscribers`, not as a Nest provider —
+ * a provider does not exist under the CLI or in tests, which left both writing
+ * rows with no `created_by`.
  *
- * `createdAt` / `updatedAt` / `deletedAt` are TypeORM's own job via
- * @CreateDateColumn and friends; only the "by" half needs us.
- *
- * Deliberately does not invent a value when there is no context. A write from
- * a migration or a background job has to say who it is acting as — the system
- * user exists for that — rather than have one guessed here.
+ * Invents nothing when there is no context: a job has to name its actor.
  */
 @EventSubscriber()
 export class AuditColumnsSubscriber implements EntitySubscriberInterface {

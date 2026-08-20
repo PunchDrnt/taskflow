@@ -1,16 +1,13 @@
 import { type MigrationInterface, type QueryRunner } from 'typeorm'
 
 /**
- * One schema per module, created up front — including the ones whose tables
- * arrive in a later phase. A schema costs nothing, and having them all present
- * from the start means a module's first migration never has to remember to
- * create its own home.
+ * One schema per module, all of them up front — a schema costs nothing, and a
+ * module's first migration never has to remember to create its own home.
  *
- * `public` is deliberately absent: it already exists, and it holds only the
- * citext extension and TypeORM's own `migrations` bookkeeping table. No module
- * table belongs there.
+ * `public` is absent on purpose: it holds citext and TypeORM's `migrations`
+ * table, and no module table belongs there.
  *
- * See .claude/docs/02-database.md#1-schema-map
+ * See docs/02-database.md#1-schema-map
  */
 const SCHEMAS = [
   'identity', // users, sessions, password resets, system-level RBAC
@@ -35,9 +32,7 @@ export class CreateSchemas1787185775421 implements MigrationInterface {
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     for (const schema of SCHEMAS) {
-      // No CASCADE. If a schema still holds tables, the migration that created
-      // them owns dropping them — a revert that silently deletes tables it did
-      // not create is how a bad rollback turns into data loss.
+      // No CASCADE: the migration that created a table owns dropping it.
       await queryRunner.query(`DROP SCHEMA IF EXISTS "${schema}"`)
     }
   }

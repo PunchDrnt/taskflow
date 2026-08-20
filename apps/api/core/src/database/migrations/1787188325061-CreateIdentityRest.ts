@@ -1,31 +1,23 @@
 import { type MigrationInterface, type QueryRunner } from 'typeorm'
 
 /**
- * The rest of the `identity` schema: sessions, password resets, and the
- * system-level RBAC tables.
+ * The rest of `identity`: sessions, password resets, system-level RBAC.
+ * Nothing here has `org_id` — a user belongs to many orgs and a system role
+ * crosses them by definition. The RBAC tables wait for Phase 7 to be read.
  *
- * Nothing here has `org_id` — the whole schema is outside org scoping, since a
- * user belongs to many orgs through `organization.members` and a system role
- * crosses orgs by definition.
+ * sessions and password_reset_tokens have no deleted_at/deleted_by: both
+ * already carry a column meaning "no longer usable" and both are hard-deleted
+ * by retention, so a second marker is one more thing to keep in sync.
  *
- * The RBAC tables are created now but nothing reads them until Phase 7. They
- * are cheap to create and awkward to retrofit once `identity` has data.
+ * Base columns are written out in full rather than shared from a constant — a
+ * migration is a record, and an edited snippet would rewrite the past.
  *
- * sessions and password_reset_tokens carry no deleted_at/deleted_by. Both
- * already have a column meaning "no longer usable" (revoked_at, used_at) and
- * both are hard-deleted by the retention policy, so a second delete marker
- * would only be one more thing to keep in sync.
- *
- * Base columns are written out in full rather than shared from a constant:
- * a migration is a historical record, and a shared snippet would silently
- * rewrite what past migrations did the next time someone edited it.
- *
- * See .claude/docs/02-database.md#schema-identity
+ * See docs/02-database.md#schema-identity
  */
 export class CreateIdentityRest1787188325061 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
-    // One row per login from one device. Rotation does not insert a new row —
-    // the row lives for the full 15 days and only its token hashes change.
+    // One row per login per device, living the full 15 days; rotation only
+    // changes its token hashes.
     await queryRunner.query(`
       CREATE TABLE identity.sessions (
         id                   uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -84,9 +76,8 @@ export class CreateIdentityRest1787188325061 implements MigrationInterface {
         ON identity.password_reset_tokens (token_hash) WHERE used_at IS NULL
     `)
 
-    // System-level RBAC. Named without a system_ prefix — the identity schema
-    // already supplies that context, and there is no clash with the org-level
-    // role, which is a column on organization.members rather than a table.
+    // No system_ prefix: the schema supplies that context, and the org-level
+    // role is a column on organization.members, not a table.
     await queryRunner.query(`
       CREATE TABLE identity.roles (
         id           uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -167,9 +158,7 @@ export class CreateIdentityRest1787188325061 implements MigrationInterface {
 
         user_id     uuid        NOT NULL REFERENCES identity.users(id) ON DELETE CASCADE,
         role_id     uuid        NOT NULL REFERENCES identity.roles(id) ON DELETE CASCADE,
-        -- Kept alongside created_by, which it would otherwise duplicate,
-        -- because the two differ on delete: created_by is RESTRICT, so an
-        -- account that had granted a role could never be removed. granted_by
+        -- Duplicates created_by except on delete: that one is RESTRICT, this
         -- is SET NULL, so the grant outlives the admin who issued it.
         granted_by  uuid        REFERENCES identity.users(id) ON DELETE SET NULL,
         -- Temporary elevation for debugging, expiring on its own.

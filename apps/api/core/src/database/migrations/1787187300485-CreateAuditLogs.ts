@@ -1,21 +1,19 @@
 import { type MigrationInterface, type QueryRunner } from 'typeorm'
 
 /**
- * `audit.logs` — the activity log feature. The fastest-growing table in the
- * system, so it is partitioned by month from the very first migration:
- * converting a populated table later means moving every row.
+ * `audit.logs` — the activity log. The fastest-growing table here, so it is
+ * partitioned by month from the first migration: converting a populated table
+ * later means moving every row.
  *
- * The one table that does not use the base entity. Postgres requires the
- * partition key in every unique constraint, so the primary key is
- * `(id, occurred_at)` rather than `(id)` — a plain `PRIMARY KEY (id)` does not
- * create at all. `occurred_at` and `actor_id` already say when and by whom, so
- * created_at/created_by would be duplicates, and audit rows are never updated
- * or deleted, which leaves updated_* and deleted_* meaningless.
+ * The one table on no base entity. Postgres wants the partition key in every
+ * unique constraint, so the pk is `(id, occurred_at)` — plain `PRIMARY KEY
+ * (id)` will not create. `occurred_at`/`actor_id` cover created_at/created_by,
+ * and rows are never updated or deleted, so the rest would be dead columns.
  *
- * No foreign keys, including `actor_id`: the log has to survive the rows it
- * describes. Indexes carry the lookup weight instead.
+ * No foreign keys at all, `actor_id` included: the log outlives what it
+ * describes, and indexes carry the lookup weight instead.
  *
- * See .claude/docs/02-database.md#schema-audit
+ * See docs/02-database.md#schema-audit
  */
 
 /** Partitions created ahead of time, so a stalled job has a year of slack. */
@@ -41,10 +39,9 @@ export class CreateAuditLogs1787187300485 implements MigrationInterface {
       ) PARTITION BY RANGE (occurred_at)
     `)
 
-    // Declared on the parent, which propagates to every partition including
-    // ones created later. No CHECK on entity_type or action: both grow with
-    // every feature, and this table is never deleted, so validating a new
-    // constraint only gets more expensive.
+    // On the parent, so it propagates to partitions made later. No CHECK on
+    // entity_type or action: both grow per feature, and validating one on a
+    // table that is never deleted only gets more expensive.
     await queryRunner.query(`
       CREATE INDEX logs_entity_idx
         ON audit.logs (org_id, entity_type, entity_id, occurred_at DESC)
@@ -55,9 +52,8 @@ export class CreateAuditLogs1787187300485 implements MigrationInterface {
         ON audit.logs (org_id, actor_id, action, occurred_at DESC)
     `)
 
-    // Creating a partition is a schedulable job's whole task, so it lives in
-    // the database rather than in application code that has to reproduce the
-    // naming and boundary arithmetic correctly.
+    // In the database, so the job that calls it monthly does not have to
+    // reproduce the naming and boundary arithmetic.
     await queryRunner.query(`
       CREATE FUNCTION audit.ensure_month_partition(target date)
         RETURNS text
@@ -87,15 +83,13 @@ export class CreateAuditLogs1787187300485 implements MigrationInterface {
       )
     }
 
-    // Last-resort catch-all. Audit rows are written in the same transaction as
-    // the business logic they describe, so a row with no partition to land in
-    // does not just lose a log entry — it fails the user's operation. This
-    // makes a missed partition survivable.
+    // Last resort. Audit rows are written in the business transaction, so a
+    // row with nowhere to land fails the user's operation rather than merely
+    // losing a log entry.
     //
-    // The cost: while any row sits here for a given month, the partition for
-    // that month cannot be created, because Postgres has to prove no default
-    // row belongs in the new range. Treat rows in this table as an alert, and
-    // move them out before creating the partition they belong to.
+    // The cost: while a row for some month sits here, that month's partition
+    // cannot be created — Postgres has to prove no default row belongs in the
+    // new range. AuditPartitionService treats rows here as an alert.
     await queryRunner.query(`
       CREATE TABLE audit.logs_default PARTITION OF audit.logs DEFAULT
     `)
