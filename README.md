@@ -191,8 +191,67 @@ Unit tests sit next to the code as `src/**/*.spec.ts`. Integration tests live in
 | [audit.spec.ts](apps/api/core/test/audit.spec.ts)                             | 🔒 The activity log commits and rolls back with the change it describes                              |
 | [outbox.spec.ts](apps/api/core/test/outbox.spec.ts)                           | Notification queue and delivery: retries, backoff, and giving up                                     |
 | [storage.spec.ts](apps/api/core/test/storage.spec.ts)                         | The bucket is private: a presigned URL works, the plain one gets 403                                 |
+| [sentry.spec.ts](apps/api/core/test/sentry.spec.ts)                           | Unhandled errors are reported; an `HttpException` is an answer, not a fault                          |
 
 The permission layer joins them once it exists.
+
+## Deploying
+
+[deploy/](deploy/) is everything the server runs and nothing else from this repository — copy that one directory to the box, create `.env` inside it, and the installation is complete; the apps themselves arrive as images. See [deploy/README.md](deploy/README.md).
+
+[deploy/compose.yml](deploy/compose.yml) is a separate file rather than an override on the development one. Compose can add a service but never remove one, and [docker-compose.yml](docker-compose.yml) carries two that must not run on a server: `postgres-test`, which truncates tables, and `garage-ui`, which holds the admin token.
+
+```bash
+cd deploy
+cp .env.example .env        # then fill it in
+docker compose up -d --build
+```
+
+On the server it pulls instead of building. The three app services declare both
+`image:` and `build:`, so CI pushes what it built and tested and the server only
+restarts:
+
+```bash
+cd deploy
+docker compose pull
+docker compose up -d
+```
+
+[.github/workflows/deploy.yml](.github/workflows/deploy.yml) does that on a push to `prod` — merging `main` into it is what ships, so the gates on `main` have already run. Each image is tagged with both `latest` and the commit SHA, which is what makes a rollback possible: `latest` alone leaves nothing to go back to once the next push overwrites it. To roll back, set `IMAGE_TAG` to the old SHA and pull.
+
+It needs `SSH_HOST`, `SSH_USER`, `SSH_PRIVATE_KEY` and `DEPLOY_PATH` as repository secrets, `NEXT_PUBLIC_SENTRY_DSN` as a repository variable (it is a build argument, so it has to be present when the image is built rather than when it starts), and one `docker login ghcr.io` on the server itself with a token that has `read:packages` — GHCR packages are private by default, so a pull without it fails as "not found" rather than as a permission error.
+
+[Caddy](deploy/config/Caddyfile) is the only service that publishes a port. It serves both apps from one origin — `/api/*` to Nest with the prefix stripped, everything else to Next — which is what lets `SameSite=Lax` stand alone as CSRF defence rather than needing double-submit tokens. It also provisions TLS from `SITE_ADDRESS`, so that variable is a hostname in production and `:80` only when smoke-testing without a domain.
+
+Migrations run in their own one-shot container before the API starts, for the same reason `migrationsRun` is `false`: two instances starting together would race on the DDL. It needs `DATABASE_URL` and nothing else, so a migration is never blocked on an unrelated variable.
+
+The application connects as a role [postgres.sh](deploy/init/postgres.sh) creates, never as the superuser the image made. That role owns the database — enough to create every schema, and enough to install `citext`, which works only because Postgres marks that extension _trusted_ — while `pg_authid`, `COPY TO` a file and `CREATE ROLE` are all refused.
+
+### Backups
+
+[deploy/backup.sh](deploy/backup.sh) writes the two stores to separate directories, because they fail separately: a database dump cannot restore an attachment, and an object copy cannot restore a task.
+
+```bash
+cd deploy && ./backup.sh /srv/backups
+```
+
+It asks the server what it is before dumping — a database with no migrations applied is refused — because a backup of the wrong database is worse than none, since it looks like one. Set `COMPOSE_PROJECT_NAME` as well if the stack does not run under its directory's name.
+
+The database goes out as a `pg_dump` custom-format archive, checked with `pg_restore --list` before the script reports success — a dump that cannot be read back is not a backup. Objects are copied as plain files rather than as Garage's data directory, so restoring them needs no working Garage and any S3 target will take them; `garage meta snapshot` is the other option, and the right one when the goal is rebuilding the node rather than the files in it.
+
+## Error tracking
+
+Sentry, on both sides, inert without a DSN so a fresh checkout runs unchanged. The API initialises it in [src/instrument.ts](apps/api/core/src/instrument.ts), imported on the first line of `main.ts` — Sentry instruments modules as they load, so anything imported earlier is invisible to it, which is also why that file reads `process.env` directly instead of waiting for `ConfigService`.
+
+`NEXT_PUBLIC_SENTRY_DSN` is a **build argument**, not an environment variable: Next inlines `NEXT_PUBLIC_*` into the browser bundle when it compiles, so setting it at container start leaves the client half reporting nowhere.
+
+Production refuses to boot without `SENTRY_DSN`, on the same bargain as `RESEND_API_KEY` — absent is a developer affordance, and a deployment that reports its errors nowhere is the failure nobody notices until they need the report.
+
+## Continuous integration
+
+[.github/workflows/ci.yml](.github/workflows/ci.yml) runs `lint`, `check-types`, `build` and `test` against a real Postgres and Garage, then builds both images so a broken Dockerfile surfaces on the branch rather than during a deploy.
+
+CI copies `.env.example` to `.env` rather than listing variables in the workflow, which makes the committed example a checked artefact: the suite reads the root `.env`, so a variable missing there fails CI instead of working only on the machine of whoever added it.
 
 ## Git hooks
 

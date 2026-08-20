@@ -146,16 +146,20 @@
 
 ## 7. Deploy — อย่าเลื่อน
 
-- [ ] เพิ่ม `api` / `web` / `caddy` เข้า `docker-compose.yml`
-- [ ] แยก service ที่มีไว้ใช้ตอน dev ออกจากชุดที่ deploy — `postgres-test` กับ `garage-ui`
-      (ถือ admin token) ต้องไม่ขึ้นบน Bangmod · `docker-compose.yml` ตอนนี้ประกาศตัวเองว่า
-      เป็น local dev ทั้งไฟล์ ตอน §7 ต้องตัดสินใจว่าจะ override ยังไง
-- [ ] `Dockerfile` ทั้งสอง app (multi-stage)
-- [ ] CI: `lint` + `check-types` + `test` + `build`
-- [ ] **Deploy ขึ้น Bangmod ได้จริง แม้เป็นหน้าเปล่า**
-- [ ] Sentry ทั้งสองฝั่ง
-- [ ] Backup: DB กับ object storage **แยกกัน** (ไฟล์หายกู้จาก DB ไม่ได้)
-- [ ] DB user ของ app **ไม่ใช่ superuser**
+- [x] เพิ่ม `api` / `web` / `caddy` — อยู่ใน `deploy/compose.yml` แยกไฟล์
+- [x] แยก service ตอน dev ออกจากชุดที่ deploy · เป็นคนละไฟล์ ไม่ใช่ override เพราะ
+      compose เพิ่ม service ได้แต่ลบไม่ได้ · `postgres-test` กับ `garage-ui` ไม่มีในไฟล์ prod
+- [x] `Dockerfile` ทั้งสอง app (multi-stage) · api 234 MB · web 198 MB (standalone)
+- [x] CI: `lint` + `check-types` + `test` + `build` + build image ทั้งสองตัว
+- [ ] **Deploy ขึ้น Bangmod ได้จริง แม้เป็นหน้าเปล่า** ← เหลือแค่รัน ยังไม่ได้ยิงจริง
+      pipeline พร้อมแล้ว: `.github/workflows/deploy.yml` push image ขึ้น GHCR แล้ว ssh ไป
+      `pull` + `up -d` · ต้องตั้ง secret `SSH_HOST`/`SSH_USER`/`SSH_PRIVATE_KEY`/`DEPLOY_PATH`,
+      var `NEXT_PUBLIC_SENTRY_DSN` และ `docker login ghcr.io` บน server หนึ่งครั้ง
+      (GHCR package เป็น private โดย default · pull ไม่ผ่านจะขึ้นว่า "not found" ไม่ใช่ 403)
+      ทดสอบบนเครื่องครบแล้ว: boot จากศูนย์ → migrate → serve ผ่าน Caddy → redeploy ซ้ำ → rollback ด้วย IMAGE_TAG
+- [x] Sentry ทั้งสองฝั่ง · ไม่มี DSN = เงียบ · production ไม่มี DSN = ไม่ boot
+- [x] Backup: `deploy/backup.sh` แยก DB กับ object · restore กลับเข้า DB เปล่าแล้ว ผ่าน
+- [x] DB user ของ app **ไม่ใช่ superuser** · `deploy/init/postgres.sh` · ยืนยันด้วย pg_roles
 
 > pipeline ที่ทำทีหลังมักกลายเป็นคอขวด — ข้อนี้เป็น 🔴 ทั้งที่ไม่มีฟีเจอร์ให้ดู
 

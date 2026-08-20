@@ -10,6 +10,8 @@ Stack, การแบ่ง module, และ convention ที่ทุก mod
 2. [Modular Monolith](#2-modular-monolith)
 3. [Conventions](#conventions) — [API](#api) · [Naming](#naming) · [Permission Hierarchy](#permission-hierarchy) · [Data Types](#data-types) 🔒 · [Implementation Notes](#implementation-notes) · [Auth](#auth) · [CSRF](#csrf)
 
+ดูเพิ่ม: [docker-compose](#docker-compose) · [Deploy](#deploy)
+
 ---
 
 ## 1. Tech Stack
@@ -49,16 +51,24 @@ packages/
 
 ### docker-compose
 
-```
-├─ api             NestJS
-├─ web             Next.js 16
-├─ postgres        + volume แยก
-├─ postgres-test   ephemeral (tmpfs) สำหรับ integration test
-├─ garage          + volume แยก (meta/data) + init container
-└─ caddy           reverse proxy + SSL อัตโนมัติ
-```
+**สองไฟล์ ไม่ใช่ override** — compose เพิ่ม service ได้แต่ลบไม่ได้ และไฟล์ dev มีสองตัวที่ห้ามขึ้น server คือ `postgres-test` (truncate table) กับ `garage-ui` (ถือ admin token)
 
-> ตอนนี้ `docker-compose.yml` มีแค่ `postgres` + `postgres-test` · service ที่เหลือเพิ่มใน Phase 0
+| `docker-compose.yml` (dev) | `deploy/compose.yml` (Bangmod) |
+| --- | --- |
+| `postgres` `postgres-test` `garage` `garage-init` `garage-ui` | `postgres` `garage` `garage-init` `api-migrate` `api` `web` `caddy` |
+| publish port ออกมาหมด (4xxx / 54xx) | มีแค่ `caddy` ที่ publish |
+| ต่อ DB ด้วย superuser ของ image | ต่อด้วย role ที่ `deploy/init/postgres.sh` สร้าง ไม่ใช่ superuser |
+
+### Deploy
+
+- **`deploy/` คือทุกอย่างที่อยู่บน server** — `compose.yml` + ไฟล์ที่มัน bind mount + `.env` ที่สร้างเองในนั้น · copy โฟลเดอร์นี้ไปโฟลเดอร์เดียวจบ ไม่ต้องมี source เลยเพราะแอปมาเป็น image · ไฟล์ในนั้น commit ได้หมด ไม่มีความลับ ทุกค่าเป็น `${...}` — ยกเว้น `.env` ที่ gitignore กันไว้
+- **`prod` เป็น release gate** — merge `main` → `prod` คือการ ship · gate ทั้งสี่รันบน `main` ไปแล้ว `deploy.yml` เลยไม่รัน test ซ้ำ
+- **image build ที่ CI ไม่ใช่ที่ server** — push ขึ้น GHCR แล้ว server แค่ `pull` + `up -d` · service ทั้งสามประกาศทั้ง `image:` และ `build:` บนเครื่อง dev เลยยัง `up -d --build` ได้
+- **tag ด้วย commit SHA คู่กับ `latest`** — `latest` อย่างเดียวไม่มีอะไรให้ถอยกลับ · rollback = ตั้ง `IMAGE_TAG` เป็น sha เก่าแล้ว pull
+- **migration เป็น container แยก** (`api-migrate`) รันจบก่อน `api` ขึ้น เหตุผลเดียวกับที่ `migrationsRun` เป็น false — สอง instance ที่ start พร้อมกันจะแย่งกันทำ DDL
+- **Caddy รับ origin เดียว** `/api/*` → Nest (ตัด prefix), ที่เหลือ → Next · เป็นเหตุผลที่ `SameSite=Lax` พอโดยไม่ต้องมี CSRF token ([CSRF](#csrf))
+- **backup แยก DB กับ object** (`deploy/backup.sh`) — ไฟล์กู้จาก DB dump ไม่ได้ · object เก็บเป็นไฟล์ธรรมดา ไม่ใช่ data dir ของ Garage เพื่อให้ restore ได้โดยไม่ต้องมี Garage
+- **Sentry บังคับใน production** เหมือน `RESEND_API_KEY` — ไม่มี DSN แล้ว boot ไม่ผ่าน · deployment ที่ไม่ส่ง error ไปไหนคือความพังที่ไม่มีใครรู้
 
 ---
 
