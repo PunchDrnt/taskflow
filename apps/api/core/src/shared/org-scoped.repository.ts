@@ -8,62 +8,10 @@ import {
   type FindOptionsWhere,
   type ObjectLiteral,
   type Repository,
-  type SelectQueryBuilder,
 } from 'typeorm'
 
 import { requireRequestContext } from './request-context'
-
-/**
- * A SelectQueryBuilder that cannot drop the org condition.
- *
- * `where` replaces every condition set so far; `orWhere` widens past them.
- * Both would silently unscope a query that looks scoped.
- */
-export type ScopedQueryBuilder<T extends ObjectLiteral> = Omit<
-  SelectQueryBuilder<T>,
-  'where' | 'orWhere'
->
-
-/**
- * Wraps a builder so `where` and `orWhere` throw, at every hop of a chain.
- *
- * The type-level omission only holds for the first call — `andWhere` returns
- * `this`, which TypeScript resolves back to the full builder. Re-wrapping
- * anything a method hands back keeps the guarantee for the rest of the chain.
- */
-function guardScopedBuilder<T extends ObjectLiteral>(
-  builder: SelectQueryBuilder<T>,
-  alias: string,
-): ScopedQueryBuilder<T> {
-  const proxy: SelectQueryBuilder<T> = new Proxy(builder, {
-    get(target, property) {
-      if (property === 'where' || property === 'orWhere') {
-        return () => {
-          throw new Error(
-            `${String(property)}() would drop the organisation condition from ` +
-              `this query on "${alias}". Use andWhere (with Brackets for OR), ` +
-              'or queryBuilder.withoutOrg if the query really must cross orgs.',
-          )
-        }
-      }
-
-      const value = Reflect.get(target, property, target) as unknown
-      if (typeof value !== 'function') return value
-
-      return (...args: unknown[]) => {
-        const result = (value as (...a: unknown[]) => unknown).apply(
-          target,
-          args,
-        )
-        // Builder methods return themselves for chaining; hand back the proxy
-        // so the guard survives.
-        return result === target ? proxy : result
-      }
-    },
-  })
-
-  return proxy
-}
+import { OrgQueryBuilders } from './scoped-query-builder'
 
 /**
  * A repository that cannot return another organisation's rows.
@@ -91,7 +39,19 @@ export class OrgScopedRepository<T extends ObjectLiteral> {
      * exist. See .claude/docs/02-database.md#3-multi-tenancy
      */
     private readonly scopeColumn: 'orgId' | 'id' = 'orgId',
-  ) {}
+  ) {
+    this.queryBuilder = new OrgQueryBuilders(repository, scopeColumn)
+  }
+
+  /**
+   * Query builders for anything the methods below cannot express.
+   *
+   * ```ts
+   * projects.queryBuilder.withOrg('project').andWhere(...)  // normal
+   * projects.queryBuilder.withoutOrg('project')             // crosses orgs
+   * ```
+   */
+  readonly queryBuilder: OrgQueryBuilders<T>
 
   /** The organisation this repository is currently bound to. */
   get orgId(): string {
@@ -222,59 +182,6 @@ export class OrgScopedRepository<T extends ObjectLiteral> {
       updatedBy: userId,
     } as never)
     return result.affected ?? 0
-  }
-
-  /**
-   * Query builders, in the two shapes there are. Neither is the default —
-   * `repository.queryBuilder` on its own is an object, not a builder, so every
-   * call site has to say which one it means.
-   *
-   * ```ts
-   * projects.queryBuilder.withOrg('project').andWhere(...)     // normal
-   * projects.queryBuilder.withoutOrg('project')                // crosses orgs
-   * ```
-   */
-  get queryBuilder(): {
-    withOrg: (alias: string) => ScopedQueryBuilder<T>
-    withoutOrg: (alias: string) => SelectQueryBuilder<T>
-  } {
-    return {
-      /**
-       * Scoped to the current org, with `where` and `orWhere` taken away.
-       *
-       * Those two are the only way to unscope a query by accident: `where`
-       * *replaces* every condition set so far, org included, and `orWhere`
-       * widens past it. `andWhere` and `Brackets` cover everything they were
-       * needed for.
-       *
-       * Guarded twice, because neither half is enough on its own. The type
-       * omits them, which catches the mistake where it is normally made — the
-       * first call. But `andWhere` is declared as returning `this`, so the
-       * omission does not survive a chain, and a Proxy re-applies it at every
-       * hop and throws if either name is reached at runtime.
-       */
-      withOrg: (alias: string): ScopedQueryBuilder<T> => {
-        const builder = this.repository
-          .createQueryBuilder(alias)
-          .where(`${alias}.${this.scopeColumn} = :__orgId`, {
-            __orgId: this.orgId,
-          })
-
-        return guardScopedBuilder(builder, alias)
-      },
-
-      /**
-       * No org condition at all.
-       *
-       * Named after the same idea as `@SkipOrgScope()`, so the two read as one
-       * decision at different layers. Every caller should be able to say why
-       * the scoped builder could not do the job — a report spanning orgs, or
-       * the Phase 7 back-office. If the answer is "it was easier", it is the
-       * wrong one.
-       */
-      withoutOrg: (alias: string): SelectQueryBuilder<T> =>
-        this.repository.createQueryBuilder(alias),
-    }
   }
 }
 
