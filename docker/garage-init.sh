@@ -11,7 +11,14 @@
 set -eu
 
 ADMIN="http://garage:3903"
-API="curl -sS -H \"Authorization: Bearer $GARAGE_ADMIN_TOKEN\" -H 'Content-Type: application/json'"
+
+# Layout weights, not settings anyone needs to choose. Garage only acts on a
+# zone when it has several nodes to spread replicas across, and this deployment
+# is one node at replication_factor = 1 — so the name is a label nothing reads,
+# and capacity only ever competes with itself. Both are here rather than in
+# .env to keep a deployment's location out of a file people copy.
+ZONE="${GARAGE_ZONE:-dc1}"
+CAPACITY="${GARAGE_CAPACITY:-10000000000}"
 
 api() {
   # $1 method, $2 path, $3 body (optional)
@@ -33,7 +40,7 @@ if [ "${version:-0}" -eq 0 ]; then
   node=$(echo "$status" | sed -n 's/.*"id": *"\([0-9a-f]*\)".*/\1/p' | head -1)
   echo "assigning layout to $node"
   api POST /v2/UpdateClusterLayout \
-    "{\"roles\":[{\"id\":\"$node\",\"zone\":\"$GARAGE_ZONE\",\"capacity\":$GARAGE_CAPACITY,\"tags\":[]}]}" >/dev/null
+    "{\"roles\":[{\"id\":\"$node\",\"zone\":\"$ZONE\",\"capacity\":$CAPACITY,\"tags\":[]}]}" >/dev/null
   api POST /v2/ApplyClusterLayout '{"version":1}' >/dev/null
 else
   echo "layout already at version $version"

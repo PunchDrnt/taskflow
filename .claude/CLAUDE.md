@@ -80,7 +80,7 @@ yarn test             # vitest run across all workspaces
 Local services (Postgres for development, plus an ephemeral one for the integration suite):
 
 ```bash
-docker compose up -d postgres postgres-test
+docker compose up -d    # postgres, postgres-test, garage, and the one-shot garage-init
 ```
 
 To target a single workspace, use `yarn workspace <name> <script>`, e.g.:

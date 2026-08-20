@@ -114,7 +114,9 @@ apps/api/core/src/
 
 **Client เป็น `@aws-sdk/client-s3` ไม่ใช่ client ของยี่ห้อไหน** — โค้ดไม่รู้จักคำว่า Garage เลย ตัวแปรก็ชื่อ `S3_*` เปลี่ยน server ทีหลังคือแก้ compose อย่างเดียว
 
-**Garage ไม่มี web UI ในตัว** ต่างจาก MinIO — มีแค่ Admin API (3903) กับ CLI
+**Garage ไม่มี web UI ในตัว** ต่างจาก MinIO — มีแค่ Admin API กับ CLI
+
+port ที่ publish ออกมาอยู่ช่วง 4xxx (`S3_PORT=4900`, UI `4909`) — ในคอนเทนเนอร์ยังเป็น 3900/3903 ตาม default ของ Garage · ย้ายออกจาก 39xx เพราะช่วงนั้นชนกับของอย่างอื่นบนเครื่อง dev ง่าย เรื่องเดียวกับที่ MinIO เคยชนที่ 9000
 
 ลองของ community สามตัว มีตัวเดียวที่ใช้กับ Garage v2 ได้จริง:
 
@@ -128,7 +130,7 @@ apps/api/core/src/
 
 - **ต้องใส่ `AUTH_ADMIN_ENABLED=true`** ไม่งั้นมันอ่าน username/password แล้วเมินเฉย แล้วเปิดหน้าเว็บโดยไม่มี login เลย (ลองแล้ว log บอก `enabled_methods=["none"]`)
 - ถือ admin token ไว้ในตัว จึง bind กับ `127.0.0.1` เท่านั้น · บน Bangmod ต้องอยู่หลัง Caddy ที่มี auth หรือไม่เปิดออกเลย
-- ถ้าแค่อยากดูไฟล์ ใช้ `aws --endpoint-url http://localhost:3900 s3 ls s3://taskflow --recursive` ก็พอ (ลองแล้ว upload/download/delete ผ่านหมด)
+- ถ้าแค่อยากดูไฟล์ ใช้ `aws --endpoint-url http://localhost:4900 s3 ls s3://taskflow --recursive` ก็พอ (ลองแล้ว upload/download/delete ผ่านหมด)
 
 **Phase 1 ทำแค่ 6 module:** `identity`, `organization`, `project`, `task`, `notify`, `storage`
 

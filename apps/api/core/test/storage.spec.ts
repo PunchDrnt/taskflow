@@ -14,7 +14,7 @@ import { StorageService } from '../src/modules/storage/storage.service'
 const storage = new StorageService({
   get: (key: string) => {
     const raw = process.env[key]
-    if (key === 'S3_PORT') return Number(raw ?? 3900)
+    if (key === 'S3_PORT') return Number(raw ?? 4900)
     if (key === 'S3_USE_SSL') return raw === 'true'
     return raw
   },

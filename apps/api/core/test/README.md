@@ -6,12 +6,13 @@ code they cover as `src/**/*.spec.ts` and need nothing running.
 ## Running them
 
 ```bash
-docker compose up -d postgres-test garage garage-init
+docker compose up -d
 yarn test
 ```
 
 `storage.spec.ts` needs object storage and skips without `S3_ENDPOINT`; everything
-else needs only `postgres-test`.
+else needs only `postgres-test`. `garage-init` is a one-shot container that lays
+out the cluster on first boot and exits — nothing to start by hand.
 
 `postgres-test` is the ephemeral service in `docker-compose.yml` — it stores
 its data on tmpfs, so it starts empty every time the container is recreated and

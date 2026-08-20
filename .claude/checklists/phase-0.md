@@ -171,7 +171,7 @@
 |---|---|
 | Postgres 18 | data dir ย้ายไป subdirectory ที่มีเลขเวอร์ชัน · mount ที่ `/var/lib/postgresql` ไม่ใช่ `/var/lib/postgresql/data` (เจอมาแล้วตอนตั้ง compose) |
 | Port 5432 | เครื่อง dev มี Postgres รันอยู่แล้ว → ตั้ง `POSTGRES_PORT` ใน `.env` |
-| Port 9000/9001 | เรื่องเดียวกัน MinIO ของโปรเจกต์อื่นจองไว้แล้ว · อาการคือ `S3Error: signature does not match` ไม่ใช่ connection refused เพราะมีตัวจริงตอบอยู่ แค่คนละ instance (เจอมาแล้วตอนยังใช้ MinIO · Garage ใช้ 3900 ซึ่งว่างกว่า) |
+| Port 9000/9001 | เรื่องเดียวกัน MinIO ของโปรเจกต์อื่นจองไว้แล้ว · อาการคือ `S3Error: signature does not match` ไม่ใช่ connection refused เพราะมีตัวจริงตอบอยู่ แค่คนละ instance (เจอมาแล้วตอนยังใช้ MinIO · Garage เลย publish ที่ 4900 แทน) |
 | S3 region | Garage default `garage` · AWS SDK default `us-east-1` · ไม่ตรงกัน = `Authorization header malformed` ทุกคำสั่ง ซึ่งอ่านแล้วเหมือนปัญหา credential |
 | AWS SDK v3 checksum | ใส่ CRC32 ให้ทุก upload อัตโนมัติ → presigned PUT พังด้วย `InvalidDigest` เพราะ browser ไม่ได้ส่ง header นั้น → `requestChecksumCalculation: 'WHEN_REQUIRED'` |
 | Garage image | ไม่มี shell ไม่มี netstat อะไรเลย มีแต่ binary · script ทุกอย่างต้องทำผ่าน Admin API จาก container อื่น |

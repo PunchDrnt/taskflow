@@ -31,7 +31,7 @@ export const envSchema = z
     // a deployment choice — Garage in docker-compose.yml, and nothing in the
     // code knows that. No defaults, for the reason DATABASE_URL has none.
     S3_ENDPOINT: z.string().min(1),
-    S3_PORT: z.coerce.number().int().positive().default(3900),
+    S3_PORT: z.coerce.number().int().positive().default(4900),
     S3_USE_SSL: z.stringbool().default(false),
     S3_ACCESS_KEY: z.string().min(1),
     S3_SECRET_KEY: z.string().min(1),
