@@ -126,7 +126,7 @@ port ที่ publish ออกมาอยู่ช่วง 4xxx (`S3_PORT=49
 | `noooste/garage-ui` | **ใช้ได้ครบ** อ่าน layout/node/bucket/object ได้ · ประกาศรองรับ v2.1.0+ |
 | `waazaafr/garage-s3-simple` | ไม่ได้ลอง |
 
-อยู่ใน `docker-compose.yml` แล้วแต่**ไม่ขึ้นเอง** ต้อง `docker compose --profile tools up -d garage-ui`
+ขึ้นมาพร้อม `docker compose up -d` ที่ port 4909
 
 - **ต้องใส่ `AUTH_ADMIN_ENABLED=true`** ไม่งั้นมันอ่าน username/password แล้วเมินเฉย แล้วเปิดหน้าเว็บโดยไม่มี login เลย (ลองแล้ว log บอก `enabled_methods=["none"]`)
 - ถือ admin token ไว้ในตัว จึง bind กับ `127.0.0.1` เท่านั้น · บน Bangmod ต้องอยู่หลัง Caddy ที่มี auth หรือไม่เปิดออกเลย

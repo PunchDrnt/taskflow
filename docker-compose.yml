@@ -99,16 +99,14 @@ services:
     entrypoint: ['sh', '/init.sh']
     restart: on-failure
 
-  # Not started by default: `docker compose --profile tools up -d garage-ui`.
   # Garage ships no web interface of its own — this is a community one, and
   # the only one of three tried that works against Garage v2's admin API.
   #
   # It holds the admin token, so it must never be reachable from outside the
-  # box. Bound to localhost here; on Bangmod it belongs behind Caddy with its
-  # own auth, or not exposed at all.
+  # box: bound to localhost, and it belongs in whatever override file keeps
+  # development services out of the Bangmod deployment.
   garage-ui:
     image: noooste/garage-ui:latest
-    profiles: ['tools']
     restart: unless-stopped
     depends_on:
       garage-init:

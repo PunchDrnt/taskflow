@@ -147,11 +147,14 @@
 ## 7. Deploy — อย่าเลื่อน
 
 - [ ] เพิ่ม `api` / `web` / `caddy` เข้า `docker-compose.yml`
+- [ ] แยก service ที่มีไว้ใช้ตอน dev ออกจากชุดที่ deploy — `postgres-test` กับ `garage-ui`
+      (ถือ admin token) ต้องไม่ขึ้นบน Bangmod · `docker-compose.yml` ตอนนี้ประกาศตัวเองว่า
+      เป็น local dev ทั้งไฟล์ ตอน §7 ต้องตัดสินใจว่าจะ override ยังไง
 - [ ] `Dockerfile` ทั้งสอง app (multi-stage)
 - [ ] CI: `lint` + `check-types` + `test` + `build`
 - [ ] **Deploy ขึ้น Bangmod ได้จริง แม้เป็นหน้าเปล่า**
 - [ ] Sentry ทั้งสองฝั่ง
-- [ ] Backup: DB กับ MinIO **แยกกัน** (ไฟล์หายกู้จาก DB ไม่ได้)
+- [ ] Backup: DB กับ object storage **แยกกัน** (ไฟล์หายกู้จาก DB ไม่ได้)
 - [ ] DB user ของ app **ไม่ใช่ superuser**
 
 > pipeline ที่ทำทีหลังมักกลายเป็นคอขวด — ข้อนี้เป็น 🔴 ทั้งที่ไม่มีฟีเจอร์ให้ดู
