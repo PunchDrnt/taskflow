@@ -3,6 +3,13 @@ import type { ObjectLiteral, Repository, SelectQueryBuilder } from 'typeorm'
 import { requireRequestContext } from './request-context'
 
 /**
+ * An entity with an `org_id` column. `identity.*` and `billing.plans` do not
+ * have one — they belong to the whole system rather than to an org — so
+ * `withOrg` is unavailable on them by type rather than failing at runtime.
+ */
+type OrgScoped = { orgId: string }
+
+/**
  * A SelectQueryBuilder that cannot drop the org condition.
  *
  * `where` replaces every condition set so far; `orWhere` widens past them.
@@ -73,16 +80,38 @@ export class OrgQueryBuilders<T extends ObjectLiteral> {
   ) {}
 
   /**
+   * The plain TypeORM builder, with nothing applied.
+   *
+   * Correct, not an escape, for the tables that have no `org_id` at all — the
+   * whole `identity` schema and `billing.plans`. A user profile is not scoped
+   * to an org because a user belongs to several.
+   *
+   * On a table that *does* have `org_id`, this crosses orgs, and every such
+   * call should be able to say why `withOrg` could not do the job — a report
+   * spanning orgs, or the Phase 7 back-office. If the answer is "it was
+   * easier", it is the wrong one.
+   */
+  base(alias: string): SelectQueryBuilder<T> {
+    return this.repository.createQueryBuilder(alias)
+  }
+
+  /**
    * Scoped to the current org, with `where` and `orWhere` taken away.
    *
    * Those two are the only way to unscope a query by accident. `andWhere` and
    * `Brackets` cover everything they were needed for.
    *
-   * Guarded twice, because neither half is enough alone: the type omits them,
-   * which catches the mistake where it is normally made — the first call —
-   * and the Proxy holds for the rest of the chain, where the type does not.
+   * Guarded three ways. The conditional type below removes this method
+   * entirely from entities with no `orgId`, so `users.queryBuilder.withOrg()`
+   * does not compile — without it, it threw at runtime with `Property "orgId"
+   * was not found in "User"`. The returned type omits `where`/`orWhere`, which
+   * catches the usual mistake on the first call. And a Proxy holds for the
+   * rest of the chain, where the type stops helping because `andWhere` is
+   * declared as returning `this`.
    */
-  withOrg(alias: string): ScopedQueryBuilder<T> {
+  withOrg: T extends OrgScoped
+    ? (alias: string) => ScopedQueryBuilder<T>
+    : never = ((alias: string): ScopedQueryBuilder<T> => {
     const { orgId } = requireRequestContext()
 
     const builder = this.repository
@@ -90,17 +119,5 @@ export class OrgQueryBuilders<T extends ObjectLiteral> {
       .where(`${alias}.${this.scopeColumn} = :__orgId`, { __orgId: orgId })
 
     return guard(builder, alias)
-  }
-
-  /**
-   * No org condition at all.
-   *
-   * Named after the same idea as `@SkipOrgScope()`, so the two read as one
-   * decision at different layers. Every caller should be able to say why the
-   * scoped builder could not do the job — a report spanning orgs, or the
-   * Phase 7 back-office. If the answer is "it was easier", it is the wrong one.
-   */
-  withoutOrg(alias: string): SelectQueryBuilder<T> {
-    return this.repository.createQueryBuilder(alias)
-  }
+  }) as T extends OrgScoped ? (alias: string) => ScopedQueryBuilder<T> : never
 }

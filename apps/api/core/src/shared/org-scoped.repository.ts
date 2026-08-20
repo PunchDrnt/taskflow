@@ -47,8 +47,14 @@ export class OrgScopedRepository<T extends ObjectLiteral> {
    * Query builders for anything the methods below cannot express.
    *
    * ```ts
-   * projects.queryBuilder.withOrg('project').andWhere(...)  // normal
-   * projects.queryBuilder.withoutOrg('project')             // crosses orgs
+   * projects.queryBuilder.withOrg('project').andWhere(...)  // scoped
+   * users.queryBuilder.base('user')                         // identity has no org
+   * ```
+   *
+   * `withOrg` does not exist on entities without an `orgId` column, so the
+   * first line does not compile for a `User`.
+   *
+   * ```ts
    * ```
    */
   readonly queryBuilder: OrgQueryBuilders<T>

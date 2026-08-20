@@ -72,7 +72,10 @@
 - [x] `OrgScopedRepository<T>` — ทุก service ใช้ตัวนี้ ห้าม inject `Repository<T>` ตรง
   - [x] `organization.organizations` scope ด้วย `id` ไม่ใช่ `org_id` (ตารางเดียวที่ต่าง)
   - [x] `where` แบบ array (= OR ใน TypeORM) ต้องใส่เงื่อนไข org ลง**ทุก branch** ไม่ใช่ใส่ข้างนอกครั้งเดียว
-  - [x] `queryBuilder.withOrg()` / `queryBuilder.withoutOrg()` — ไม่มีตัวไหนเป็น default ต้องเลือกทุกครั้ง · `withOrg` ตัด `where`/`orWhere` ออกทั้ง type และ runtime (Proxy) เพราะ `andWhere` คืน `this` ทำให้ type หลุดตอน chain
+  - [x] `queryBuilder.withOrg()` / `queryBuilder.base()` — ไม่มีตัวไหนเป็น default ต้องเลือกทุกครั้ง
+    - `withOrg` **ไม่มีอยู่** บน entity ที่ไม่มี `orgId` (identity.\*, billing.plans) — compile ไม่ผ่าน แทนที่จะพังตอน runtime
+    - `withOrg` ตัด `where`/`orWhere` ออกทั้ง type และ runtime (Proxy) เพราะ `andWhere` คืน `this` ทำให้ type หลุดตอน chain
+    - `base()` = `createQueryBuilder` เปล่า · ถูกต้องสำหรับตารางที่ไม่มี org_id · เป็นการข้าม org ถ้าใช้บนตารางที่มี
 - [x] ESLint rule ห้าม inject `Repository<T>` ธรรมดา (เฉพาะ `src/modules/**`)
 - [x] `@SkipOrgScope()` decorator สำหรับ endpoint ที่ต้องข้ามจริงๆ
 - [x] 🔒 **Integration test: query จาก org A ต้องมองไม่เห็นข้อมูล org B** — [`test/org-isolation.spec.ts`](../../apps/api/core/test/org-isolation.spec.ts) 10 เคส

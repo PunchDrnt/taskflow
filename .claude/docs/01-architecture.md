@@ -365,9 +365,13 @@ export class OrgScopedRepository<T> {
 }
 
 // query builder ไม่มีตัวไหนเป็น default — ทุก call site ต้องบอกว่าเอาแบบไหน
-projects.queryBuilder.withOrg('project').andWhere(...)  // ปกติ
-projects.queryBuilder.withoutOrg('project')             // ข้าม org (report, back-office)
+projects.queryBuilder.withOrg('project').andWhere(...)  // scope ด้วย org
+users.queryBuilder.base('user')                         // identity ไม่มี org_id
 ```
+
+**`withOrg` ไม่มีอยู่บน entity ที่ไม่มีคอลัมน์ `orgId`** — `users.queryBuilder.withOrg()` compile ไม่ผ่าน · ก่อนหน้านี้มันพังตอน runtime ด้วย `Property "orgId" was not found in "User"`
+
+`base()` คือ `createQueryBuilder` เปล่า ๆ ของ TypeORM — สำหรับ `identity.*` กับ `billing.plans` ที่**ไม่มี `org_id` ตั้งแต่แรก** มันคือตัวที่ถูกต้อง ไม่ใช่ทางหนี (profile ของ user ไม่ผูกกับ org เพราะ user อยู่ได้หลาย org) · ส่วนบนตารางที่**มี** `org_id` การเรียก `base()` คือการข้าม org ซึ่งต้องมีเหตุผลอธิบายได้
 
 `withOrg` คืน type ที่**ตัด `where` / `orWhere` ออก** — สองตัวนี้คือทางเดียวที่จะปลด scope โดยไม่ตั้งใจ (`where` แทนที่เงื่อนไขทั้งหมดที่ตั้งไว้รวมถึง org · `orWhere` ขยายออกไปจากมัน) · `andWhere` กับ `Brackets` ใช้แทนได้หมด
 

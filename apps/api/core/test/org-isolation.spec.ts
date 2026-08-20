@@ -252,9 +252,9 @@ describe.skipIf(!hasTestDatabase)('cross-org isolation', () => {
     expect(rows.every((project) => project.orgId === orgA.id)).toBe(true)
   })
 
-  it('the unscoped builder is the only way across orgs, and says so by name', async () => {
+  it('base() is the only way across orgs on an org-scoped table', async () => {
     const all = await asOrg(orgA, () =>
-      projects.queryBuilder.withoutOrg('project').getMany(),
+      projects.queryBuilder.base('project').getMany(),
     )
 
     const orgIds = new Set(all.map((project) => project.orgId))
