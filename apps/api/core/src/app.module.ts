@@ -5,7 +5,9 @@ import {
   type NestModule,
 } from '@nestjs/common'
 import { ConfigModule, ConfigService } from '@nestjs/config'
+import { APP_FILTER } from '@nestjs/core'
 import { EventEmitterModule } from '@nestjs/event-emitter'
+import { SentryGlobalFilter, SentryModule } from '@sentry/nestjs/setup'
 import { LoggerModule } from 'nestjs-pino'
 
 import { AppController } from './app.controller'
@@ -30,6 +32,9 @@ const rootEnvFile = join(__dirname, '..', '..', '..', '..', '.env')
 
 @Module({
   imports: [
+    // Inert without a DSN — src/instrument.ts skips Sentry.init entirely, and
+    // the filter below then just re-throws.
+    SentryModule.forRoot(),
     ConfigModule.forRoot({
       isGlobal: true,
       cache: true,
@@ -64,7 +69,13 @@ const rootEnvFile = join(__dirname, '..', '..', '..', '..', '.env')
     MaintenanceModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    // Reports what nothing else handled. Registered rather than applied in
+    // main.ts so it sits below Nest's own filters and does not swallow the
+    // HttpExceptions that are ordinary answers.
+    { provide: APP_FILTER, useClass: SentryGlobalFilter },
+  ],
 })
 export class AppModule implements NestModule {
   // Applied to every route: the context has to exist before any handler runs,

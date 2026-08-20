@@ -11,6 +11,13 @@ const required = {
   S3_BUCKET: 'taskflow',
 }
 
+// What production additionally demands, on top of `required`.
+const productionOnly = {
+  NODE_ENV: 'production',
+  RESEND_API_KEY: 're_live_key',
+  SENTRY_DSN: 'https://abc123@o1.ingest.sentry.io/1',
+}
+
 describe('validateEnv', () => {
   it('applies defaults when optional variables are absent', () => {
     const env = validateEnv({ ...required })
@@ -49,14 +56,18 @@ describe('validateEnv', () => {
     ).toThrow(/DATABASE_URL/)
   })
 
-  it('lets a developer boot without a Resend key', () => {
-    // Without this, nobody without a Resend account can run the API at all.
-    expect(validateEnv({ ...required }).RESEND_API_KEY).toBeUndefined()
+  it('lets a developer boot without a Resend key or a Sentry DSN', () => {
+    // Without this, nobody without accounts at both can run the API at all.
+    const env = validateEnv({ ...required })
+
+    expect(env.RESEND_API_KEY).toBeUndefined()
+    expect(env.SENTRY_DSN).toBeUndefined()
   })
 
-  it('refuses to boot production without one', () => {
-    // The other half of the bargain: the fallback writes notifications to the
-    // log, which must never be what a real deployment does.
+  it('refuses to boot production without either', () => {
+    // The other half of the bargain. Missing Resend writes notifications to
+    // the log; missing Sentry reports errors nowhere. Neither is something a
+    // real deployment should be able to do quietly.
     expect(() => validateEnv({ ...required, NODE_ENV: 'production' })).toThrow(
       /RESEND_API_KEY/,
     )
@@ -67,7 +78,37 @@ describe('validateEnv', () => {
         NODE_ENV: 'production',
         RESEND_API_KEY: 're_live_key',
       }),
-    ).not.toThrow()
+    ).toThrow(/SENTRY_DSN/)
+
+    expect(() => validateEnv({ ...required, ...productionOnly })).not.toThrow()
+  })
+
+  it('rejects a Sentry DSN that is not a URL', () => {
+    expect(() => validateEnv({ ...required, SENTRY_DSN: 'not-a-dsn' })).toThrow(
+      /SENTRY_DSN/,
+    )
+  })
+
+  it('reads an empty variable as absent, not as a malformed one', () => {
+    // `FOO=` in a .env file and a compose `${FOO:-}` both arrive as ''. It
+    // means off, and checking '' against the shape reports one missing value
+    // as two errors.
+    expect(
+      validateEnv({ ...required, SENTRY_DSN: '', RESEND_API_KEY: '' })
+        .SENTRY_DSN,
+    ).toBeUndefined()
+
+    const error = (() => {
+      try {
+        validateEnv({ ...required, NODE_ENV: 'production', SENTRY_DSN: '' })
+      } catch (cause) {
+        return String(cause)
+      }
+      return ''
+    })()
+
+    expect(error).toMatch(/is required when NODE_ENV=production/)
+    expect(error).not.toMatch(/Invalid URL/)
   })
 })
 

@@ -1,3 +1,6 @@
+// First, and above reflect-metadata: Sentry instruments modules as they load,
+// so anything imported before it is invisible to it.
+import './instrument'
 import 'reflect-metadata'
 
 import { ConfigService } from '@nestjs/config'

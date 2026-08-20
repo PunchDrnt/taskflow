@@ -29,6 +29,7 @@
     "@nestjs/terminus": "^11.1.1",
     "@nestjs/typeorm": "^11.0.3",
     "@repo/shared": "workspace:*",
+    "@sentry/nestjs": "^10.70.0",
     "nestjs-pino": "^4.6.1",
     "pg": "^8.23.0",
     "pino": "^10.3.1",

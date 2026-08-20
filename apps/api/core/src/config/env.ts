@@ -1,5 +1,20 @@
 import { z } from 'zod'
 
+/**
+ * Reads an empty variable as absent.
+ *
+ * `FOO=` in a .env file, or a compose `${FOO:-}` that resolves to nothing, is
+ * how people turn an optional thing off. Without this the empty string is
+ * checked against the shape instead, and one missing value reports as two
+ * errors — a malformed URL and a missing requirement.
+ */
+function optional<T extends z.ZodType>(schema: T) {
+  return z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    schema.optional(),
+  )
+}
+
 // Named separately because the TypeORM CLI validates this one on its own.
 const databaseUrlSchema = z
   .string()
@@ -44,11 +59,18 @@ export const envSchema = z
     // Authorization header, which does not read like a region problem.
     S3_REGION: z.string().min(1).default('us-east-1'),
 
+    // Error tracking. Read directly by src/instrument.ts, which runs before
+    // ConfigService exists; declared here so a malformed value still stops the
+    // process, and so this file stays the list of what the API reads.
+    SENTRY_DSN: optional(z.url()),
+    SENTRY_ENVIRONMENT: optional(z.string().min(1)),
+    SENTRY_TRACES_SAMPLE_RATE: z.coerce.number().min(0).max(1).default(0),
+
     // Optional, unlike the rest — a developer has no Resend account, and
     // without a key EmailService writes the message to the log instead of
     // sending it. The refine below makes that a development-only affordance:
     // production fails at boot rather than delivering notifications to stdout.
-    RESEND_API_KEY: z.string().min(1).optional(),
+    RESEND_API_KEY: optional(z.string().min(1)),
     EMAIL_FROM: z.string().min(1).default('Taskflow <noreply@taskflow.local>'),
   })
   .refine(
@@ -58,6 +80,13 @@ export const envSchema = z
       message: 'is required when NODE_ENV=production',
     },
   )
+  // Same bargain as RESEND_API_KEY: absent is a developer affordance, and a
+  // production deployment that reports its errors nowhere is the failure
+  // nobody notices until they need the report.
+  .refine((env) => env.NODE_ENV !== 'production' || Boolean(env.SENTRY_DSN), {
+    path: ['SENTRY_DSN'],
+    message: 'is required when NODE_ENV=production',
+  })
 
 export type Env = z.infer<typeof envSchema>
 

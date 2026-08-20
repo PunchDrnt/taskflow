@@ -1,11 +1,7 @@
 # syntax=docker/dockerfile:1
 #
-# Built from the repository root, not from this directory:
-#
-#     docker build -f apps/web/client/Dockerfile .
-#
-# @web/client imports @repo/ui, and Yarn resolves workspaces from the root, so
-# a build context narrower than the monorepo cannot install or compile.
+# Built from the repository root: `docker build -f apps/web/client/Dockerfile .`
+# Yarn resolves workspaces there, and @web/client imports @repo/ui.
 
 ARG NODE_VERSION=24.18.0
 
@@ -14,8 +10,8 @@ RUN corepack enable
 WORKDIR /app
 
 # ── dependencies ─────────────────────────────────────────────────────────────
-# Manifests only. Editing a source file must not invalidate this layer, or
-# every build re-resolves the whole tree.
+# Every workspace's manifest, including ones this app never imports: yarn.lock
+# covers all of them, and leaving one out fails --immutable with YN0028.
 FROM base AS deps
 COPY package.json yarn.lock .yarnrc.yml ./
 COPY apps/api/core/package.json apps/api/core/
@@ -26,23 +22,33 @@ COPY packages/ui/package.json packages/ui/
 RUN yarn install --immutable
 
 # ── build ────────────────────────────────────────────────────────────────────
+# Narrow, unlike the manifests: `COPY . .` would rebuild this whenever the
+# API changed.
 FROM deps AS build
-COPY . .
+COPY tsconfig.json* turbo.json ./
+COPY packages/config packages/config
+COPY packages/ui packages/ui
+COPY apps/web/client apps/web/client
+
 ENV NEXT_TELEMETRY_DISABLED=1
+
+# Build arguments, not environment: Next inlines NEXT_PUBLIC_* into the bundle
+# here, so setting them at container start reports nowhere, silently.
+ARG NEXT_PUBLIC_SENTRY_DSN=""
+ARG NEXT_PUBLIC_SENTRY_ENVIRONMENT="production"
+ENV NEXT_PUBLIC_SENTRY_DSN=${NEXT_PUBLIC_SENTRY_DSN} \
+    NEXT_PUBLIC_SENTRY_ENVIRONMENT=${NEXT_PUBLIC_SENTRY_ENVIRONMENT}
+
 RUN yarn workspace @web/client build
 
 # ── runtime ──────────────────────────────────────────────────────────────────
-# No install here: `output: 'standalone'` already wrote the subset of
-# node_modules the server reaches, which is why there is no prod-deps stage
-# the way the API has one.
+# No install: `output: 'standalone'` already wrote the node_modules subset the
+# server reaches.
 FROM base AS runner
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1
 
-# Ownership set on copy: the standalone server writes nothing, but the image
-# should not hand root-owned files to a non-root user either.
-# Standalone is written under the app's own .next, but its contents are laid
-# out from outputFileTracingRoot — node_modules at the top, server.js still at
-# apps/web/client. Copying its root to /app reproduces that.
+# Standalone lives under the app's .next but is laid out from
+# outputFileTracingRoot, so its root maps onto /app.
 COPY --from=build --chown=node:node /app/apps/web/client/.next/standalone ./
 COPY --from=build --chown=node:node /app/apps/web/client/.next/static ./apps/web/client/.next/static
 COPY --from=build --chown=node:node /app/apps/web/client/public ./apps/web/client/public
