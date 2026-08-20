@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { MAX_TASK_DEPTH } from '@repo/shared'
 
+import { SYSTEM_USER_ID } from '../src/shared/system-user'
 import { createMigratedTestDataSource, hasTestDatabase } from './database'
 
 /**
@@ -40,8 +41,20 @@ describe.skipIf(!hasTestDatabase)('schema invariants', () => {
          VALUES
            (gen_random_uuid(), gen_random_uuid(), 't', gen_random_uuid(), 'a0', $1,
             gen_random_uuid(), $2, $2)`,
-        [MAX_TASK_DEPTH + 1, '00000000-0000-0000-0000-000000000000'],
+        [MAX_TASK_DEPTH + 1, SYSTEM_USER_ID],
       ),
     ).rejects.toThrow(/tasks_depth_within_limit_check/)
+  })
+
+  it('seeds the system user at the id the application writes as', async () => {
+    // The migration spells the uuid out rather than importing SYSTEM_USER_ID,
+    // for the same reason the depth CHECK spells its number out. This is what
+    // catches the two parting company — and they part company silently, as a
+    // foreign key violation on created_by in whichever job writes first.
+    const [seeded] = (await dataSource.query(
+      `SELECT id FROM identity.users WHERE is_system`,
+    )) as { id: string }[]
+
+    expect(seeded?.id).toBe(SYSTEM_USER_ID)
   })
 })

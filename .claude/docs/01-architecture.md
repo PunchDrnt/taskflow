@@ -558,7 +558,21 @@ CREATE TABLE audit.logs_2026_08 PARTITION OF audit.logs
 >
 > ฝั่ง TypeORM entity ก็ต้องประกาศเป็น composite (`@PrimaryColumn()` สองตัว) ไม่ใช่ `@PrimaryGeneratedColumn('uuid')` ตัวเดียว — `audit.logs` จึงเป็นตารางเดียวที่**ไม่ใช้ base entity เลยสักคอลัมน์** (อีกสองข้อยกเว้นใช้บางส่วน ดู [ตารางเทียบ](./02-database.md#base-entity--on-every-table-with-three-named-exceptions))
 
-Job สร้าง partition เดือนถัดไปล่วงหน้า
+#### Where the retention jobs live
+
+`apps/api/core/src/maintenance/` — cron สองตัว ตีสามตามเวลาไทย (ระบุ `Asia/Bangkok` ตรง ๆ ไม่อิงเวลาเครื่อง เพราะ container ที่รันบน UTC จะกลายเป็นกลางวันของคนใช้งาน)
+
+| Job                | เวลา  | ทำอะไร                                                                          |
+| ------------------ | ----- | ------------------------------------------------------------------------------ |
+| `audit-partitions` | 03:05 | สร้าง partition ของ 12 เดือนข้างหน้าที่ยังไม่มี · log `error` ถ้า `audit.logs_default` มีแถว |
+| `retention`        | 03:15 | ทั้ง 5 นโยบายในตารางข้างบน                                                          |
+
+- **ลำดับการลบเป็นเรื่องจริง ไม่ใช่รายละเอียด** — `tasks.project_id` เป็น RESTRICT ลบ project ก่อน task ไม่ได้ · ลำดับจึงอ่านจาก `pg_constraint` ตอนรันแล้ว topological sort ไม่ใช่ลิสต์ที่เขียนมือ ตารางใหม่ที่ลืมใส่ในลิสต์คือแถวที่ไม่มีวันถูกลบ และไม่มีอะไรฟ้อง
+- **`identity.users` ไม่เคย hard delete** — anonymize อย่างเดียว เพราะ `created_by` ของทุกตารางชี้มาที่นี่แบบ RESTRICT · ถ้า sweep ลบได้จริงมันจะลบได้เฉพาะคนที่ยังไม่ทันสร้างอะไร ซึ่งแปลว่าพฤติกรรมขึ้นกับว่าคนนั้นทำงานไปมากแค่ไหนก่อนลาออก
+- **นับ 30 วันของ `pending_deletion` จาก `updated_at`** เพราะ schema ไม่มีคอลัมน์บอกว่าสถานะเปลี่ยนเมื่อไหร่ · ผิดทางเดียวคือแถวที่ถูกแก้อีกครั้งได้เวลาเพิ่ม ซึ่งเข้าข้างเจ้าของบัญชี · ถ้าวันหนึ่งไม่พอ ทางแก้คือเพิ่มคอลัมน์ `status_changed_at` ไม่ใช่เขียน query ให้ฉลาดขึ้น
+- **`pg_try_advisory_lock`** กันสอง instance ยิง cron พร้อมกัน · ตัวที่สอง**ข้าม**ไม่ใช่ต่อคิว — กว่าจะได้ lock งานก็เสร็จไปแล้ว
+- **`JOBS_ENABLED=false`** ปิด job ทั้งสองในโปรเซสนั้น (default `true`) — มีไว้สำหรับเครื่อง dev ที่ต่อ DB ร่วมกัน
+- ตารางที่ลบไม่ผ่าน (เช่น project ที่ soft delete แล้วแต่ task ยังไม่ถูกลบตาม) จะ log แล้วข้าม ไม่ล้มทั้ง sweep · แต่ตารางนั้นค้างจนกว่าจะแก้ต้นเหตุ เพราะ batch เดียวคือ statement เดียว
 
 ---
 

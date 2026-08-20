@@ -119,6 +119,16 @@ One per table under `src/modules/<module>/*.entity.ts`, each listed in `src/data
 
 Entities are registered explicitly in `entities.ts` rather than discovered by glob — a `*.entity.js` glob resolves differently under `nest build` than under Vitest's SWC transform, and the difference shows up as an "entity metadata not found" error in one runner but not the other. Entity properties are camelCase and mapped to snake_case columns by `snake-naming.strategy.ts`, so `@Column({ name })` is only needed to override.
 
+### Maintenance jobs
+
+[apps/api/core/src/maintenance/](apps/api/core/src/maintenance/) holds the two jobs nobody triggers, both at three in the morning Bangkok time: audit-log partition upkeep at 03:05, and the retention sweep at 03:15. What each kind of data is kept for is in `.claude/docs/01-architecture.md`; three details are worth knowing before touching them.
+
+The order tables are purged in is a topological sort over `pg_constraint`, read at run time. A hand-written list would be wrong in a way nothing detects — `tasks.project_id` is `RESTRICT`, so tasks genuinely have to go before projects, and a table added without a thought for retention is rows that are simply never deleted.
+
+`identity.users` is never hard-deleted. Every `created_by` in the schema points at it with `ON DELETE RESTRICT`, which is the decision that history keeps an author, so a user who asks to be deleted is anonymised in place instead.
+
+Scheduled work is declared per process, so two containers fire the same cron on the same second. `pg_try_advisory_lock` means the second one skips — by the time the lock is free the work is done. `JOBS_ENABLED=false` turns both jobs off in a process entirely, which is what you want on a development machine pointed at a shared database.
+
 ## Scripts
 
 Run from the repo root, fanned out to every workspace via Turborepo:
@@ -146,6 +156,7 @@ Unit tests sit next to the code as `src/**/*.spec.ts`. Integration tests live in
 | [org-isolation.spec.ts](apps/api/core/test/org-isolation.spec.ts)         | 🔒 A query from org A must never see org B's rows                                                    |
 | [schema-drift.spec.ts](apps/api/core/test/schema-drift.spec.ts)           | Entities still describe the schema the migrations built                                              |
 | [schema-invariants.spec.ts](apps/api/core/test/schema-invariants.spec.ts) | Facts the schema and the code both rely on, such as the task-depth ceiling matching `MAX_TASK_DEPTH` |
+| [retention.spec.ts](apps/api/core/test/retention.spec.ts)                 | The maintenance jobs: purge order, anonymisation, partition upkeep, the advisory lock                |
 
 The permission layer joins them once it exists.
 

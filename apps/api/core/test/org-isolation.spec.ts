@@ -5,6 +5,7 @@ import { Organization } from '../src/modules/organization/organization.entity'
 import { Project } from '../src/modules/project/project.entity'
 import { OrgScopedRepository } from '../src/shared/org-scoped.repository'
 import { runWithRequestContext } from '../src/shared/request-context'
+import { SYSTEM_USER_ID } from '../src/shared/system-user'
 import { createMigratedTestDataSource, hasTestDatabase } from './database'
 
 /**
@@ -18,8 +19,6 @@ import { createMigratedTestDataSource, hasTestDatabase } from './database'
  * See .claude/docs/02-database.md#3-multi-tenancy
  */
 
-const SYSTEM_USER = '00000000-0000-0000-0000-000000000000'
-
 describe.skipIf(!hasTestDatabase)('cross-org isolation', () => {
   let dataSource: DataSource
   let orgA: Organization
@@ -28,7 +27,7 @@ describe.skipIf(!hasTestDatabase)('cross-org isolation', () => {
   let organizations: OrgScopedRepository<Organization>
 
   const asOrg = <R>(org: Organization, fn: () => R): R =>
-    runWithRequestContext({ orgId: org.id, userId: SYSTEM_USER }, fn)
+    runWithRequestContext({ orgId: org.id, userId: SYSTEM_USER_ID }, fn)
 
   beforeAll(async () => {
     dataSource = await createMigratedTestDataSource()
@@ -45,16 +44,16 @@ describe.skipIf(!hasTestDatabase)('cross-org isolation', () => {
       rawOrgs.create({
         name: 'Org A',
         slug: 'org-a',
-        createdBy: SYSTEM_USER,
-        updatedBy: SYSTEM_USER,
+        createdBy: SYSTEM_USER_ID,
+        updatedBy: SYSTEM_USER_ID,
       }),
     )
     orgB = await rawOrgs.save(
       rawOrgs.create({
         name: 'Org B',
         slug: 'org-b',
-        createdBy: SYSTEM_USER,
-        updatedBy: SYSTEM_USER,
+        createdBy: SYSTEM_USER_ID,
+        updatedBy: SYSTEM_USER_ID,
       }),
     )
 
@@ -181,7 +180,7 @@ describe.skipIf(!hasTestDatabase)('cross-org isolation', () => {
 
     // A CHECK on every soft-deletable table rejects one without the other,
     // and TypeORM's softDelete() runs no subscriber to fill it in.
-    expect(row?.deleted_by).toBe(SYSTEM_USER)
+    expect(row?.deleted_by).toBe(SYSTEM_USER_ID)
     expect(row?.deleted_at).not.toBeNull()
   })
 
@@ -209,8 +208,8 @@ describe.skipIf(!hasTestDatabase)('cross-org isolation', () => {
       projects.save(projects.create({ name: 'unattributed' })),
     )
 
-    expect(project.createdBy).toBe(SYSTEM_USER)
-    expect(project.updatedBy).toBe(SYSTEM_USER)
+    expect(project.createdBy).toBe(SYSTEM_USER_ID)
+    expect(project.updatedBy).toBe(SYSTEM_USER_ID)
   })
 
   it('rejects .where() on the scoped builder, at every hop of a chain', async () => {

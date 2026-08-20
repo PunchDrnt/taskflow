@@ -39,8 +39,8 @@
 - [x] 🔒 `004` `audit.logs` — `PARTITION BY RANGE (occurred_at)` + **`PRIMARY KEY (id, occurred_at)`** · partition ล่วงหน้า 12 เดือน + `logs_default`
 - [x] ตารางที่เหลือตาม [`02-database.md`](../docs/02-database.md#5-full-schema) ยกเว้น `chat.*` (Phase 2)
 - [x] Test กัน entity หลุดจาก migration — [`test/schema-drift.spec.ts`](../../apps/api/core/test/schema-drift.spec.ts)
-- [ ] Job สร้าง partition เดือนถัดไป — ฝั่ง DB พร้อมแล้ว (`audit.ensure_month_partition(date)` เรียกซ้ำได้) เหลือตัวตั้งเวลา
-- [ ] Alert เมื่อ `audit.logs_default` มีแถว — แปลว่า partition ขาด และเดือนนั้นจะสร้าง partition ไม่ได้จนกว่าจะย้ายออก
+- [x] Job สร้าง partition เดือนถัดไป — cron `audit-partitions` 03:05 เติมให้ครบ 12 เดือนล่วงหน้าทุกวัน ([`src/maintenance/`](../../apps/api/core/src/maintenance/))
+- [x] Alert เมื่อ `audit.logs_default` มีแถว — ตอนนี้เป็น log level `error` · กลายเป็น alert จริงเมื่อ Sentry เข้าใน §7
 
 > **28 ตาราง · 10 schema · 12 migration** — revert ทั้งหมดแล้วเหลือ 0 ตาราง 0 schema 0 extension · run ใหม่ได้ 28 เท่าเดิม
 
@@ -87,11 +87,22 @@
 
 > ❓ RLS **ไม่ทำใน phase นี้** — เลื่อนไป Phase 2 พร้อมเรื่อง transaction strategy
 
-## 4. Soft delete
+## 4. Soft delete + retention
 
 - [ ] `@DeleteDateColumn` — TypeORM กรอง `deleted_at IS NULL` ให้อัตโนมัติ
 - [ ] จุดที่ TypeORM **ไม่ครอบคลุม** ต้องทำเอง: raw query / QueryBuilder · relation ที่ join มา · unique constraint · `deleted_by`
 - [ ] Cascade soft delete เขียนใน service เอง (`ON DELETE CASCADE` ทำงานกับ hard delete เท่านั้น)
+  - ข้อนี้คือสิ่งที่กัน retention ไม่ให้ติด — project ที่ soft delete แล้วแต่ task ยังอยู่ ลบไม่ออกเพราะ `tasks.project_id` เป็น RESTRICT
+
+**Retention job** — ครบทั้ง 5 นโยบายใน [`01-architecture.md`](../docs/01-architecture.md#retention--each-kind-of-data-has-its-own-lifetime) แล้ว อยู่ที่ [`src/maintenance/`](../../apps/api/core/src/maintenance/)
+
+- [x] cron `retention` 03:15 (`Asia/Bangkok`) — soft-deleted 90 วัน · `pending_deletion` 30 วัน · outbox 30 วัน · session 7 วัน · reset token 1 วัน
+- [x] ลำดับการลบคำนวณจาก `pg_constraint` ตอนรัน ไม่ใช่ลิสต์เขียนมือ — ตารางใหม่เข้า sweep เองอัตโนมัติ
+- [x] `identity.users` อยู่ใน `NEVER_PURGED` — anonymize อย่างเดียว ไม่ hard delete
+- [x] `pg_try_advisory_lock` กันสอง instance ยิงพร้อมกัน · `JOBS_ENABLED=false` ปิดได้ทั้งโปรเซส
+- [x] `SYSTEM_USER_ID` ย้ายมาที่ [`src/shared/system-user.ts`](../../apps/api/core/src/shared/system-user.ts) — job ไม่มี request context ต้องบอกเองว่าเขียนในนามใคร · [`test/schema-invariants.spec.ts`](../../apps/api/core/test/schema-invariants.spec.ts) เช็คว่าตรงกับ uuid ที่ migration seed ไว้
+- [x] Test — [`test/retention.spec.ts`](../../apps/api/core/test/retention.spec.ts) 21 เคส รวมเคสที่ลบไม่ผ่านแล้วต้องข้ามไม่ล้มทั้ง sweep
+- [ ] ย้าย alert (`audit.logs_default`, retention step ที่ fail) จาก log ไป Sentry — รอ §7
 
 ## 5. Permission + Activity log
 

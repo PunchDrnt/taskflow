@@ -24,6 +24,12 @@ export const envSchema = z.object({
     .refine((value) => /^postgres(ql)?:\/\//.test(value), {
       message: 'must be a postgres:// or postgresql:// connection string',
     }),
+  // Retention and audit-log partition upkeep. On by default, because a
+  // deployment that quietly stops deleting personal data is the failure that
+  // matters. Turn it off for a process that should not run them — a second API
+  // container is already covered by the advisory lock, but a developer pointed
+  // at a shared database is not.
+  JOBS_ENABLED: z.stringbool().default(true),
 })
 
 export type Env = z.infer<typeof envSchema>

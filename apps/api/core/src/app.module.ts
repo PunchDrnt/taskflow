@@ -12,6 +12,7 @@ import { AppService } from './app.service'
 import { validateEnv, type Env } from './config/env'
 import { DatabaseModule } from './database/database.module'
 import { HealthModule } from './health/health.module'
+import { MaintenanceModule } from './maintenance/maintenance.module'
 import { RequestContextMiddleware } from './shared/request-context.middleware'
 
 // The repo keeps a single .env at its root, shared with docker-compose.
@@ -42,6 +43,7 @@ const rootEnvFile = join(__dirname, '..', '..', '..', '..', '.env')
     }),
     DatabaseModule,
     HealthModule,
+    MaintenanceModule,
   ],
   controllers: [AppController],
   providers: [AppService],
