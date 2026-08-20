@@ -1,4 +1,5 @@
 import {
+  IsNull,
   type DataSource,
   type DeepPartial,
   type EntityManager,
@@ -138,16 +139,25 @@ export class OrgScopedRepository<T extends ObjectLiteral> {
   }
 
   /**
-   * Returns rows affected — 0 for another org's id, so the caller sees "not
-   * found" rather than proof the row exists elsewhere.
+   * Returns rows affected — 0 for another org's id or a row already deleted,
+   * so the caller sees "not found" rather than proof the row exists elsewhere.
    *
    * `deletedBy` is written explicitly because TypeORM's `softDelete()` builds
    * a query without loading the entity, so no subscriber runs and the CHECK on
    * every soft-deletable table rejects the half-set pair. Found by testing.
+   *
+   * `update()` does not apply the soft-delete filter that reads get, so
+   * `deletedAt: IsNull()` is added here — without it a second call rewrites
+   * who deleted the row and restarts its ninety-day retention clock.
+   *
+   * Deletes only this row. Anything belonging to it needs CascadeSoftDelete.
    */
   async softDeleteById(id: string): Promise<number> {
     const { userId } = requireRequestContext()
-    const where = this.withScope({ id } as unknown as FindOptionsWhere<T>)
+    const where = this.withScope({
+      id,
+      deletedAt: IsNull(),
+    } as unknown as FindOptionsWhere<T>)
     if (!where) return 0
 
     const result = await this.repository.update(where, {

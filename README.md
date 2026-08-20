@@ -119,6 +119,14 @@ One per table under `src/modules/<module>/*.entity.ts`, each listed in `src/data
 
 Entities are registered explicitly in `entities.ts` rather than discovered by glob — a `*.entity.js` glob resolves differently under `nest build` than under Vitest's SWC transform, and the difference shows up as an "entity metadata not found" error in one runner but not the other. Entity properties are camelCase and mapped to snake_case columns by `snake-naming.strategy.ts`, so `@Column({ name })` is only needed to override.
 
+### Soft delete
+
+`@DeleteDateColumn` filters `deleted_at IS NULL` out of reads — including the query builder, which the usual warnings say it does not; [cascade-soft-delete.spec.ts](apps/api/core/test/cascade-soft-delete.spec.ts) asserts the generated SQL so a change upstream is noticed. What it does not filter is `update()` and raw SQL, which is why `softDeleteById` adds `deletedAt: IsNull()` itself: without it a second call rewrites who deleted the row and restarts its ninety-day retention clock.
+
+`ON DELETE CASCADE` fires only on a hard delete, so an aggregate has to be carried down in code — [cascade-soft-delete.ts](apps/api/core/src/shared/cascade-soft-delete.ts), one transaction, driven by a declared `AGGREGATE_CHILDREN` map.
+
+That map is hand-written, unlike retention's purge order which is read from the catalog, because the database cannot answer this question. `tasks.project_id` is `RESTRICT` — a project holding tasks must be emptied deliberately — which says nothing about whether tasks belong to it, and `NOT NULL` is no better a signal: `tasks.status_id` is `NOT NULL`, but deleting a status moves its tasks rather than deleting them. A test requires every soft-deletable table to appear in the map or in `ROOTS`, so a new table forces the question instead of leaving its rows to outlive their parent.
+
 ### Maintenance jobs
 
 [apps/api/core/src/maintenance/](apps/api/core/src/maintenance/) holds the two jobs nobody triggers, both at three in the morning Bangkok time: audit-log partition upkeep at 03:05, and the retention sweep at 03:15. What each kind of data is kept for is in `.claude/docs/01-architecture.md`; three details are worth knowing before touching them.

@@ -50,10 +50,11 @@ each other's data and fail in ways that depend on timing.
 
 ## What lives here
 
-| File                        | Covers                                                               |
-| --------------------------- | -------------------------------------------------------------------- |
-| `database.ts`               | Helper: connect to the test database with migrations applied         |
-| `org-isolation.spec.ts`     | 🔒 A query made for org A must never return org B's rows             |
-| `schema-drift.spec.ts`      | Entities still describe the schema the migrations built              |
-| `schema-invariants.spec.ts` | Facts the schema and the code both rely on, and must agree about     |
-| `retention.spec.ts`         | The maintenance jobs — purge order, anonymisation, the partition job |
+| File                          | Covers                                                               |
+| ----------------------------- | -------------------------------------------------------------------- |
+| `database.ts`                 | Helper: connect to the test database with migrations applied         |
+| `org-isolation.spec.ts`       | 🔒 A query made for org A must never return org B's rows             |
+| `schema-drift.spec.ts`        | Entities still describe the schema the migrations built              |
+| `schema-invariants.spec.ts`   | Facts the schema and the code both rely on, and must agree about     |
+| `retention.spec.ts`           | The maintenance jobs — purge order, anonymisation, the partition job |
+| `cascade-soft-delete.spec.ts` | What TypeORM hides on its own, and that an aggregate goes down whole |

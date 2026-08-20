@@ -490,14 +490,20 @@ generateKeyBetween('a0', 'a1') // 'a0V' — แทรกกลาง
 
 ใช้ `@DeleteDateColumn` ของ TypeORM — กรอง `deleted_at IS NULL` อัตโนมัติ
 
-**แต่ไม่ครอบคลุม 4 กรณี ต้องทำเอง**
+**ครอบคลุมแค่ไหน — วัดกับ TypeORM 1.1 จริง ไม่ใช่เดา**
 
-| กรณี                      | ต้องทำ                                      |
-| ------------------------ | ------------------------------------------ |
-| Raw query / QueryBuilder | เติม `.andWhere('x.deletedAt IS NULL')` เอง |
-| Relation ที่ join มา       | TypeORM กรองให้เฉพาะ entity หลัก             |
-| Unique constraint        | ต้องเป็น **partial index** ไม่งั้นชนกับแถวที่ลบแล้ว |
-| `deleted_by`             | TypeORM ไม่มีให้ — set เองผ่าน subscriber      |
+| กรณี                            | TypeORM ทำให้? | ต้องทำเอง                                         |
+| ------------------------------ | ------------- | ------------------------------------------------ |
+| `find` / `count` / `exists`     | ✅             | —                                                |
+| **QueryBuilder**               | ✅             | — เติม `andWhere` เองจะซ้ำ (`withDeleted()` คือทางกลับเข้าไป) |
+| `update()` — รวมถึง soft delete ซ้ำ | ❌             | เติม `deletedAt: IsNull()` เอง ไม่งั้นเขียนทับว่าใครลบและนับ 90 วันใหม่ |
+| Raw SQL                        | ❌             | เติมเงื่อนไขเอง                                      |
+| Unique constraint              | ❌             | ต้องเป็น **partial index** ไม่งั้นชนกับแถวที่ลบแล้ว        |
+| `deleted_by`                   | ❌             | set เองผ่าน subscriber หรือใน UPDATE ตรง ๆ          |
+
+> เอกสารเดิมเขียนว่า QueryBuilder ไม่กรองให้ — **ผิด** ลอง `getQuery()` แล้วมี `deleted_at IS NULL` ติดมาเอง · เคสนี้ล็อกไว้ด้วย test แล้วเผื่อ TypeORM เปลี่ยนพฤติกรรม
+>
+> Relation ที่ join มายังไม่ได้วัด เพราะ entity ในระบบนี้ไม่ประกาศ relation เลยสักตัว (ดู [กฎขอบเขต module](#rules-to-enforce))
 
 ```sql
 -- ✅ ถูก
@@ -507,7 +513,14 @@ CREATE UNIQUE INDEX ON project.statuses (project_id, name) WHERE deleted_at IS N
 UNIQUE (project_id, name)
 ```
 
-**Soft delete แบบ cascade ต้องทำใน service ไม่ใช่ DB** — `ON DELETE CASCADE` ทำงานกับ hard delete เท่านั้น ลบ project ต้องลบ statuses / members / sprints / tasks ทั้งหมดใน transaction เดียวเอง
+**Soft delete แบบ cascade ต้องทำในโค้ด ไม่ใช่ DB** — `ON DELETE CASCADE` ทำงานกับ hard delete เท่านั้น
+
+อยู่ที่ [`shared/cascade-soft-delete.ts`](../../apps/api/core/src/shared/cascade-soft-delete.ts) — เดินลงตาม `AGGREGATE_CHILDREN` ใน transaction เดียว
+
+- **แผนที่ "อะไรเป็นของอะไร" เขียนมือ ไม่ได้อ่านจาก DB** ต่างจาก retention ที่อ่านจาก `pg_constraint` ได้ · เพราะ DB ตอบคำถามนี้ไม่ได้: `tasks.project_id` เป็น RESTRICT ตั้งใจ (จะลบ project ต้องเคลียร์ task ก่อน) ซึ่งไม่ได้แปลว่า task ไม่ใช่ของ project · `NOT NULL` ก็ตอบไม่ได้: `tasks.status_id` เป็น NOT NULL แต่ลบ status ต้องย้าย task ไม่ใช่ลบ
+- **มี test บังคับว่าทุกตารางที่ soft delete ได้ ต้องอยู่ใน `AGGREGATE_CHILDREN` หรือ `ROOTS`** — ตารางใหม่ที่ลืมใส่จะ fail ทันที ไม่ใช่ปล่อยให้แถวอยู่ค้างเกินพ่อแม่มันไป
+- แถวที่ถูกลบไปแล้วจะถูกข้าม ไม่เขียนทับ `deleted_at` เดิม — ไม่งั้นนาฬิกา 90 วันเริ่มใหม่และเสียบันทึกว่าใครลบจริง
+- Comment / attachment เป็น polymorphic ต้องแมตช์ `entity_type` ด้วย ไม่งั้นลบ task แล้วลาก comment ของ project ไปด้วย
 
 #### FK On Delete
 

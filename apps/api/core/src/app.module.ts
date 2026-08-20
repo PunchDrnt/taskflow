@@ -14,6 +14,7 @@ import { DatabaseModule } from './database/database.module'
 import { HealthModule } from './health/health.module'
 import { MaintenanceModule } from './maintenance/maintenance.module'
 import { RequestContextMiddleware } from './shared/request-context.middleware'
+import { SharedModule } from './shared/shared.module'
 
 // The repo keeps a single .env at its root, shared with docker-compose.
 // ConfigModule resolves envFilePath from the process cwd, which is this
@@ -42,6 +43,7 @@ const rootEnvFile = join(__dirname, '..', '..', '..', '..', '.env')
       }),
     }),
     DatabaseModule,
+    SharedModule,
     HealthModule,
     MaintenanceModule,
   ],
