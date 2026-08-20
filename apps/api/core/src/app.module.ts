@@ -1,5 +1,9 @@
 import { join } from 'node:path'
-import { Module } from '@nestjs/common'
+import {
+  Module,
+  type MiddlewareConsumer,
+  type NestModule,
+} from '@nestjs/common'
 import { ConfigModule, ConfigService } from '@nestjs/config'
 import { LoggerModule } from 'nestjs-pino'
 
@@ -8,6 +12,7 @@ import { AppService } from './app.service'
 import { validateEnv, type Env } from './config/env'
 import { DatabaseModule } from './database/database.module'
 import { HealthModule } from './health/health.module'
+import { RequestContextMiddleware } from './shared/request-context.middleware'
 
 // The repo keeps a single .env at its root, shared with docker-compose.
 // ConfigModule resolves envFilePath from the process cwd, which is this
@@ -41,4 +46,11 @@ const rootEnvFile = join(__dirname, '..', '..', '..', '..', '.env')
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  // Applied to every route: the context has to exist before any handler runs,
+  // and a route that opted out would be a route where org scoping silently
+  // stops applying.
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(RequestContextMiddleware).forRoutes('*')
+  }
+}

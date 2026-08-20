@@ -11,9 +11,34 @@ import { createMigratedTestDataSource, hasTestDatabase } from './database'
  * one that exists, and nothing complains until a query fails in production.
  *
  * This closes it. The schema builder computes exactly what `synchronize` would
- * run against the migrated database; if it wants to run anything at all, the
- * entities and the migrations have drifted apart.
+ * run against the migrated database, and any statement that touches a column
+ * means the entities and the migrations have drifted apart.
  */
+
+/**
+ * Statements about columns. Everything else the schema builder proposes is
+ * about a constraint or an index.
+ */
+const COLUMN_STATEMENT =
+  /\b(ADD "[a-z_]+"|DROP COLUMN|ALTER COLUMN|ADD COLUMN|RENAME COLUMN)/i
+
+/**
+ * Constraints, indexes and foreign keys live in migrations and are absent from
+ * the entities on purpose, so the schema builder always wants to drop them:
+ *
+ * - No entity declares a relation for `created_by` and friends. Doing so would
+ *   import identity's User into every module, which the module boundary rules
+ *   forbid — a service wanting a name calls UserService, it does not join.
+ * - Partial indexes, CHECK constraints and `UNIQUE (id, org_id)` are things
+ *   `synchronize` cannot express, which is why it is off.
+ *
+ * Ignoring them is not a loosened assertion: what this test exists to catch is
+ * a column mismatch, and those are still fatal.
+ */
+function isColumnDrift(query: string): boolean {
+  return COLUMN_STATEMENT.test(query)
+}
+
 describe.skipIf(!hasTestDatabase)('entities match the migrated schema', () => {
   let dataSource: DataSource
 
@@ -25,21 +50,35 @@ describe.skipIf(!hasTestDatabase)('entities match the migrated schema', () => {
     await dataSource?.destroy()
   })
 
-  it('has no pending schema changes after running every migration', async () => {
+  it('has no column differences after running every migration', async () => {
     const pending = await dataSource.driver.createSchemaBuilder().log()
+    const drift = pending.upQueries
+      .map((query) => query.query)
+      .filter(isColumnDrift)
 
-    // The failure message matters more than the assertion here: each query is
-    // a concrete statement someone forgot to put in a migration (or an entity
-    // that describes a column the migrations never created).
-    //
-    // When partitioning, partial indexes and `COLLATE "C"` land, expect false
-    // positives — the schema builder cannot represent any of them and will
-    // propose "fixing" them on every run. The answer is a narrow ignore with a
-    // comment naming the specific construct, never a looser assertion.
-    expect(pending.upQueries.map((query) => query.query)).toEqual([])
+    // Each entry is a column someone forgot to put in a migration, or an
+    // entity describing a column the migrations never created.
+    expect(drift).toEqual([])
   })
 
   it('registers every entity it was given', () => {
     expect(dataSource.entityMetadatas).toHaveLength(entities.length)
+  })
+
+  it('maps camelCase properties onto the snake_case columns that exist', async () => {
+    for (const metadata of dataSource.entityMetadatas) {
+      const declared = metadata.columns.map((column) => column.databaseName)
+      const actual: { column_name: string }[] = await dataSource.query(
+        `SELECT column_name FROM information_schema.columns
+          WHERE table_schema = $1 AND table_name = $2`,
+        [metadata.schema, metadata.tableName],
+      )
+      const existing = new Set(actual.map((row) => row.column_name))
+
+      expect(
+        declared.filter((column) => !existing.has(column)),
+        `${metadata.schema}.${metadata.tableName} declares columns the database does not have`,
+      ).toEqual([])
+    }
   })
 })

@@ -61,18 +61,22 @@
 
 ## 3. Base entity + org scoping
 
-- [ ] `shared/base.entity.ts` — 🔒 UUID pk, `org_id`, `created_at/by`, `updated_at/by`, `deleted_at/by`
-  - [ ] ข้อยกเว้น 3 กลุ่ม ([ตารางเทียบ](../docs/02-database.md#base-entity--on-every-table-with-three-named-exceptions)) — `audit.logs` ไม่ใช้เลย · `organizations` ไม่มี `org_id` · `sessions` / `password_reset_tokens` / `outbox` ไม่มี soft delete
-- [ ] TypeORM subscriber เติม `createdBy` / `updatedBy` / `deletedBy` จาก request context
-  - [ ] `deletedBy` ต้องมาพร้อม `deletedAt` เสมอ ไม่งั้น DB ฟ้อง (มี CHECK ทุกตาราง)
-- [ ] `shared/request-context.ts` — `AsyncLocalStorage<{ orgId, userId }>`
-- [ ] Guard ใส่ค่า context ตอนต้น request
-- [ ] `OrgScopedRepository<T>` — ทุก service ใช้ตัวนี้ ห้าม inject `Repository<T>` ตรง
-  - [ ] `organization.organizations` scope ด้วย `id` ไม่ใช่ `org_id` (ตารางเดียวที่ต่าง)
-- [ ] ESLint rule ห้าม inject `Repository<T>` ธรรมดา
-- [ ] `@SkipOrgScope()` decorator สำหรับ endpoint ที่ต้องข้ามจริงๆ
-- [ ] 🔒 **Integration test: query จาก org A ต้องมองไม่เห็นข้อมูล org B** — รันกับ `postgres-test` ข้อนี้ไม่มีข้อยกเว้น
-  - [x] โครง integration test พร้อมแล้ว — [`test/database.ts`](../../apps/api/core/test/database.ts) reset DB แล้วรัน migration ให้เองทุกครั้ง
+- [x] `shared/base.entity.ts` — 🔒 UUID pk, `org_id`, `created_at/by`, `updated_at/by`, `deleted_at/by`
+  - [x] 4 คลาสตามรูปทรงที่ schema ใช้จริง ([ตารางเทียบ](../docs/02-database.md#base-entity--on-every-table-with-three-named-exceptions)) — `BaseEntity` (ปกติ) · `SoftDeletableEntity` (ไม่มี org_id) · `OrgScopedEntity` (ไม่มี soft delete) · `TimestampedEntity` · `audit.logs` ประกาศเอง
+- [x] TypeORM subscriber เติม `createdBy` / `updatedBy` / `deletedBy` จาก request context
+  - [x] ไม่เดาค่าเมื่อไม่มี context — migration/job ต้องบอกเองว่าทำในนามใคร (system user มีไว้เพื่อการนี้)
+- [x] `shared/request-context.ts` — `AsyncLocalStorage<{ orgId, userId }>`
+- [x] ~~Guard~~ **Middleware** ใส่ค่า context ตอนต้น request
+  - guard ทำไม่ได้ — มันคืน boolean แล้ว scope ของ `AsyncLocalStorage` ปิดทันที handler จะรันนอก context (พิสูจน์แล้ว) · middleware เรียก `next()` จากในนั้นได้
+- [x] `OrgScopedRepository<T>` — ทุก service ใช้ตัวนี้ ห้าม inject `Repository<T>` ตรง
+  - [x] `organization.organizations` scope ด้วย `id` ไม่ใช่ `org_id` (ตารางเดียวที่ต่าง)
+  - [x] `where` แบบ array (= OR ใน TypeORM) ต้องใส่เงื่อนไข org ลง**ทุก branch** ไม่ใช่ใส่ข้างนอกครั้งเดียว
+  - ⚠️ `createQueryBuilder()` ต่อด้วย `andWhere` เท่านั้น — `.where()` จะทับเงื่อนไข org ทิ้ง
+- [x] ESLint rule ห้าม inject `Repository<T>` ธรรมดา (เฉพาะ `src/modules/**`)
+- [x] `@SkipOrgScope()` decorator สำหรับ endpoint ที่ต้องข้ามจริงๆ
+- [x] 🔒 **Integration test: query จาก org A ต้องมองไม่เห็นข้อมูล org B** — [`test/org-isolation.spec.ts`](../../apps/api/core/test/org-isolation.spec.ts) 10 เคส
+  - [x] โครง integration test — [`test/database.ts`](../../apps/api/core/test/database.ts) reset DB แล้วรัน migration ให้เองทุกครั้ง
+- [ ] Entity ที่เหลือ — ตอนนี้มีแค่ `Organization` + `Project` (พอให้ isolation test กับ drift test ทำงาน)
 
 > ❓ RLS **ไม่ทำใน phase นี้** — เลื่อนไป Phase 2 พร้อมเรื่อง transaction strategy
 

@@ -1,5 +1,8 @@
 import type { DataSourceOptions } from 'typeorm'
 
+import { Organization } from '../modules/organization/organization.entity'
+import { Project } from '../modules/project/project.entity'
+
 /**
  * TypeORM types `entities` as `MixedList<T>`, which is `T[] | Record<string, T>`.
  * The record branch makes `entities.length` an index lookup rather than an array
@@ -25,4 +28,4 @@ type EntityList = Extract<
  *
  * Add each entity here as it lands.
  */
-export const entities: EntityList = []
+export const entities: EntityList = [Organization, Project]
