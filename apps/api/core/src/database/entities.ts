@@ -1,6 +1,16 @@
 import type { DataSourceOptions } from 'typeorm'
 
 /**
+ * TypeORM types `entities` as `MixedList<T>`, which is `T[] | Record<string, T>`.
+ * The record branch makes `entities.length` an index lookup rather than an array
+ * length, so narrow to the array form here — otherwise every consumer has to.
+ */
+type EntityList = Extract<
+  NonNullable<DataSourceOptions['entities']>,
+  readonly unknown[]
+>
+
+/**
  * Every entity TypeORM should know about, listed explicitly.
  *
  * A `*.entity.js` glob would be shorter, but it resolves differently under
@@ -15,4 +25,4 @@ import type { DataSourceOptions } from 'typeorm'
  *
  * Add each entity here as it lands.
  */
-export const entities: NonNullable<DataSourceOptions['entities']> = []
+export const entities: EntityList = []
