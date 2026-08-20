@@ -5,6 +5,7 @@ import {
   type NestModule,
 } from '@nestjs/common'
 import { ConfigModule, ConfigService } from '@nestjs/config'
+import { EventEmitterModule } from '@nestjs/event-emitter'
 import { LoggerModule } from 'nestjs-pino'
 
 import { AppController } from './app.controller'
@@ -13,6 +14,8 @@ import { validateEnv, type Env } from './config/env'
 import { DatabaseModule } from './database/database.module'
 import { HealthModule } from './health/health.module'
 import { MaintenanceModule } from './maintenance/maintenance.module'
+import { AuditModule } from './modules/audit/audit.module'
+import { PermissionModule } from './permission/permission.module'
 import { RequestContextMiddleware } from './shared/request-context.middleware'
 import { SharedModule } from './shared/shared.module'
 
@@ -42,8 +45,15 @@ const rootEnvFile = join(__dirname, '..', '..', '..', '..', '.env')
         },
       }),
     }),
+    // Notifications only. An audit row must not travel this way: a listener
+    // runs after the transaction commits, so a throw there loses the entry
+    // with no error anywhere. AuditService.record refuses a manager that is
+    // not in a transaction, which makes that mistake fail loudly.
+    EventEmitterModule.forRoot(),
     DatabaseModule,
     SharedModule,
+    PermissionModule,
+    AuditModule,
     HealthModule,
     MaintenanceModule,
   ],

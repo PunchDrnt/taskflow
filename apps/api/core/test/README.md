@@ -58,3 +58,4 @@ each other's data and fail in ways that depend on timing.
 | `schema-invariants.spec.ts`   | Facts the schema and the code both rely on, and must agree about     |
 | `retention.spec.ts`           | The maintenance jobs — purge order, anonymisation, the partition job |
 | `cascade-soft-delete.spec.ts` | What TypeORM hides on its own, and that an aggregate goes down whole |
+| `audit.spec.ts`               | 🔒 The activity log commits and rolls back with what it describes    |

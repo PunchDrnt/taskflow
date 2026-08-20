@@ -137,6 +137,14 @@ The order tables are purged in is a topological sort over `pg_constraint`, read 
 
 Scheduled work is declared per process, so two containers fire the same cron on the same second. `pg_try_advisory_lock` means the second one skips — by the time the lock is free the work is done. `JOBS_ENABLED=false` turns both jobs off in a process entirely, which is what you want on a development machine pointed at a shared database.
 
+### Permissions and the activity log
+
+`can(user, action, resource)` lives in [apps/api/core/src/permission/](apps/api/core/src/permission/), built on CASL. It is a skeleton by design: it carries the role hierarchy the specification already fixes and nothing feature-specific. One behaviour is worth knowing before using it — `can()` **without** a resource asks whether the actor could do that to _something_, so a project admin gets `true` for `can('delete', 'Project')` while being allowed to delete only their own. Endpoints pass the row.
+
+The activity log is written in the same transaction as the change it describes, which is a binding decision rather than a preference: history cannot be reconstructed, and a listener that runs after the commit loses the entry with no error anywhere. [AuditService](apps/api/core/src/modules/audit/audit.service.ts) enforces it by shape — `record(manager, entry)` takes the caller's `EntityManager` and throws unless a transaction is open, which an event listener can never satisfy. `@nestjs/event-emitter` is installed for notifications only.
+
+`audit/` is also the first full module, and the pattern the rest should follow: `provideOrgRepository(Entity)` in its providers, `@InjectOrgRepository(Entity)` in the constructor, and only the service exported — no other module touches `audit.logs`.
+
 ## Scripts
 
 Run from the repo root, fanned out to every workspace via Turborepo:

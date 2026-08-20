@@ -110,15 +110,20 @@
 
 ## 5. Permission + Activity log
 
-- [ ] `can(user, action, resource)` ด้วย CASL — โครงเปล่าพอ ยังไม่ต้องมี rule ครบ
-- [ ] Test: แต่ละ role ทำอะไรได้/ไม่ได้
-- [ ] Test: invariant ที่ app บังคับ (DB ไม่ได้) — ต้องมีใน Phase 1:
+- [x] 🔒 **`AuditService` เขียน audit row ใน transaction เดียวกับ business logic** ไม่ผ่าน event emitter ([เหตุผล](../docs/01-architecture.md#how-the-activity-log-is-written))
+  - `record(manager, entry)` รับ `EntityManager` ของ transaction เข้ามา และ **throw ถ้า transaction ไม่ได้เปิดอยู่** — ทำให้ทางที่ผิด (เขียนจาก event listener) พังเสียงดังแทนที่จะเงียบ
+  - `org_id` / `actor_id` มาจาก request context ไม่ใช่จาก argument เหมือนทุก write ในระบบ
+  - Test: business logic throw → ทั้ง row งานและ audit row หายไปด้วยกัน
+- [x] `@nestjs/event-emitter` ติดตั้งไว้ใช้กับ **notification เท่านั้น** — เขียนเหตุผลไว้ที่ `EventEmitterModule.forRoot()` ใน `app.module.ts`
+- [x] `AuditService` เปิด method เฉพาะ ตั้งชื่อเป็นภาษาของ audit — `findRecentTargets` / `findForEntity` ไม่ใช่ `getRecentAssignees`
+- [x] `can(user, action, resource)` ด้วย CASL — [`src/permission/`](../../apps/api/core/src/permission/) โครงเปล่าตามที่ตั้งใจ มีแค่ลำดับชั้น role ที่ spec ฟิกไว้แล้ว ยังไม่มี rule ราย feature
+  - ⚠️ **`can()` ที่ไม่ส่ง resource ตอบ "ทำกับ *บางอัน* ได้ไหม"** — project admin ได้ `true` สำหรับ `can('delete','Project')` ทั้งที่ลบได้แค่ project ตัวเอง · เป็นพฤติกรรมของ CASL เอง · endpoint ต้องส่ง resource เสมอ · ล็อกไว้ด้วย test แล้ว
+- [x] Test: แต่ละ role ทำอะไรได้/ไม่ได้ — [`permission.service.spec.ts`](../../apps/api/core/src/permission/permission.service.spec.ts) 9 เคส (unit ไม่ต้องมี DB)
+- [x] `provideOrgRepository()` / `@InjectOrgRepository()` — วิธีที่ module ต่อกับตารางของตัวเอง โดยไม่ต้องแตะ `@InjectRepository` ที่ ESLint ห้ามไว้ · `audit/` เป็นตัวอย่างแรก
+- [ ] Test: invariant ที่ app บังคับ (DB ไม่ได้) — **เลื่อนไป Phase 1 ตามที่ระบุไว้แต่แรก** เพราะยังไม่มี service ให้บังคับ:
   - [ ] org ต้องมี role='owner' ≥1 แถวเสมอ
   - [ ] project ต้องมี status.is_done_type=true ≥1 อัน
   - [ ] `tasks.completed_at`/`completed_by` ต้องมีค่า **ก็ต่อเมื่อ** status ของ task นั้นเป็น `is_done_type` — ข้ามตาราง CHECK ไม่ได้ · ต้องคุมทั้งตอนเปลี่ยน status ของ task และตอนแก้ `is_done_type` ของ status ที่มี task ใช้อยู่
-- [ ] 🔒 **`AuditService` เขียน audit row ใน transaction เดียวกับ business logic** ไม่ผ่าน event emitter ([เหตุผล](../docs/01-architecture.md#how-the-activity-log-is-written))
-- [ ] `@nestjs/event-emitter` ติดตั้งไว้ใช้กับ **notification เท่านั้น**
-- [ ] `AuditService` เปิด method เฉพาะ ตั้งชื่อเป็นภาษาของ audit (`getRecentActorTargets` ไม่ใช่ `getRecentAssignees`)
 
 ## 6. Service wrapper
 

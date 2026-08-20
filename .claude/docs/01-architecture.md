@@ -147,11 +147,13 @@ TaskService          // เขียน + business logic ห้าม join
 
 ```ts
 // ✅ audit ไม่ต้องรู้ว่า "assignee" คืออะไร
-getRecentActorTargets(orgId, actorId, actionType, limit)
+findRecentTargets(actorId, action, limit)
 
 // ❌ audit เริ่มรู้จัก domain ของ task
-getRecentAssignees(orgId, userId)
+getRecentAssignees(userId)
 ```
+
+> ไม่มี `orgId` ใน signature ต่างจากที่เอกสารเขียนไว้เดิม — มาจาก request context เหมือนทุก query ในระบบ · org ที่ส่งเข้ามาเป็น argument คือ argument ที่ส่งผิดได้
 
 ---
 
@@ -460,6 +462,8 @@ TaskService
 ```
 
 **Event emitter ยังใช้ต่อ** — แต่ใช้กับ notification อย่างเดียว ซึ่ง at-most-once รับได้ (และมี `notify.outbox` รองรับอีกชั้น)
+
+บังคับด้วยรูปของ API ไม่ใช่ด้วยวินัย — [`AuditService.record(manager, entry)`](../../apps/api/core/src/modules/audit/audit.service.ts) รับ `EntityManager` ของ transaction เข้ามา แล้ว **throw ถ้าไม่มี transaction เปิดอยู่** · event listener รันหลัง commit ไปแล้ว เรียกยังไงก็ไม่ผ่าน
 
 #### LexoRank / sort_order
 
