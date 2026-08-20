@@ -59,22 +59,10 @@ describe.skipIf(!hasTestDatabase)('cross-org isolation', () => {
     )
 
     await asOrg(orgA, () =>
-      projects.save(
-        projects.create({
-          name: "A's project",
-          createdBy: SYSTEM_USER,
-          updatedBy: SYSTEM_USER,
-        }),
-      ),
+      projects.save(projects.create({ name: "A's project" })),
     )
     await asOrg(orgB, () =>
-      projects.save(
-        projects.create({
-          name: "B's project",
-          createdBy: SYSTEM_USER,
-          updatedBy: SYSTEM_USER,
-        }),
-      ),
+      projects.save(projects.create({ name: "B's project" })),
     )
   }, 60_000)
 
@@ -158,6 +146,52 @@ describe.skipIf(!hasTestDatabase)('cross-org isolation', () => {
     const fromA = await asOrg(orgA, () => organizations.find())
 
     expect(fromA.map((org) => org.slug)).toEqual(['org-a'])
+  })
+
+  it('does not answer a different question when asked for another org by id', async () => {
+    // Scoping used to overwrite the caller's id, so this returned org A.
+    expect(await asOrg(orgA, () => organizations.findById(orgB.id))).toBeNull()
+  })
+
+  it('returns nothing when the where clause names another org outright', async () => {
+    expect(
+      await asOrg(orgA, () => projects.find({ where: { orgId: orgB.id } })),
+    ).toEqual([])
+  })
+
+  it('does not force id = orgId when creating on the id-scoped repository', () => {
+    const created = asOrg(orgA, () =>
+      organizations.create({ name: 'new', slug: 'new-org' }),
+    )
+
+    // Forcing it would make every new organisation collide with its creator's.
+    expect(created.id).toBeUndefined()
+  })
+
+  it('soft delete writes deletedBy, not just deletedAt', async () => {
+    const project = await asOrg(orgA, () =>
+      projects.save(projects.create({ name: 'to delete' })),
+    )
+    await asOrg(orgA, () => projects.softDeleteById(project.id))
+
+    const [row] = (await dataSource.query(
+      'SELECT deleted_at, deleted_by FROM project.projects WHERE id = $1',
+      [project.id],
+    )) as { deleted_at: Date | null; deleted_by: string | null }[]
+
+    // A CHECK on every soft-deletable table rejects one without the other,
+    // and TypeORM's softDelete() runs no subscriber to fill it in.
+    expect(row?.deleted_by).toBe(SYSTEM_USER)
+    expect(row?.deleted_at).not.toBeNull()
+  })
+
+  it('fills createdBy from the context when the caller omits it', async () => {
+    const project = await asOrg(orgA, () =>
+      projects.save(projects.create({ name: 'unattributed' })),
+    )
+
+    expect(project.createdBy).toBe(SYSTEM_USER)
+    expect(project.updatedBy).toBe(SYSTEM_USER)
   })
 
   it('refuses to query at all with no request context', () => {

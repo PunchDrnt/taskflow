@@ -348,21 +348,33 @@ export const requestContext = new AsyncLocalStorage<{
 }>()
 ```
 
-Guard ใส่ค่าตอนต้น request → เข้าถึงได้ทุกที่โดยไม่ต้องส่ง parameter ผ่านทุกชั้น
+**Middleware** ใส่ค่าตอนต้น request → เข้าถึงได้ทุกที่โดยไม่ต้องส่ง parameter ผ่านทุกชั้น
 
-**ชั้นที่ 2: Repository base class** _(Phase 0)_
+> ⚠️ **ใช้ guard ไม่ได้** — guard คืน `boolean` แปลว่า scope ของ `AsyncLocalStorage.run()` ปิดตั้งแต่ก่อน handler จะรัน handler เลยอยู่นอก context (ทดสอบแล้ว: `getStore()` เป็น `undefined`) · middleware เรียก `next()` จากในนั้นได้ scope จึงครอบทั้ง request
+
+**ชั้นที่ 2: Repository wrapper** _(Phase 0)_
+
+**ห่อ ไม่ใช่ extend** — `Repository<T>` มี method หลายสิบตัวและมีทางออกทาง raw SQL ด้วย extend แล้ว override ไม่ครบคือช่องโหว่ที่ไม่มีใครเห็น · wrapper เปิดเฉพาะ method ที่ scope แล้ว ถ้าขาดอะไรให้เพิ่มเข้าไปพร้อม scope ไม่ใช่ไปหยิบ repository ดิบมาใช้
 
 ```ts
-export class OrgScopedRepository<T> extends Repository<T> {
-  find(options?) {
-    const { orgId } = requestContext.getStore()
-    return super.find({ ...options, where: { ...options?.where, orgId } })
-  }
+export class OrgScopedRepository<T> {
+  constructor(
+    private readonly repository: Repository<T>,
+    private readonly scopeColumn: 'orgId' | 'id' = 'orgId',
+  ) {}
 }
 ```
 
-- ทุก service ใช้ base นี้ ไม่ inject `Repository` ตรง
-- ตั้ง ESLint rule ห้าม inject `Repository<T>` ธรรมดา
+สามจุดที่พลาดง่ายและมี test คุมไว้แล้ว:
+
+| จุด | ถ้าทำผิด |
+| --- | --- |
+| `where` แบบ array คือ **OR** — ต้องใส่เงื่อนไข org ลงทุก branch | ใส่ข้างนอกครั้งเดียว query จะกว้างขึ้นไม่ใช่แคบลง |
+| caller ระบุ org อื่นมาเอง → **ตัด branch นั้นทิ้ง** ไม่ใช่เขียนทับ | เขียนทับแล้วตอบคนละคำถามกับที่ถาม (`findById(orgB)` คืน org A) |
+| `softDelete()` ของ TypeORM **ไม่ยิง subscriber** ต้องเซ็ต `deletedBy` เอง | ได้ `deleted_at` แต่ไม่มี `deleted_by` → CHECK ฟ้อง |
+
+- ทุก service ใช้ตัวนี้ ไม่ inject `Repository` ตรง
+- ตั้ง ESLint rule ห้าม inject `Repository<T>` ธรรมดา (เปิดที่ `src/modules/**`)
 - Endpoint ที่ต้องข้าม scope จริงๆ ต้องมี `@SkipOrgScope()` ประกาศชัด
 - **ต้องมี test ว่า query จาก org A มองไม่เห็นข้อมูล org B** — ข้อนี้ไม่มีข้อยกเว้น
 
@@ -532,7 +544,7 @@ CREATE TABLE audit.logs_2026_08 PARTITION OF audit.logs
 
 > ⚠️ **ตารางที่ partition ต้องมี partition key อยู่ใน unique/primary key ทุกตัว** — Postgres บังคับ ดังนั้น `PRIMARY KEY (id)` เฉยๆ จะสร้างไม่ผ่าน ต้องเป็น `PRIMARY KEY (id, occurred_at)`
 >
-> ฝั่ง TypeORM entity ก็ต้องประกาศเป็น composite (`@PrimaryColumn()` สองตัว) ไม่ใช่ `@PrimaryGeneratedColumn('uuid')` ตัวเดียว — `audit.logs` จึงเป็นตารางเดียวที่ไม่ได้ใช้ base entity ตรงๆ
+> ฝั่ง TypeORM entity ก็ต้องประกาศเป็น composite (`@PrimaryColumn()` สองตัว) ไม่ใช่ `@PrimaryGeneratedColumn('uuid')` ตัวเดียว — `audit.logs` จึงเป็นตารางเดียวที่**ไม่ใช้ base entity เลยสักคอลัมน์** (อีกสองข้อยกเว้นใช้บางส่วน ดู [ตารางเทียบ](./02-database.md#base-entity--on-every-table-with-three-named-exceptions))
 
 Job สร้าง partition เดือนถัดไปล่วงหน้า
 

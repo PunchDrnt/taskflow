@@ -65,7 +65,10 @@ depends on which was crossed:
   nobody writes in the link. Report the heading, not the link: markers like ⭐
   belong in the roadmap tables, not in a heading.
 - **Env vars.** A variable added to `apps/api/core/src/config/env.ts` should also
-  appear in `.env.example`, and vice versa.
+  appear in `.env.example`. The reverse does not hold: `.env.example` also carries
+  variables the API never reads — `POSTGRES_*` belong to docker-compose, and
+  `DATABASE_URL_TEST` is read by `test/database.ts`, deliberately kept out of the
+  boot-time schema so the API cannot connect to the test database.
 - **Phase scope creep.** Work that the roadmap places in a later phase, landing now.
   Not automatically wrong — but it should be a decision someone made, not a drift.
 

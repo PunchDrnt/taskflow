@@ -53,31 +53,49 @@ export class OrgScopedRepository<T extends ObjectLiteral> {
   /**
    * Merges the org condition into a caller's where clause.
    *
-   * An array means OR in TypeORM, so the condition has to go into every branch
-   * — adding it once beside the array would widen the query instead of
-   * narrowing it.
+   * An array means OR in TypeORM, so the condition goes into every branch —
+   * adding it once beside the array would widen the query instead of narrowing
+   * it.
+   *
+   * A branch that names the scope column with some other value is dropped
+   * rather than overwritten. Overwriting silently answers a different question
+   * than the one asked: `findById(otherOrgId)` on the id-scoped repository
+   * would have returned the *current* org, and `find({ where: { orgId: b } })`
+   * would have returned org a's rows. Dropping the branch says "no such row",
+   * which is both true and what the caller can act on. `null` means unscoped
+   * and is left alone.
    */
   private withScope(
     where: FindOptionsWhere<T> | FindOptionsWhere<T>[] | undefined,
-  ): FindOptionsWhere<T> | FindOptionsWhere<T>[] {
-    if (Array.isArray(where)) {
-      return where.map((branch) => ({ ...branch, ...this.scope() }))
-    }
-    return { ...(where ?? {}), ...this.scope() }
+  ): FindOptionsWhere<T> | FindOptionsWhere<T>[] | null {
+    const branches = Array.isArray(where) ? where : [where ?? {}]
+
+    const scoped = branches
+      .filter((branch) => {
+        const asked = (branch as Record<string, unknown>)[this.scopeColumn]
+        return asked === undefined || asked === this.orgId
+      })
+      .map((branch) => ({ ...branch, ...this.scope() }))
+
+    // Every branch asked for a different org, so nothing can match. Returning
+    // null lets callers skip the query entirely.
+    if (scoped.length === 0) return null
+
+    return Array.isArray(where) ? scoped : scoped[0]!
   }
 
   find(options: FindManyOptions<T> = {}): Promise<T[]> {
-    return this.repository.find({
-      ...options,
-      where: this.withScope(options.where),
-    })
+    const where = this.withScope(options.where)
+    if (!where) return Promise.resolve([])
+
+    return this.repository.find({ ...options, where })
   }
 
   findOne(options: FindOneOptions<T>): Promise<T | null> {
-    return this.repository.findOne({
-      ...options,
-      where: this.withScope(options.where),
-    })
+    const where = this.withScope(options.where)
+    if (!where) return Promise.resolve(null)
+
+    return this.repository.findOne({ ...options, where })
   }
 
   findById(id: string): Promise<T | null> {
@@ -87,17 +105,30 @@ export class OrgScopedRepository<T extends ObjectLiteral> {
   }
 
   count(options: FindManyOptions<T> = {}): Promise<number> {
-    return this.repository.count({
-      ...options,
-      where: this.withScope(options.where),
-    })
+    const where = this.withScope(options.where)
+    if (!where) return Promise.resolve(0)
+
+    return this.repository.count({ ...options, where })
   }
 
   exists(options: FindManyOptions<T> = {}): Promise<boolean> {
-    return this.repository.exists({
-      ...options,
-      where: this.withScope(options.where),
-    })
+    const where = this.withScope(options.where)
+    if (!where) return Promise.resolve(false)
+
+    return this.repository.exists({ ...options, where })
+  }
+
+  /**
+   * The scope to stamp onto a new or saved row.
+   *
+   * Empty for an id-scoped repository: `organizations.id` is a primary key the
+   * database generates, and forcing it to the current org's id would make
+   * every created organisation collide with the one creating it.
+   */
+  private writeScope(): Partial<T> {
+    return this.scopeColumn === 'orgId'
+      ? ({ orgId: this.orgId } as unknown as Partial<T>)
+      : ({} as Partial<T>)
   }
 
   /**
@@ -107,14 +138,14 @@ export class OrgScopedRepository<T extends ObjectLiteral> {
   create(data: DeepPartial<T>): T {
     return this.repository.create({
       ...data,
-      ...this.scope(),
+      ...this.writeScope(),
     } as DeepPartial<T>)
   }
 
   save(entity: DeepPartial<T>): Promise<T> {
     return this.repository.save({
       ...entity,
-      ...this.scope(),
+      ...this.writeScope(),
     } as DeepPartial<T>) as Promise<T>
   }
 
@@ -122,12 +153,22 @@ export class OrgScopedRepository<T extends ObjectLiteral> {
    * Soft delete, scoped. Returns the number of rows affected, which is 0 when
    * the id belongs to another organisation — the caller sees "not found"
    * rather than an error revealing that the row exists elsewhere.
+   *
+   * Writes `deletedBy` alongside `deletedAt` explicitly. TypeORM's
+   * `softDelete()` builds a query rather than loading the entity, so no
+   * subscriber runs and `deletedBy` would stay null — which every
+   * soft-deletable table rejects with a CHECK. Found by testing it.
    */
   async softDeleteById(id: string): Promise<number> {
-    const result = await this.repository.softDelete({
-      id,
-      ...this.scope(),
-    } as unknown as FindOptionsWhere<T>)
+    const { userId } = requireRequestContext()
+    const where = this.withScope({ id } as unknown as FindOptionsWhere<T>)
+    if (!where) return 0
+
+    const result = await this.repository.update(where, {
+      deletedAt: new Date(),
+      deletedBy: userId,
+      updatedBy: userId,
+    } as never)
     return result.affected ?? 0
   }
 

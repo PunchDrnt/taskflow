@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import type { DataSourceOptions } from 'typeorm'
 
+import { AuditColumnsSubscriber } from '../shared/audit-columns.subscriber'
 import { entities } from './entities'
 import { SnakeNamingStrategy } from './snake-naming.strategy'
 
@@ -33,6 +34,9 @@ export function buildDataSourceOptions(databaseUrl: string): DataSourceOptions {
     namingStrategy: new SnakeNamingStrategy(),
 
     entities,
+    // Part of the DataSource rather than a Nest provider, so it applies under
+    // the CLI and in tests too — not only where Nest happens to have built it.
+    subscribers: [AuditColumnsSubscriber],
     // Migrations are only ever loaded by the CLI, which runs against the
     // compiled output, so a directory glob is safe here in a way it is not
     // for entities (see ./entities.ts).

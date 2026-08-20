@@ -7,9 +7,14 @@ export const SKIP_ORG_SCOPE = 'skipOrgScope'
  * signing in, health checks, and the Phase 7 back-office, which acts across
  * orgs by design.
  *
- * The guard skips establishing an org for these, which means anything they
- * touch through OrgScopedRepository will throw rather than quietly return
- * everything. That is intentional: an endpoint outside org scope has to reach
- * for data deliberately, naming the org it means.
+ * Nothing reads it yet — RequestContextMiddleware establishes a context
+ * whenever the request carries one, and the authorization guard that consults
+ * this marker arrives with auth in Phase 1. It exists now so the marker is
+ * available at the point routes start being written, and so the intent is
+ * recorded: a route outside org scope reaches for data deliberately, naming
+ * the org it means, rather than inheriting one.
+ *
+ * A route with no context is not a route that sees everything —
+ * OrgScopedRepository throws without one.
  */
 export const SkipOrgScope = () => SetMetadata(SKIP_ORG_SCOPE, true)

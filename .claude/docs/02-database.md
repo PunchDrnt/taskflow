@@ -433,8 +433,7 @@ assignees
   task_id             uuid  FK
   assignee_type       text  'user' | 'team'
   assignee_id         uuid  ชี้ไป identity.users หรือ organization.teams ตาม type (ไม่มี FK)
-  assigned_at         timestamptz
-  UNIQUE (task_id, assignee_type, assignee_id)
+  UNIQUE (task_id, assignee_type, assignee_id)   -- assigned_at คือ created_at
 ```
 
 ### Schema `audit`
@@ -458,7 +457,7 @@ logs
   PRIMARY KEY (id, occurred_at)
   -- ⚠️ Postgres บังคับให้ partition key อยู่ใน unique/primary key ทุกตัว
   --    PRIMARY KEY (id) เฉยๆ จะสร้างไม่ผ่าน → entity ฝั่ง TypeORM ต้องเป็น composite
-  --    audit.logs จึงเป็นตารางเดียวที่ไม่ได้ใช้ base entity ตรงๆ
+  --    audit.logs จึงเป็นตารางเดียวที่ไม่ใช้ base entity เลยสักคอลัมน์
   -- ห้ามลบ · archive หลัง 2 ปี
   -- index ตัวที่สองใช้กับ assignee picker (คนที่เพิ่ง assign ล่าสุด)
   -- changes_json เป็น NOT NULL DEFAULT '{}' — action อย่าง 'created' ไม่มี diff
