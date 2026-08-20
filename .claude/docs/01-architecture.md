@@ -114,6 +114,22 @@ apps/api/core/src/
 
 **Client เป็น `@aws-sdk/client-s3` ไม่ใช่ client ของยี่ห้อไหน** — โค้ดไม่รู้จักคำว่า Garage เลย ตัวแปรก็ชื่อ `S3_*` เปลี่ยน server ทีหลังคือแก้ compose อย่างเดียว
 
+**Garage ไม่มี web UI ในตัว** ต่างจาก MinIO — มีแค่ Admin API (3903) กับ CLI
+
+ลองของ community สามตัว มีตัวเดียวที่ใช้กับ Garage v2 ได้จริง:
+
+| | ผล |
+| --- | --- |
+| `khairul169/garage-webui` | จัดการ bucket/key ได้ แต่หน้า cluster พัง — เรียก `/v1/status` ที่ v2 ถอดออกแล้ว (ตอบ 400) |
+| `noooste/garage-ui` | **ใช้ได้ครบ** อ่าน layout/node/bucket/object ได้ · ประกาศรองรับ v2.1.0+ |
+| `waazaafr/garage-s3-simple` | ไม่ได้ลอง |
+
+อยู่ใน `docker-compose.yml` แล้วแต่**ไม่ขึ้นเอง** ต้อง `docker compose --profile tools up -d garage-ui`
+
+- **ต้องใส่ `AUTH_ADMIN_ENABLED=true`** ไม่งั้นมันอ่าน username/password แล้วเมินเฉย แล้วเปิดหน้าเว็บโดยไม่มี login เลย (ลองแล้ว log บอก `enabled_methods=["none"]`)
+- ถือ admin token ไว้ในตัว จึง bind กับ `127.0.0.1` เท่านั้น · บน Bangmod ต้องอยู่หลัง Caddy ที่มี auth หรือไม่เปิดออกเลย
+- ถ้าแค่อยากดูไฟล์ ใช้ `aws --endpoint-url http://localhost:3900 s3 ls s3://taskflow --recursive` ก็พอ (ลองแล้ว upload/download/delete ผ่านหมด)
+
 **Phase 1 ทำแค่ 6 module:** `identity`, `organization`, `project`, `task`, `notify`, `storage`
 
 ### File Layout Within a Module

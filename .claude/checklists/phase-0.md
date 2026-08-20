@@ -142,6 +142,7 @@
 - [x] เพิ่ม `garage` + `garage-init` เข้า `docker-compose.yml` (volume แยกจาก DB — ไฟล์กู้จาก DB backup ไม่ได้ ต้อง restore แยกกันได้)
   - Garage image ไม่มี shell เลย (เหตุผลที่มันแค่ 66MB) · init เลยเป็น container แยกที่คุยผ่าน Admin API ด้วย curl
   - init รันซ้ำได้ ทดสอบแล้ว — layout ข้ามถ้ามีแล้ว ส่วน key/bucket ตอบ 409 แล้วปล่อยผ่าน
+  - `garage-ui` อยู่ใน profile `tools` ไม่ขึ้นเอง — Garage ไม่มี UI ในตัว ([ตัวไหนใช้ได้บ้าง](../docs/01-architecture.md#object-storage)) · ถือ admin token จึง bind `127.0.0.1` เท่านั้น
 
 ## 7. Deploy — อย่าเลื่อน
 

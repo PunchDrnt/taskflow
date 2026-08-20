@@ -87,6 +87,33 @@ services:
     entrypoint: ['sh', '/init.sh']
     restart: on-failure
 
+  # Not started by default: `docker compose --profile tools up -d garage-ui`.
+  # Garage ships no web interface of its own — this is a community one, and
+  # the only one of three tried that works against Garage v2's admin API.
+  #
+  # It holds the admin token, so it must never be reachable from outside the
+  # box. Bound to localhost here; on Bangmod it belongs behind Caddy with its
+  # own auth, or not exposed at all.
+  garage-ui:
+    image: noooste/garage-ui:latest
+    profiles: ['tools']
+    restart: unless-stopped
+    depends_on:
+      garage:
+        condition: service_started
+    environment:
+      GARAGE_UI_GARAGE_ENDPOINT: http://garage:3900
+      GARAGE_UI_GARAGE_ADMIN_ENDPOINT: http://garage:3903
+      GARAGE_UI_GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN}
+      GARAGE_UI_GARAGE_REGION: ${S3_REGION:-us-east-1}
+      # Without `ENABLED` the username and password are read and ignored, and
+      # the UI comes up with no login at all — verified.
+      GARAGE_UI_AUTH_ADMIN_ENABLED: 'true'
+      GARAGE_UI_AUTH_ADMIN_USERNAME: ${GARAGE_UI_USERNAME:-admin}
+      GARAGE_UI_AUTH_ADMIN_PASSWORD: ${GARAGE_UI_PASSWORD}
+    ports:
+      - '127.0.0.1:${GARAGE_UI_PORT:-3909}:8080'
+
 volumes:
   postgres-data:
   garage-meta:
