@@ -42,7 +42,7 @@ function guardScopedBuilder<T extends ObjectLiteral>(
           throw new Error(
             `${String(property)}() would drop the organisation condition from ` +
               `this query on "${alias}". Use andWhere (with Brackets for OR), ` +
-              'or createUnscopedQueryBuilder if the query really must cross orgs.',
+              'or queryBuilder.withoutOrg if the query really must cross orgs.',
           )
         }
       }
@@ -225,41 +225,56 @@ export class OrgScopedRepository<T extends ObjectLiteral> {
   }
 
   /**
-   * A query builder with the org condition already applied, and `where` /
-   * `orWhere` taken away.
+   * Query builders, in the two shapes there are. Neither is the default —
+   * `repository.queryBuilder` on its own is an object, not a builder, so every
+   * call site has to say which one it means.
    *
-   * Those two are the only way to defeat this class by accident: `.where()`
-   * *replaces* every condition set so far, org included, and `.orWhere()`
-   * widens past it. `andWhere` and `Brackets` cover everything they were
-   * needed for.
-   *
-   * Guarded twice, because neither alone is enough. The type omits them, which
-   * catches the mistake where it is normally made — the first call. But
-   * `andWhere` is declared as returning `this`, so the omission does not
-   * survive a chain, and a Proxy re-applies it at every hop and throws if
-   * either is reached at runtime.
-   *
-   * Use `createUnscopedQueryBuilder` when a query genuinely has to cross orgs.
+   * ```ts
+   * projects.queryBuilder.withOrg('project').andWhere(...)     // normal
+   * projects.queryBuilder.withoutOrg('project')                // crosses orgs
+   * ```
    */
-  createQueryBuilder(alias: string): ScopedQueryBuilder<T> {
-    const builder = this.repository
-      .createQueryBuilder(alias)
-      .where(`${alias}.${this.scopeColumn} = :__orgId`, { __orgId: this.orgId })
+  get queryBuilder(): {
+    withOrg: (alias: string) => ScopedQueryBuilder<T>
+    withoutOrg: (alias: string) => SelectQueryBuilder<T>
+  } {
+    return {
+      /**
+       * Scoped to the current org, with `where` and `orWhere` taken away.
+       *
+       * Those two are the only way to unscope a query by accident: `where`
+       * *replaces* every condition set so far, org included, and `orWhere`
+       * widens past it. `andWhere` and `Brackets` cover everything they were
+       * needed for.
+       *
+       * Guarded twice, because neither half is enough on its own. The type
+       * omits them, which catches the mistake where it is normally made — the
+       * first call. But `andWhere` is declared as returning `this`, so the
+       * omission does not survive a chain, and a Proxy re-applies it at every
+       * hop and throws if either name is reached at runtime.
+       */
+      withOrg: (alias: string): ScopedQueryBuilder<T> => {
+        const builder = this.repository
+          .createQueryBuilder(alias)
+          .where(`${alias}.${this.scopeColumn} = :__orgId`, {
+            __orgId: this.orgId,
+          })
 
-    return guardScopedBuilder(builder, alias)
-  }
+        return guardScopedBuilder(builder, alias)
+      },
 
-  /**
-   * A query builder with no org condition at all.
-   *
-   * Named so that it is obvious in review and greppable in the codebase. Every
-   * caller should be able to say which org's data it is reaching for and why
-   * the scoped builder could not do it — a reporting query spanning orgs, or
-   * the Phase 7 back-office. If the answer is "it was easier", it is the wrong
-   * method.
-   */
-  createUnscopedQueryBuilder(alias: string): SelectQueryBuilder<T> {
-    return this.repository.createQueryBuilder(alias)
+      /**
+       * No org condition at all.
+       *
+       * Named after the same idea as `@SkipOrgScope()`, so the two read as one
+       * decision at different layers. Every caller should be able to say why
+       * the scoped builder could not do the job — a report spanning orgs, or
+       * the Phase 7 back-office. If the answer is "it was easier", it is the
+       * wrong one.
+       */
+      withoutOrg: (alias: string): SelectQueryBuilder<T> =>
+        this.repository.createQueryBuilder(alias),
+    }
   }
 }
 

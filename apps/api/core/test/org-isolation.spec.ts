@@ -117,7 +117,7 @@ describe.skipIf(!hasTestDatabase)('cross-org isolation', () => {
 
   it('the query builder starts scoped', async () => {
     const rows = await asOrg(orgA, () =>
-      projects.createQueryBuilder('project').getMany(),
+      projects.queryBuilder.withOrg('project').getMany(),
     )
 
     expect(rows.map((project) => project.name)).toEqual(["A's project"])
@@ -215,7 +215,7 @@ describe.skipIf(!hasTestDatabase)('cross-org isolation', () => {
 
   it('rejects .where() on the scoped builder, at every hop of a chain', async () => {
     await asOrg(orgA, () => {
-      const builder = projects.createQueryBuilder('project')
+      const builder = projects.queryBuilder.withOrg('project')
 
       // The type omits it; this is the runtime half, which is what still
       // holds after andWhere returns `this` and TypeScript stops helping.
@@ -242,8 +242,8 @@ describe.skipIf(!hasTestDatabase)('cross-org isolation', () => {
 
   it('still runs a normal chained query through the guard', async () => {
     const rows = await asOrg(orgA, () =>
-      projects
-        .createQueryBuilder('project')
+      projects.queryBuilder
+        .withOrg('project')
         .andWhere('project.name IS NOT NULL')
         .orderBy('project.name', 'ASC')
         .getMany(),
@@ -254,7 +254,7 @@ describe.skipIf(!hasTestDatabase)('cross-org isolation', () => {
 
   it('the unscoped builder is the only way across orgs, and says so by name', async () => {
     const all = await asOrg(orgA, () =>
-      projects.createUnscopedQueryBuilder('project').getMany(),
+      projects.queryBuilder.withoutOrg('project').getMany(),
     )
 
     const orgIds = new Set(all.map((project) => project.orgId))

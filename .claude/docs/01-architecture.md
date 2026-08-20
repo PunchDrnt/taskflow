@@ -363,7 +363,15 @@ export class OrgScopedRepository<T> {
     private readonly scopeColumn: 'orgId' | 'id' = 'orgId',
   ) {}
 }
+
+// query builder ไม่มีตัวไหนเป็น default — ทุก call site ต้องบอกว่าเอาแบบไหน
+projects.queryBuilder.withOrg('project').andWhere(...)  // ปกติ
+projects.queryBuilder.withoutOrg('project')             // ข้าม org (report, back-office)
 ```
+
+`withOrg` คืน type ที่**ตัด `where` / `orWhere` ออก** — สองตัวนี้คือทางเดียวที่จะปลด scope โดยไม่ตั้งใจ (`where` แทนที่เงื่อนไขทั้งหมดที่ตั้งไว้รวมถึง org · `orWhere` ขยายออกไปจากมัน) · `andWhere` กับ `Brackets` ใช้แทนได้หมด
+
+> type อย่างเดียวไม่พอ — `andWhere` ประกาศว่าคืน `this` พอ chain แล้ว TypeScript คืน type เต็มกลับมา · มี Proxy ห่อซ้ำที่ throw ถ้าเรียกสองชื่อนี้ ไม่ว่าจะลึกแค่ไหน
 
 สามจุดที่พลาดง่ายและมี test คุมไว้แล้ว:
 
