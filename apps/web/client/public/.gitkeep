@@ -1,0 +1,3 @@
+Kept empty on purpose: the Dockerfile copies this directory into the runtime
+image, and standalone output does not include it. Deleting it means the first
+file added here is silently missing in production.

@@ -1,0 +1,26 @@
+# Everything the build produces or that would leak into an image.
+node_modules
+**/node_modules
+.yarn/install-state.gz
+.git
+.github
+.turbo
+**/.turbo
+**/dist
+**/.next
+**/out
+**/build
+.env
+.env*.local
+**/*.log
+coverage
+**/coverage
+.claude
+.impeccable
+.vscode
+.idea
+.DS_Store
+docker-compose*.yml
+**/Dockerfile
+.dockerignore
+README.md

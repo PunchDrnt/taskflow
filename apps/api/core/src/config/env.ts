@@ -1,5 +1,13 @@
 import { z } from 'zod'
 
+// Named separately because the TypeORM CLI validates this one on its own.
+const databaseUrlSchema = z
+  .string()
+  .min(1)
+  .refine((value) => /^postgres(ql)?:\/\//.test(value), {
+    message: 'must be a postgres:// or postgresql:// connection string',
+  })
+
 /**
  * Every environment variable the API reads, validated once at boot. Add new
  * ones here: a bad value must stop the process, not surface as `undefined`
@@ -16,12 +24,7 @@ export const envSchema = z
       .default('info'),
     // No default on purpose: a fallback like localhost would let a
     // misconfigured deployment boot and quietly talk to the wrong database.
-    DATABASE_URL: z
-      .string()
-      .min(1)
-      .refine((value) => /^postgres(ql)?:\/\//.test(value), {
-        message: 'must be a postgres:// or postgresql:// connection string',
-      }),
+    DATABASE_URL: databaseUrlSchema,
     // On by default: a deployment that quietly stops deleting personal data is
     // the failure that matters. Off for a dev machine on a shared database — a
     // second container is already covered by the advisory lock.
@@ -58,16 +61,33 @@ export const envSchema = z
 
 export type Env = z.infer<typeof envSchema>
 
+function describe(error: z.ZodError): string {
+  const issues = error.issues
+    .map((issue) => `  ${issue.path.join('.') || '(root)'}: ${issue.message}`)
+    .join('\n')
+
+  return `Invalid environment variables:\n${issues}`
+}
+
 export function validateEnv(raw: Record<string, unknown>): Env {
   const result = envSchema.safeParse(raw)
 
-  if (!result.success) {
-    const issues = result.error.issues
-      .map((issue) => `  ${issue.path.join('.') || '(root)'}: ${issue.message}`)
-      .join('\n')
-
-    throw new Error(`Invalid environment variables:\n${issues}`)
-  }
+  if (!result.success) throw new Error(describe(result.error))
 
   return result.data
+}
+
+/**
+ * The database URL alone, for the TypeORM CLI.
+ *
+ * Holding a migration to the whole schema means it cannot run without a Resend
+ * key and S3 credentials it will never touch — which is a deploy blocked on a
+ * variable that has nothing to do with the change being applied.
+ */
+export function validateDatabaseUrl(raw: Record<string, unknown>): string {
+  const result = z.object({ DATABASE_URL: databaseUrlSchema }).safeParse(raw)
+
+  if (!result.success) throw new Error(describe(result.error))
+
+  return result.data.DATABASE_URL
 }

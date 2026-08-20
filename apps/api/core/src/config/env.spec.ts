@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { validateEnv } from './env'
+import { validateDatabaseUrl, validateEnv } from './env'
 
 // The variables with no default — every case below has to supply them.
 const required = {
@@ -68,5 +68,33 @@ describe('validateEnv', () => {
         RESEND_API_KEY: 're_live_key',
       }),
     ).not.toThrow()
+  })
+})
+
+describe('validateDatabaseUrl', () => {
+  it('needs nothing but the URL', () => {
+    // What the TypeORM CLI runs on. A migration that cannot be applied until
+    // the container is given a Resend key is a deploy blocked on a variable
+    // the migration never reads.
+    expect(validateDatabaseUrl({ DATABASE_URL: required.DATABASE_URL })).toBe(
+      required.DATABASE_URL,
+    )
+
+    expect(() =>
+      validateDatabaseUrl({
+        DATABASE_URL: required.DATABASE_URL,
+        NODE_ENV: 'production',
+      }),
+    ).not.toThrow()
+  })
+
+  it('still rejects a URL that is not postgres', () => {
+    expect(() =>
+      validateDatabaseUrl({ DATABASE_URL: 'mysql://app@localhost/app' }),
+    ).toThrow(/postgres/)
+
+    expect(() => validateDatabaseUrl({})).toThrow(
+      /Invalid environment variables/,
+    )
   })
 })
