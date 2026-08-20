@@ -6,9 +6,12 @@ code they cover as `src/**/*.spec.ts` and need nothing running.
 ## Running them
 
 ```bash
-docker compose up -d postgres-test
+docker compose up -d postgres-test minio
 yarn test
 ```
+
+`storage.spec.ts` needs MinIO and skips without `MINIO_ENDPOINT`; everything
+else needs only `postgres-test`.
 
 `postgres-test` is the ephemeral service in `docker-compose.yml` — it stores
 its data on tmpfs, so it starts empty every time the container is recreated and
@@ -59,3 +62,5 @@ each other's data and fail in ways that depend on timing.
 | `retention.spec.ts`           | The maintenance jobs — purge order, anonymisation, the partition job |
 | `cascade-soft-delete.spec.ts` | What TypeORM hides on its own, and that an aggregate goes down whole |
 | `audit.spec.ts`               | 🔒 The activity log commits and rolls back with what it describes    |
+| `outbox.spec.ts`              | Notification queue and delivery: retries, backoff, giving up         |
+| `storage.spec.ts`             | The bucket is private: presigned URLs work, plain ones get 403       |
