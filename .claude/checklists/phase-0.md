@@ -48,7 +48,11 @@
   - สร้าง schema ครบทุกตัวตั้งแต่รอบนี้แม้ตารางจะมาทีหลัง — schema ไม่มีต้นทุน และ migration แรกของแต่ละ module จะได้ไม่ต้องจำว่าต้องสร้างบ้านตัวเองก่อน
   - `public` ไม่ต้องสร้าง (มีอยู่แล้ว) มีแค่ extension + ตาราง `migrations`
   - `down` ใช้ `DROP SCHEMA` เปล่า ๆ ไม่ใส่ `CASCADE` — ถ้ายังมีตารางค้างต้องพังให้เห็น ไม่ใช่ลบตารางที่ตัวเองไม่ได้สร้างทิ้งเงียบ ๆ
-- [ ] 🔒 **`003` seed system user** — base entity บังคับ `created_by NOT NULL` ทุกตาราง**รวม `identity.users` เอง** แถวแรกต้อง insert โดยชี้ `created_by` มาที่ id ตัวเอง (Postgres ทำได้ใน INSERT เดียว แต่ต้องวางลำดับให้ถูก)
+- [x] 🔒 **`003` `identity.users` + seed system user** — base entity บังคับ `created_by NOT NULL` ทุกตาราง**รวม `identity.users` เอง** แถวแรกชี้ `created_by` มาที่ id ตัวเอง
+  - ง่ายกว่าที่เขียนเตือนไว้เดิม: ใส่ `id` เป็นค่าคงที่แล้ว `INSERT` เดียวจบ ไม่ต้อง `DEFERRABLE` ไม่ต้องแยกคำสั่ง (FK ตรวจหลังแถวลงแล้ว)
+  - `is_system` + `password_hash` nullable — system user login ไม่ได้ในระดับ schema ไม่ใช่แค่ตกลงกันไว้
+  - ⚠️ `ON DELETE RESTRICT` กันแถวนี้ไม่ได้ (อ้างตัวเอง ลบแล้วตัวอ้างหายพร้อมกัน) → ต้องมี trigger `BEFORE DELETE`
+  - ทดสอบครบ 7 ทาง: system user ซ้ำ · system user มีรหัสผ่าน · `deleted_at` ไม่ตรง `status` · `created_by` ชี้ผี · `status` ผิดค่า · ลบ system user · อีเมลซ้ำ — ฟ้องหมดทุกข้อ
 - [ ] 🔒 `audit.logs` — `PARTITION BY RANGE (occurred_at)` + **`PRIMARY KEY (id, occurred_at)`** (Postgres บังคับให้ partition key อยู่ใน PK · `PRIMARY KEY (id)` เฉยๆ สร้างไม่ผ่าน)
 - [ ] Job สร้าง partition เดือนถัดไปล่วงหน้า
 - [ ] ตารางที่เหลือตาม [`02-database.md`](../docs/02-database.md#5-full-schema) — **ครบทุกตารางตั้งแต่รอบนี้** ยกเว้น `chat.*` (Phase 2)

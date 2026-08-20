@@ -114,6 +114,8 @@ CREATE INDEX ON discussion.comments (org_id, entity_type, entity_id, created_at)
 
 คอลัมน์ค่าจำกัดตัวอื่น (`role`, `priority`, `platform`, `assignee_type`, `type` ฯลฯ) ปล่อยเป็น `text` ให้ application คุม — เพิ่ม `CHECK` ทีหลังได้ตลอดถ้าเจอปัญหาจริง
 
+หัวข้อนี้พูดถึง `CHECK` ที่จำกัด**ชุดค่า**ของคอลัมน์เดียวเท่านั้น · `CHECK` ที่ผูกสองคอลัมน์เข้าด้วยกัน (invariant ข้ามคอลัมน์ เช่น `identity.users` ที่บังคับ `password_hash IS NULL` เมื่อ `is_system`) เป็นคนละเรื่อง ใส่ได้ตามที่จำเป็น ไม่ต้องเข้าเกณฑ์ข้างบน
+
 **ห้ามใส่** `CHECK` กับคอลัมน์ที่ค่าโตตามฟีเจอร์ — `audit.logs.entity_type` / `audit.logs.action` / `discussion.comments.entity_type` / `notify.outbox.template` / `view.columns.column_key` · ทุกฟีเจอร์ใหม่จะกลายเป็น migration แถม และ `audit.logs` เป็นตาราง partition ที่ไม่เคยลบ → `VALIDATE` แพงขึ้นเรื่อย ๆ
 
 > ⚠️ `CHECK` ใน DB กับ union type ใน `@repo/shared` ไม่มีอะไร sync ให้ — แก้ที่ไหนต้องแก้อีกที่ด้วย
@@ -193,19 +195,42 @@ export abstract class BaseEntity {
 ```
 users
   email                       citext   unique (partial — ดูด้านล่าง)
-  password_hash               text
+  password_hash               text     null · NULL = login ด้วยรหัสผ่านไม่ได้ (system user · เผื่อ OAuth ทีหลัง)
   name                        text
   nickname                    text     คนไทยเรียกชื่อเล่น — ต้องค้นได้
   avatar_url                  text     null
   status                      text     'active' | 'deactivated' | 'pending_deletion' | 'deleted'
+  is_system                   boolean  default false · true ได้แถวเดียวทั้งตาราง — ดูด้านล่าง
   has_claimed_free_credits    boolean  default false  (SaaS — ไม่ reset แม้ org ถูกลบ)
   free_org_count              int      default 0      (SaaS)
 
   -- users ไม่มี org_id (1 user อยู่ได้หลาย org ผ่าน organization.members)
   -- citext เป็น case-insensitive อยู่แล้ว จึงไม่ต้องพันด้วย lower() ซ้ำ
   CHECK (status IN ('active', 'deactivated', 'pending_deletion', 'deleted'))
+  CHECK (NOT is_system OR password_hash IS NULL)
+  CHECK ((status = 'deleted') = (deleted_at IS NOT NULL))
   CREATE UNIQUE INDEX ON identity.users (email) WHERE status != 'deleted';
+  CREATE UNIQUE INDEX ON identity.users (is_system) WHERE is_system;
+```
 
+**System user** — `id` คงที่ `00000000-0000-0000-0000-000000000000`
+
+`created_by` เป็น `NOT NULL` ทุกตาราง แต่มีแถวที่ระบบสร้างเองจริง ๆ (migration ที่ seed status เริ่มต้น, outbox worker, cron สร้าง partition) จึงต้องมี "คน" ให้ชี้ · แถวแรกของ `identity.users` ชี้ `created_by` มาที่ตัวเอง — Postgres ทำได้ใน `INSERT` เดียวถ้าใส่ `id` เป็นค่าคงที่ ไม่ต้อง `DEFERRABLE` ไม่ต้องแยกสองคำสั่ง
+
+ล็อกไว้ที่ schema ไม่ใช่ที่วินัย:
+
+| กัน                            | ด้วย                                              |
+| ----------------------------- | ------------------------------------------------ |
+| login เข้ามาเป็น system user     | `password_hash IS NULL` + CHECK บังคับ            |
+| มี system user มากกว่าหนึ่ง       | partial unique index บน `is_system`               |
+| ลบ system user ทิ้ง              | trigger `BEFORE DELETE ... WHEN (OLD.is_system)`  |
+| โผล่ในรายชื่อสมาชิก / assignee picker | กรอง `is_system = false` — เป็นคอลัมน์จริง grep เจอ |
+
+> ⚠️ `ON DELETE RESTRICT` **กัน system user ไม่ได้** — แถวนี้อ้างถึงตัวเองเป็นรายเดียว พอลบ ตัวที่อ้างก็หายไปพร้อมกัน Postgres จึงยอมให้ลบ (ลองแล้ว `DELETE 1` ผ่านฉลุย) · FK จากตารางอื่นจะช่วยได้ก็ต่อเมื่อตารางนั้นมีแถวที่ระบบสร้างแล้วเท่านั้น จึงต้องมี trigger กันไว้ตรง ๆ
+
+**`deleted_at` กับ `status` ต้องตรงกันเสมอ** — `identity.users` มีตัวบอกการลบสองตัว (base entity ให้ `deleted_at` มา ส่วน lifecycle จริงของ user เดินด้วย `status` ตาม [User States](./04-features.md#user-states--three-different-things)) · CHECK ผูกไว้ให้ขัดกันไม่ได้ ถ้าปล่อยไว้จะมีแถวที่ `deleted_at` ตั้งแล้วแต่ `status` ยังเป็น `active` แล้วอีเมลนั้นจะถูกจองค้างตลอดไป
+
+```
 sessions                                 -- 1 แถว = 1 การ login จาก 1 เครื่อง
   user_id                uuid  FK
   current_token_hash     text          hash ของ refresh token ที่ใช้ได้ตอนนี้
