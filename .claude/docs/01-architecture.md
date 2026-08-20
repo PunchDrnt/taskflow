@@ -330,7 +330,7 @@ TypeORM ต้องระบุ type ชัดเจน ไม่งั้น�
 
 #### `org_id` scoping
 
-> 🔒 **ต้องทำ** — `org_id` ทุกตาราง ยกเว้น schema `identity` · Phase 0 ต้องมี test ว่า org A มองไม่เห็นข้อมูล org B
+> 🔒 **ต้องทำ** — `org_id` ทุกตาราง ยกเว้น schema `identity`, `billing.plans` และ `organization.organizations` (org_id เท่ากับ id ตัวเอง — [เหตุผล](./02-database.md#3-multi-tenancy)) · Phase 0 ต้องมี test ว่า org A มองไม่เห็นข้อมูล org B
 
 **ตัดสินแล้ว: Phase 0 ทำชั้น application · RLS เลื่อนไป Phase 2**
 

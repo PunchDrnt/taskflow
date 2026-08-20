@@ -65,7 +65,10 @@
 **ตรวจก่อนปิดข้อนี้**
 
 - [ ] 🔒 ทุก column วันเวลาเป็น `timestamptz` — `grep -rn "timestamp[^t]" migrations/` ต้องไม่เจอ
-- [ ] 🔒 ทุกตารางมี `org_id` ยกเว้น schema `identity` และ `billing.plans`
+- [ ] 🔒 ทุกตารางมี `org_id` ยกเว้น schema `identity`, `billing.plans` และ `organization.organizations` (org_id = id เสมอ → `OrgScopedRepository` scope ตารางนี้ด้วย `id`)
+- [ ] ทุกตารางที่ soft delete มี `CHECK ((deleted_at IS NULL) = (deleted_by IS NULL))`
+- [ ] ไม่มีคอลัมน์ที่ซ้ำกับ base entity — `joined_at`/`granted_at`/`assigned_at` คือ `created_at` · `owner_id` คือ `created_by`
+  - ข้อยกเว้นเดียว: `user_roles.granted_by` เก็บไว้เพราะ ON DELETE ต่างจาก `created_by` (SET NULL vs RESTRICT)
 - [ ] 🔒 unique constraint ของตารางที่ soft delete เป็น **partial index** (`WHERE deleted_at IS NULL`) ไม่ใช่ `UNIQUE (...)` ธรรมดา
 - [ ] 🔒 `created_by` / `updated_by` / `completed_by` เป็น `RESTRICT`
 - [ ] 🔒 `sort_order` เป็น `text COLLATE "C"`

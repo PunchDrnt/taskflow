@@ -56,7 +56,12 @@ export class CreateIdentityUsers1787186718550 implements MigrationInterface {
         -- status still 'active' would hold its email reserved forever, since
         -- the unique index below keys off status.
         CONSTRAINT users_deleted_at_matches_status_check
-          CHECK ((status = 'deleted') = (deleted_at IS NOT NULL))
+          CHECK ((status = 'deleted') = (deleted_at IS NOT NULL)),
+
+        -- A soft delete must record who performed it. Half-set pairs are the
+        -- kind of thing nobody notices until someone asks who deleted this.
+        CONSTRAINT users_deleted_pair_check
+          CHECK ((deleted_at IS NULL) = (deleted_by IS NULL))
       )
     `)
 

@@ -11,6 +11,11 @@ import { type MigrationInterface, type QueryRunner } from 'typeorm'
  * The RBAC tables are created now but nothing reads them until Phase 7. They
  * are cheap to create and awkward to retrofit once `identity` has data.
  *
+ * sessions and password_reset_tokens carry no deleted_at/deleted_by. Both
+ * already have a column meaning "no longer usable" (revoked_at, used_at) and
+ * both are hard-deleted by the retention policy, so a second delete marker
+ * would only be one more thing to keep in sync.
+ *
  * Base columns are written out in full rather than shared from a constant:
  * a migration is a historical record, and a shared snippet would silently
  * rewrite what past migrations did the next time someone edited it.
@@ -36,12 +41,12 @@ export class CreateIdentityRest1787188325061 implements MigrationInterface {
         revoked_at           timestamptz,
         revoked_reason       text,
 
+        -- created_by is not the same as user_id: an admin holding
+        -- user.impersonate creates a session for someone else.
         created_at           timestamptz NOT NULL DEFAULT now(),
         created_by           uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
         updated_at           timestamptz NOT NULL DEFAULT now(),
-        updated_by           uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
-        deleted_at           timestamptz,
-        deleted_by           uuid        REFERENCES identity.users(id) ON DELETE RESTRICT
+        updated_by           uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT
       )
     `)
     // The hot path: look up a live session by the token just presented.
@@ -71,9 +76,7 @@ export class CreateIdentityRest1787188325061 implements MigrationInterface {
         created_at  timestamptz NOT NULL DEFAULT now(),
         created_by  uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
         updated_at  timestamptz NOT NULL DEFAULT now(),
-        updated_by  uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
-        deleted_at  timestamptz,
-        deleted_by  uuid        REFERENCES identity.users(id) ON DELETE RESTRICT
+        updated_by  uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT
       )
     `)
     await queryRunner.query(`
@@ -89,14 +92,17 @@ export class CreateIdentityRest1787188325061 implements MigrationInterface {
         id           uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
 
         name         text        NOT NULL,
-        description  text        NOT NULL DEFAULT '',
+        description  text,
 
         created_at   timestamptz NOT NULL DEFAULT now(),
         created_by   uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
         updated_at   timestamptz NOT NULL DEFAULT now(),
         updated_by   uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
         deleted_at   timestamptz,
-        deleted_by   uuid        REFERENCES identity.users(id) ON DELETE RESTRICT
+        deleted_by   uuid        REFERENCES identity.users(id) ON DELETE RESTRICT,
+
+        CONSTRAINT roles_deleted_pair_check
+          CHECK ((deleted_at IS NULL) = (deleted_by IS NULL))
       )
     `)
     // Partial, not UNIQUE: a plain unique constraint would reserve the name of
@@ -114,14 +120,17 @@ export class CreateIdentityRest1787188325061 implements MigrationInterface {
         id           uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
 
         key          text        NOT NULL,
-        description  text        NOT NULL DEFAULT '',
+        description  text,
 
         created_at   timestamptz NOT NULL DEFAULT now(),
         created_by   uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
         updated_at   timestamptz NOT NULL DEFAULT now(),
         updated_by   uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
         deleted_at   timestamptz,
-        deleted_by   uuid        REFERENCES identity.users(id) ON DELETE RESTRICT
+        deleted_by   uuid        REFERENCES identity.users(id) ON DELETE RESTRICT,
+
+        CONSTRAINT permissions_deleted_pair_check
+          CHECK ((deleted_at IS NULL) = (deleted_by IS NULL))
       )
     `)
     await queryRunner.query(`
@@ -141,7 +150,10 @@ export class CreateIdentityRest1787188325061 implements MigrationInterface {
         updated_at     timestamptz NOT NULL DEFAULT now(),
         updated_by     uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
         deleted_at     timestamptz,
-        deleted_by     uuid        REFERENCES identity.users(id) ON DELETE RESTRICT
+        deleted_by     uuid        REFERENCES identity.users(id) ON DELETE RESTRICT,
+
+        CONSTRAINT role_permissions_deleted_pair_check
+          CHECK ((deleted_at IS NULL) = (deleted_by IS NULL))
       )
     `)
     await queryRunner.query(`
@@ -155,19 +167,24 @@ export class CreateIdentityRest1787188325061 implements MigrationInterface {
 
         user_id     uuid        NOT NULL REFERENCES identity.users(id) ON DELETE CASCADE,
         role_id     uuid        NOT NULL REFERENCES identity.roles(id) ON DELETE CASCADE,
-        -- Nullable because the FK is SET NULL: losing the granter must not
-        -- take the grant with it.
+        -- Kept alongside created_by, which it would otherwise duplicate,
+        -- because the two differ on delete: created_by is RESTRICT, so an
+        -- account that had granted a role could never be removed. granted_by
+        -- is SET NULL, so the grant outlives the admin who issued it.
         granted_by  uuid        REFERENCES identity.users(id) ON DELETE SET NULL,
-        granted_at  timestamptz NOT NULL DEFAULT now(),
         -- Temporary elevation for debugging, expiring on its own.
         expires_at  timestamptz,
 
+        -- granted_at is created_at under another name, so it is not repeated.
         created_at  timestamptz NOT NULL DEFAULT now(),
         created_by  uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
         updated_at  timestamptz NOT NULL DEFAULT now(),
         updated_by  uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
         deleted_at  timestamptz,
-        deleted_by  uuid        REFERENCES identity.users(id) ON DELETE RESTRICT
+        deleted_by  uuid        REFERENCES identity.users(id) ON DELETE RESTRICT,
+
+        CONSTRAINT user_roles_deleted_pair_check
+          CHECK ((deleted_at IS NULL) = (deleted_by IS NULL))
       )
     `)
     await queryRunner.query(`

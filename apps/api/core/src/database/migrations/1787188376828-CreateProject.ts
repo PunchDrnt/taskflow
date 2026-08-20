@@ -29,7 +29,10 @@ export class CreateProject1787188376828 implements MigrationInterface {
         updated_at            timestamptz NOT NULL DEFAULT now(),
         updated_by            uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
         deleted_at            timestamptz,
-        deleted_by            uuid        REFERENCES identity.users(id) ON DELETE RESTRICT
+        deleted_by            uuid        REFERENCES identity.users(id) ON DELETE RESTRICT,
+
+        CONSTRAINT projects_deleted_pair_check
+          CHECK ((deleted_at IS NULL) = (deleted_by IS NULL))
       )
     `)
     await queryRunner.query(`
@@ -51,7 +54,10 @@ export class CreateProject1787188376828 implements MigrationInterface {
         updated_at  timestamptz NOT NULL DEFAULT now(),
         updated_by  uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
         deleted_at  timestamptz,
-        deleted_by  uuid        REFERENCES identity.users(id) ON DELETE RESTRICT
+        deleted_by  uuid        REFERENCES identity.users(id) ON DELETE RESTRICT,
+
+        CONSTRAINT project_members_deleted_pair_check
+          CHECK ((deleted_at IS NULL) = (deleted_by IS NULL))
       )
     `)
     await queryRunner.query(`
@@ -92,7 +98,9 @@ export class CreateProject1787188376828 implements MigrationInterface {
         deleted_by         uuid        REFERENCES identity.users(id) ON DELETE RESTRICT,
 
         CONSTRAINT statuses_done_xor_cancelled_check
-          CHECK (NOT (is_done_type AND is_cancelled_type))
+          CHECK (NOT (is_done_type AND is_cancelled_type)),
+        CONSTRAINT statuses_deleted_pair_check
+          CHECK ((deleted_at IS NULL) = (deleted_by IS NULL))
       )
     `)
     await queryRunner.query(`
@@ -137,7 +145,9 @@ export class CreateProject1787188376828 implements MigrationInterface {
         CONSTRAINT sprints_status_check
           CHECK (status IN ('planned', 'active', 'completed')),
         CONSTRAINT sprints_dates_ordered_check
-          CHECK (end_date >= start_date)
+          CHECK (end_date >= start_date),
+        CONSTRAINT sprints_deleted_pair_check
+          CHECK ((deleted_at IS NULL) = (deleted_by IS NULL))
       )
     `)
     await queryRunner.query(`

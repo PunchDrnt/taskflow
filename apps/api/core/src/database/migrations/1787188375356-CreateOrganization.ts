@@ -4,10 +4,13 @@ import { type MigrationInterface, type QueryRunner } from 'typeorm'
  * The `organization` schema — the customer's top level. Everything below this
  * point carries `org_id`, and every composite index leads with it.
  *
- * `organizations.org_id` is the org's own id, not a parent's. It looks
- * redundant, but the base entity is on every table without exception, and the
- * repository layer filters on `org_id` blindly — a table missing the column
- * would need a special case in exactly the code path that must not have one.
+ * `organizations` itself does not: its `org_id` would always equal its `id`.
+ * OrgScopedRepository therefore scopes this one table on `id` instead, which
+ * is a single deliberate case rather than a column every row carries twice.
+ *
+ * There is no `owner_id` either. The spec described it as "who created it, not
+ * authority" — permission lives in `members.role` — which is exactly what
+ * `created_by` already records, with the same ON DELETE RESTRICT.
  *
  * See .claude/docs/02-database.md#schema-organization
  */
@@ -16,13 +19,9 @@ export class CreateOrganization1787188375356 implements MigrationInterface {
     await queryRunner.query(`
       CREATE TABLE organization.organizations (
         id          uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
-        org_id      uuid        NOT NULL,
 
         name        text        NOT NULL,
         slug        text        NOT NULL,
-        -- Who created it. Not authority — permission lives in members.role,
-        -- and an org can have several owners.
-        owner_id    uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
 
         created_at  timestamptz NOT NULL DEFAULT now(),
         created_by  uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
@@ -31,8 +30,8 @@ export class CreateOrganization1787188375356 implements MigrationInterface {
         deleted_at  timestamptz,
         deleted_by  uuid        REFERENCES identity.users(id) ON DELETE RESTRICT,
 
-        -- An org is its own scope.
-        CONSTRAINT organizations_org_id_is_self_check CHECK (org_id = id)
+        CONSTRAINT organizations_deleted_pair_check
+          CHECK ((deleted_at IS NULL) = (deleted_by IS NULL))
       )
     `)
     await queryRunner.query(`
@@ -51,14 +50,17 @@ export class CreateOrganization1787188375356 implements MigrationInterface {
         -- single-row constraint can express — the application enforces it and
         -- a test covers it.
         role        text        NOT NULL,
-        joined_at   timestamptz NOT NULL DEFAULT now(),
 
+        -- joined_at is created_at under another name, so it is not repeated.
         created_at  timestamptz NOT NULL DEFAULT now(),
         created_by  uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
         updated_at  timestamptz NOT NULL DEFAULT now(),
         updated_by  uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
         deleted_at  timestamptz,
-        deleted_by  uuid        REFERENCES identity.users(id) ON DELETE RESTRICT
+        deleted_by  uuid        REFERENCES identity.users(id) ON DELETE RESTRICT,
+
+        CONSTRAINT members_deleted_pair_check
+          CHECK ((deleted_at IS NULL) = (deleted_by IS NULL))
       )
     `)
     await queryRunner.query(`
@@ -84,7 +86,10 @@ export class CreateOrganization1787188375356 implements MigrationInterface {
         updated_at   timestamptz NOT NULL DEFAULT now(),
         updated_by   uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
         deleted_at   timestamptz,
-        deleted_by   uuid        REFERENCES identity.users(id) ON DELETE RESTRICT
+        deleted_by   uuid        REFERENCES identity.users(id) ON DELETE RESTRICT,
+
+        CONSTRAINT teams_deleted_pair_check
+          CHECK ((deleted_at IS NULL) = (deleted_by IS NULL))
       )
     `)
     await queryRunner.query(`
@@ -106,7 +111,10 @@ export class CreateOrganization1787188375356 implements MigrationInterface {
         updated_at  timestamptz NOT NULL DEFAULT now(),
         updated_by  uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
         deleted_at  timestamptz,
-        deleted_by  uuid        REFERENCES identity.users(id) ON DELETE RESTRICT
+        deleted_by  uuid        REFERENCES identity.users(id) ON DELETE RESTRICT,
+
+        CONSTRAINT team_members_deleted_pair_check
+          CHECK ((deleted_at IS NULL) = (deleted_by IS NULL))
       )
     `)
     await queryRunner.query(`

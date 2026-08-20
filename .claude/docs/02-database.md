@@ -68,7 +68,6 @@ CREATE INDEX ON discussion.comments (org_id, entity_type, entity_id, created_at)
 | `chat.channels.default_assignee_id` · `identity.user_roles.granted_by`                      | `SET NULL`                |
 | `task.tasks.project_id` · `task.tasks.status_id`                                            | `RESTRICT`                |
 | `organization.members.user_id` · `team_members.user_id`                                     | `RESTRICT`                |
-| `organization.organizations.owner_id`                                                       | `RESTRICT`                |
 | `*.created_by` · `*.updated_by` · `task.tasks.completed_by`                                 | `RESTRICT`                |
 
 **`created_by` เป็น `RESTRICT` ไม่ใช่ `SET NULL`** — เพราะการลบ user คือ _anonymize_ (แถวยังอยู่) ไม่ใช่ hard delete FK จึงยังชี้ได้ ประวัติไม่พัง และคง `NOT NULL` ได้
@@ -81,7 +80,7 @@ CREATE INDEX ON discussion.comments (org_id, entity_type, entity_id, created_at)
 
 > 🔒 **ต้องทำ** — `org_id` ทุกตาราง ทุก schema ยกเว้น `identity` ทั้งก้อน
 
-- `org_id` **ทุกตาราง ทุก schema** รวมถึงตารางกลาง
+- `org_id` **ทุกตาราง ทุก schema** รวมถึงตารางกลาง (ข้อยกเว้น 3 ข้อด้านล่าง)
 - Composite index ขึ้นต้นด้วย `org_id` เสมอ
   ```sql
   CREATE INDEX ON task.tasks (org_id, project_id, status_id);
@@ -126,7 +125,7 @@ CREATE INDEX ON discussion.comments (org_id, entity_type, entity_id, created_at)
 
 ทุกตารางในระบบ · ฟิลด์ที่มี _(Phase N)_ คือสร้างตั้งแต่ Phase 0 แต่เริ่มใช้ตอน Phase นั้น
 
-### Base Entity — On Every Table, No Exceptions
+### Base Entity — On Every Table, With Three Named Exceptions
 
 > 🔒 **ต้องทำ** — primary key เป็น UUID · วันเวลาเป็น `timestamptz` ทั้งหมด
 
@@ -140,7 +139,21 @@ updated_at   timestamptz   NOT NULL · default now() · อัปเดตทุ
 updated_by   uuid          NOT NULL · คนที่แก้ล่าสุด
 deleted_at   timestamptz   null = ยังไม่ถูกลบ (soft delete)
 deleted_by   uuid          null · คนที่ลบ
+
+CHECK ((deleted_at IS NULL) = (deleted_by IS NULL))   -- ตั้งพร้อมกันเสมอ
 ```
+
+**`deleted_at` กับ `deleted_by` ต้องตั้งพร้อมกัน** — แถวที่ถูกลบแล้วไม่รู้ว่าใครลบคือประวัติที่กู้ไม่ได้ · TypeORM ตั้ง `deleted_at` ให้เองผ่าน `@DeleteDateColumn` แต่ `deleted_by` ต้องตั้งเองผ่าน subscriber · CHECK นี้กันกรณีที่ subscriber ไม่ทำงาน
+
+**ข้อยกเว้น 3 กลุ่ม**
+
+| ตาราง                                                 | ไม่มี                      | เพราะ                                                                 |
+| ----------------------------------------------------- | ------------------------- | -------------------------------------------------------------------- |
+| `audit.logs`                                          | base entity ทั้งชุด          | composite PK · `occurred_at`/`actor_id` ทำหน้าที่แทน `created_at`/`created_by` |
+| `organization.organizations`                          | `org_id`                  | เท่ากับ `id` เสมอ                                                        |
+| `identity.sessions` · `identity.password_reset_tokens` · `notify.outbox` | `deleted_at`/`deleted_by` | มี `revoked_at` / `used_at` / `status` อยู่แล้ว และนโยบายคือ hard delete       |
+
+กลุ่มสุดท้ายคือบั๊กแบบเดียวกับที่ `identity.users` เคยมี — **ตัวบอกการลบสองตัวในตารางเดียวย่อมขัดกันได้**
 
 > ⚠️ **ทุก field ที่เป็นวันเวลาใช้ `timestamptz` (timestamp with time zone) เท่านั้น**
 >
@@ -181,12 +194,12 @@ export abstract class BaseEntity {
 | `sessions`, `password_reset_tokens`                      | ผูกกับ user ไม่ใช่ org                             |
 | `roles`, `permissions`, `role_permissions`, `user_roles` | สิทธิ์ระดับทั้งเว็บ อยู่**เหนือ** org                    |
 
-นอกจาก schema นี้ **ไม่มีข้อยกเว้นอื่น**
-
-> `organization.organizations` มี `org_id` ที่เท่ากับ `id` ตัวเอง — ซ้ำซ้อนนิดหน่อยแต่ทำให้ interceptor ทำงานเหมือนกันหมด ไม่ต้องมีเคสพิเศษ
-
 > **ข้อยกเว้นที่สอง: `billing.plans`** — เป็นแค็ตตาล็อกราคาระดับทั้งระบบ ไม่ได้เป็นของ org ใด จึงไม่มี `org_id`
 > ส่วน `billing.subscriptions`, `ai_wallet`, `ai_usage` มี `org_id` ตามปกติ
+
+> **ข้อยกเว้นที่สาม: `organization.organizations`** — `org_id` ของมันจะเท่ากับ `id` ตัวเองเสมอ เก็บไว้ก็คือเก็บค่าเดิมสองที่ทุกแถว
+>
+> `OrgScopedRepository` จึง scope ตารางนี้ด้วย `id` แทน — เป็นเคสพิเศษ **หนึ่งจุดที่ตั้งใจ** ในโค้ดที่เดียว ไม่ใช่คอลัมน์ซ้ำที่ทุกแถวต้องแบก
 
 ด้านล่างจะไม่เขียนฟิลด์ base ซ้ำ แสดงเฉพาะฟิลด์เฉพาะของแต่ละตาราง
 
@@ -281,10 +294,12 @@ role_permissions
 user_roles
   user_id             uuid  FK
   role_id             uuid  FK
-  granted_by          uuid
-  granted_at          timestamptz
+  granted_by          uuid  null · FK → identity.users · SET NULL
+                            -- เก็บไว้แม้ดูซ้ำกับ created_by เพราะ ON DELETE ต่างกัน:
+                            -- created_by เป็น RESTRICT → ลบ admin ที่เคยให้สิทธิ์ไม่ได้เลย
+                            -- granted_by เป็น SET NULL → สิทธิ์อยู่ต่อได้แม้ admin หายไป
   expires_at          timestamptz null    -- ให้สิทธิ์ชั่วคราวตอน debug แล้วหมดอายุเอง
-  UNIQUE (user_id, role_id)
+  UNIQUE (user_id, role_id)   -- granted_at คือ created_at
 ```
 
 > ชื่อตารางไม่ต้องมี `system_` นำหน้า — schema `identity` บอกบริบทอยู่แล้ว และไม่ชนกับ role ใน org ที่อยู่ `organization.members.role`
@@ -298,16 +313,14 @@ user_roles
 ### Schema `organization`
 
 ```
-organizations
+organizations                            -- ไม่มี org_id (เท่ากับ id เสมอ) · ไม่มี owner_id (คือ created_by)
   name                text
   slug                text     unique
-  owner_id            uuid     FK → identity.users · RESTRICT · คนสร้าง (ไม่ใช่สิทธิ์ — สิทธิ์อยู่ที่ organization.members.role)
 
 members                                  -- สมาชิกของ org
   user_id             uuid  FK → identity.users
   role                text  'owner' | 'admin' | 'member'   (string ไม่ใช่ enum)
-  joined_at           timestamptz
-  UNIQUE (org_id, user_id)
+  UNIQUE (org_id, user_id)   -- วันที่เข้า org คือ created_at ไม่ต้องมี joined_at
   -- ต้องมี role='owner' อย่างน้อย 1 แถวเสมอ (บังคับที่ application)
   -- owner มีได้หลายคน (โมเดลแบบ GitHub) — ห้ามลบ/ลดสิทธิ์คนสุดท้าย
 
