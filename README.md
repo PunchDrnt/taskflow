@@ -92,6 +92,31 @@ Migrations run against the compiled output in `dist/`, which needs no TypeScript
 
 Because `synchronize` is off, nothing reconciles the entities against the database — an entity can describe a column no migration ever created and nothing complains until a query fails. [test/schema-drift.spec.ts](apps/api/core/test/schema-drift.spec.ts) closes that gap: it applies every migration to the test database and asserts the schema builder has nothing left to do. It catches drift in both directions.
 
+### Multi-tenancy
+
+Every table but three carries an `org_id`, and one query returning another organisation's rows is the failure this layer exists to prevent. It is worth reading [apps/api/core/src/shared/](apps/api/core/src/shared/) before writing a service.
+
+The current organisation and user travel in `AsyncLocalStorage` rather than as a parameter — a parameter that can be omitted eventually is. It is established by **middleware, not a guard**: a guard returns a boolean, so the storage scope it opens closes again before the route handler runs.
+
+Services inject `OrgScopedRepository`, never TypeORM's `Repository`, and an ESLint rule under `src/modules/**` enforces it. Every read merges the org into the where clause, every write stamps it, and with no context at all the repository throws at the call site rather than running unscoped.
+
+```ts
+projects.queryBuilder.withOrg('project').andWhere(...)  // scoped
+users.queryBuilder.base('user')                         // identity has no org
+```
+
+`withOrg` is a conditional property: it does not exist on entities without an `orgId` column, so `users.queryBuilder.withOrg()` fails to compile rather than at runtime. What it returns has `where` and `orWhere` removed — `where` replaces every condition set so far, org included — enforced by the type on the first call and by a Proxy for the rest of the chain, since `andWhere` returns `this` and the type stops helping.
+
+`base` is TypeORM's plain builder. For `identity.*` and `billing.plans`, which have no `org_id` at all, that is simply correct; anywhere else it is a deliberate crossing that should be explainable.
+
+[apps/api/core/test/org-isolation.spec.ts](apps/api/core/test/org-isolation.spec.ts) covers this against a real Postgres and has no exceptions.
+
+### Entities
+
+One per table under `src/modules/<module>/*.entity.ts`, each listed in `src/database/entities.ts`. They describe columns and nothing else — no relations for `created_by` and friends, since importing identity's `User` into every module would break the boundary rule that a service wanting a name calls `UserService` rather than joining. Constraints, indexes and foreign keys stay in migrations.
+
+`base.entity.ts` offers four shapes rather than one, because `org_id` and soft delete are independent: most tables want `BaseEntity`, the identity schema and `billing.plans` have no `org_id`, sessions and password reset tokens have neither, and `audit.logs` uses none of them.
+
 Entities are registered explicitly in `entities.ts` rather than discovered by glob — a `*.entity.js` glob resolves differently under `nest build` than under Vitest's SWC transform, and the difference shows up as an "entity metadata not found" error in one runner but not the other. Entity properties are camelCase and mapped to snake_case columns by `snake-naming.strategy.ts`, so `@Column({ name })` is only needed to override.
 
 ## Scripts
@@ -116,7 +141,13 @@ Vitest, configured in `@api/core` ([vitest.config.mts](apps/api/core/vitest.conf
 
 Unit tests sit next to the code as `src/**/*.spec.ts`. Integration tests live in [apps/api/core/test/](apps/api/core/test/) and run against the `postgres-test` service in [docker-compose.yml](docker-compose.yml) — ephemeral, backed by tmpfs — pinned to `fileParallelism: false` since they share one database. They read `DATABASE_URL_TEST` and **skip when it is unset**, so a fresh checkout can run `yarn test` without Docker; CI must set it. See [test/README.md](apps/api/core/test/README.md).
 
-Two suites are non-negotiable once the schema exists: cross-org isolation (a query from org A must never see org B's rows) and the permission layer.
+| Suite                                                                     | Covers                                                                                               |
+| ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| [org-isolation.spec.ts](apps/api/core/test/org-isolation.spec.ts)         | 🔒 A query from org A must never see org B's rows                                                    |
+| [schema-drift.spec.ts](apps/api/core/test/schema-drift.spec.ts)           | Entities still describe the schema the migrations built                                              |
+| [schema-invariants.spec.ts](apps/api/core/test/schema-invariants.spec.ts) | Facts the schema and the code both rely on, such as the task-depth ceiling matching `MAX_TASK_DEPTH` |
+
+The permission layer joins them once it exists.
 
 ## Git hooks
 

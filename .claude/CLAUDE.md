@@ -95,6 +95,8 @@ Workspace names: `@web/client` (apps/web/client), `@api/core` (apps/api/core), `
 
 Tests run on **Vitest**, configured only in `@api/core` so far (`vitest.config.mts`). It uses `unplugin-swc` rather than Vitest's default esbuild, because esbuild cannot emit decorator metadata and both NestJS DI and TypeORM depend on it. Unit tests sit beside the code as `src/**/*.spec.ts`; integration tests live in `test/` (see `test/README.md`), run against the `postgres-test` service in `docker-compose.yml`, and are pinned to `fileParallelism: false` since they share one database. They read `DATABASE_URL_TEST` — deliberately absent from `src/config/env.ts`, since the API must never connect to the test database — and skip when it is unset, so CI has to set it.
 
+Integration suites, all in `apps/api/core/test/`: `org-isolation.spec.ts` is the 🔒 cross-org test and the one with no exceptions; `schema-drift.spec.ts` keeps entities and migrations in step; `schema-invariants.spec.ts` checks facts the schema and the application both depend on, such as the database's task-depth ceiling matching `MAX_TASK_DEPTH`.
+
 `test/schema-drift.spec.ts` guards the gap `synchronize: false` leaves open: nothing reconciles entities against the database, so it applies every migration and asserts TypeORM's schema builder has no statement left to run. Note that `migration:create` emits `import { MigrationInterface, QueryRunner }` as a value import — both are types only and TypeORM's ESM entry does not export them, so it passes `nest build` and throws under Vitest. `apps/api/core/eslint.config.mjs` turns on `consistent-type-imports` for `src/database/migrations/*.ts` only, so lint-staged fixes it on commit — the same rule applied repo-wide would rewrite NestJS constructor injection, whose DI reads the `design:paramtypes` metadata that `import type` erases.
 
 ## Commit conventions
@@ -130,6 +132,17 @@ yarn workspace @api/core migration:run                  # nest build, then apply
 yarn workspace @api/core migration:revert
 yarn workspace @api/core migration:show
 ```
+
+`src/modules/<module>/*.entity.ts` holds one entity per table, module by module, and every one is listed in `src/database/entities.ts`. Entities describe columns only — no `@ManyToOne` for `created_by` and friends, since importing identity's `User` into every module would break the boundary rule that says a service wanting a name calls `UserService` rather than joining. Constraints, indexes and foreign keys live in migrations.
+
+`src/shared/` is the org-scoping layer, and the part of this repo most worth reading before touching anything:
+
+- `request-context.ts` — `AsyncLocalStorage<{ orgId, userId }>`. `requireRequestContext()` throws rather than defaulting; there is no safe guess for an org.
+- `request-context.middleware.ts` — establishes it. **Middleware, not a guard**: a guard returns a boolean, so the storage scope it opens closes before the handler runs.
+- `base.entity.ts` — four classes, because `org_id` and soft delete are independent axes and three groups of tables sit off the default. See the exception table in `docs/02-database.md`.
+- `org-scoped.repository.ts` — the narrow, always-scoped CRUD surface. Services inject this, never `Repository<T>`; ESLint enforces that under `src/modules/**`.
+- `scoped-query-builder.ts` — `queryBuilder.withOrg(alias)` and `queryBuilder.base(alias)`. `withOrg` is a conditional property, absent on entities with no `orgId` column, and returns a builder with `where`/`orWhere` removed by type and by Proxy. `base` is TypeORM's plain builder: correct for `identity.*` and `billing.plans`, which have no org, and a deliberate crossing anywhere else.
+- `audit-columns.subscriber.ts` — fills `createdBy`/`updatedBy`/`deletedBy`. Registered in the DataSource's `subscribers`, not as a Nest provider, so it applies under the CLI and in tests too.
 
 **`packages/ui`** (`@repo/ui`) — Shared React component library built on `@base-ui/react` primitives + `class-variance-authority` + Tailwind. Each component lives in its own directory under `src/components/<name>/index.tsx` and is exported individually via the package's `exports` map (`./components/*` → `./src/components/*/index.tsx`), not as a single barrel file — import components by their specific path, not from a package root. Also exports `./globals.css`, `./hooks/*`, and `./lib/*`.
 
