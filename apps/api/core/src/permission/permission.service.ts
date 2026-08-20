@@ -1,8 +1,15 @@
-import { subject as withSubject } from '@casl/ability'
+import { subject as tag } from '@casl/ability'
 import { ForbiddenException, Injectable } from '@nestjs/common'
 
 import { defineAbilityFor, type Action, type Subject } from './ability'
 import type { Actor } from './actor'
+
+/**
+ * The row being asked about. `{}` is valid and means "nothing distinguishes
+ * it" — creating the first project of a kind, say. It fails every conditional
+ * rule, which is the safe direction.
+ */
+export type Resource = Record<string, unknown>
 
 /**
  * `can(user, action, resource)` — the one place a permission question is
@@ -13,28 +20,24 @@ import type { Actor } from './actor'
 @Injectable()
 export class PermissionService {
   /**
-   * Pass the resource whenever there is one.
+   * `resource` is required, and that is the whole design.
    *
-   * Without it the question CASL answers is "could this person do that to
+   * CASL reads a missing subject as "could this person do that to
    * *something*", so a project admin gets `true` for `can('delete', 'Project')`
-   * even though they may only delete the one project they lead. That is
-   * CASL's documented behaviour and it is useful for "should this button
-   * exist at all" — it is the wrong question at an endpoint, where the answer
-   * needed is about the row in hand.
+   * while being allowed to delete only their own. That looks exactly like a
+   * permission check that passed. Making the parameter mandatory means the
+   * dangerous form does not compile; `isEverAllowedTo` below is the same
+   * question asked on purpose.
    */
   can(
     actor: Actor,
     action: Action,
     subject: Subject,
-    resource?: Record<string, unknown>,
+    resource: Resource,
   ): boolean {
-    const ability = defineAbilityFor(actor)
-
-    // CASL matches conditions against a *tagged* object; passing a bare one
-    // makes every conditional rule silently miss.
-    return resource
-      ? ability.can(action, withSubject(subject, resource))
-      : ability.can(action, subject)
+    // CASL matches conditions against a tagged object; an untagged one makes
+    // every conditional rule silently miss.
+    return defineAbilityFor(actor).can(action, tag(subject, resource))
   }
 
   /** The same question, for a caller that should stop if the answer is no. */
@@ -42,12 +45,25 @@ export class PermissionService {
     actor: Actor,
     action: Action,
     subject: Subject,
-    resource?: Record<string, unknown>,
+    resource: Resource,
   ): void {
     if (!this.can(actor, action, subject, resource)) {
+      const which = resource.id ? ` ${String(resource.id)}` : ''
       throw new ForbiddenException(
-        `Not allowed to ${action} ${subject}${resource?.id ? ` ${String(resource.id)}` : ''}`,
+        `Not allowed to ${action} ${subject}${which}`,
       )
     }
+  }
+
+  /**
+   * Whether there is *any* row this would be allowed on — for deciding
+   * whether a menu item or a button should exist at all.
+   *
+   * Never an authorisation check. It answers yes for a project admin asked
+   * about projects in general, which is correct for drawing a button and
+   * wrong for acting on a row.
+   */
+  isEverAllowedTo(actor: Actor, action: Action, subject: Subject): boolean {
+    return defineAbilityFor(actor).can(action, subject)
   }
 }

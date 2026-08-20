@@ -117,7 +117,9 @@
 - [x] `@nestjs/event-emitter` ติดตั้งไว้ใช้กับ **notification เท่านั้น** — เขียนเหตุผลไว้ที่ `EventEmitterModule.forRoot()` ใน `app.module.ts`
 - [x] `AuditService` เปิด method เฉพาะ ตั้งชื่อเป็นภาษาของ audit — `findRecentTargets` / `findForEntity` ไม่ใช่ `getRecentAssignees`
 - [x] `can(user, action, resource)` ด้วย CASL — [`src/permission/`](../../apps/api/core/src/permission/) โครงเปล่าตามที่ตั้งใจ มีแค่ลำดับชั้น role ที่ spec ฟิกไว้แล้ว ยังไม่มี rule ราย feature
-  - ⚠️ **`can()` ที่ไม่ส่ง resource ตอบ "ทำกับ *บางอัน* ได้ไหม"** — project admin ได้ `true` สำหรับ `can('delete','Project')` ทั้งที่ลบได้แค่ project ตัวเอง · เป็นพฤติกรรมของ CASL เอง · endpoint ต้องส่ง resource เสมอ · ล็อกไว้ด้วย test แล้ว
+  - **`resource` เป็น parameter บังคับ** — CASL ตอบ `can('delete','Project')` ที่ไม่ส่ง resource ว่า "ทำกับ*บางอัน*ได้ไหม" ซึ่ง project admin ได้ `true` ทั้งที่ลบได้แค่ project ตัวเอง · หน้าตาเหมือน check ที่ผ่าน · บังคับให้ส่งแปลว่าเขียนแบบอันตรายแล้ว **compile ไม่ผ่าน** ไม่ใช่แค่มีคอมเมนต์เตือน
+  - ส่ง `{}` ได้เมื่อไม่มี row ให้อ้าง (เช่น `create Project`) — CASL fail ทุก rule ที่มีเงื่อนไข ซึ่งเป็นทางที่ปลอดภัย
+  - `isEverAllowedTo()` คือคำถาม "ทำกับบางอันได้ไหม" ที่ตั้งใจถาม — ใช้ตัดสินว่าจะโชว์ปุ่มไหม ไม่ใช่ตัดสินสิทธิ์
 - [x] Test: แต่ละ role ทำอะไรได้/ไม่ได้ — [`permission.service.spec.ts`](../../apps/api/core/src/permission/permission.service.spec.ts) 9 เคส (unit ไม่ต้องมี DB)
 - [x] `provideOrgRepository()` / `@InjectOrgRepository()` — วิธีที่ module ต่อกับตารางของตัวเอง โดยไม่ต้องแตะ `@InjectRepository` ที่ ESLint ห้ามไว้ · `audit/` เป็นตัวอย่างแรก
 - [ ] Test: invariant ที่ app บังคับ (DB ไม่ได้) — **เลื่อนไป Phase 1 ตามที่ระบุไว้แต่แรก** เพราะยังไม่มี service ให้บังคับ:
