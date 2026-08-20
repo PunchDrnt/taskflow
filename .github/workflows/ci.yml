@@ -1,9 +1,15 @@
+# The gate. Runs on pull requests and ships nothing. deploy.yml is the other
+# half: it fires only on prod and runs no tests, trusting what this proved.
 name: CI
 
 on:
-  push:
-    branches: [main]
   pull_request:
+  workflow_dispatch:
+  # Off for main while Phase 0 lands there directly and every push would be a
+  # run nobody reads. Put this back once work arrives through pull requests —
+  # until then main is only as green as the last local `yarn test`.
+  # push:
+  #   branches: [main]
 
 # A new push supersedes the run in flight for the same branch.
 concurrency:
@@ -61,8 +67,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
-    # Both images build from the repository root and compile the workspace,
-    # so a broken Dockerfile is caught here rather than during a deploy.
+    # Overlaps deploy.yml's build job on purpose: that one runs only once the
+    # change is already on prod, which is too late to learn the Dockerfile is
+    # broken. Same gha cache scope, so the second build is mostly cached.
     strategy:
       fail-fast: false
       matrix:
