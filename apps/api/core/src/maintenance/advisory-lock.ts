@@ -1,23 +1,16 @@
 import type { DataSource } from 'typeorm'
 
 /**
- * Runs `work` only if no other process is already running it.
+ * Runs `work` only if no other process is already running it — cron is
+ * declared per process, so two containers fire the same job on the same
+ * second.
  *
- * Scheduled jobs are declared per process, so two API containers both fire the
- * same cron at the same second. For the retention sweep that means two
- * concurrent `DELETE`s racing over the same rows; for the partition job, two
- * `CREATE TABLE`s where the loser gets a duplicate-object error at 03:05 that
- * nobody is awake to read. A lock the database hands out means the second
- * process simply does nothing.
+ * `try` rather than plain `pg_advisory_lock`: by the time the lock frees up
+ * the work is done, so the second caller should skip, not queue.
  *
- * `pg_try_advisory_lock` rather than `pg_advisory_lock`: a job that is already
- * running should be skipped, not queued behind the one that is running — by
- * the time the lock is free, the work is done.
- *
- * The lock is session-scoped, so it has to be taken and released on one
- * connection. `dataSource.query()` picks whichever pool member is free, which
- * would take the lock on one connection and try to release it on another, so
- * this reserves a QueryRunner for the duration.
+ * Session-scoped locks have to be taken and released on one connection, and
+ * `dataSource.query()` picks whichever pool member is free — hence the
+ * reserved QueryRunner.
  */
 export async function withAdvisoryLock<T>(
   dataSource: DataSource,
@@ -46,10 +39,8 @@ export async function withAdvisoryLock<T>(
 }
 
 /**
- * One number per job. Advisory locks share a single namespace across the whole
- * database, so these have to be unique among themselves and unlikely to
- * collide with anything else that ever takes one — hence the arbitrary but
- * distinctive prefix rather than 1 and 2.
+ * One key per job. The namespace is database-wide, so these avoid 1 and 2 to
+ * stay clear of anything else that ever takes a lock.
  */
 export const LOCK_KEYS = {
   retention: 8_147_001,

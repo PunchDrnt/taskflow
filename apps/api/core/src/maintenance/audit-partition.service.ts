@@ -4,26 +4,16 @@ import { DataSource } from 'typeorm'
 
 import { LOCK_KEYS, withAdvisoryLock } from './advisory-lock'
 
-/**
- * How far ahead partitions are kept.
- *
- * `004 CreateAuditLogs` creates the same twelve at migration time and spells
- * its own number out, for the same reason the task-depth CHECK does: a
- * migration that changes meaning when someone edits a constant is not a record
- * of what was done. Here the number only has to be large enough that a job
- * stopped for months still has somewhere to write.
- */
+/** Large enough that a job stopped for months still has somewhere to write. */
 const MONTHS_AHEAD = 12
 
 /**
  * Keeps `audit.logs` supplied with partitions to write into.
  *
- * Audit rows are written in the same transaction as the business logic they
- * describe, so a month with no partition does not merely lose a log entry — it
- * fails the user's operation. `audit.logs_default` exists to make that
- * survivable, and this job exists so it is never needed.
- *
- * See .claude/docs/01-architecture.md#retention--each-kind-of-data-has-its-own-lifetime
+ * Audit rows are written in the same transaction as the business logic, so a
+ * month with no partition fails the user's operation rather than just losing a
+ * log entry. `audit.logs_default` makes that survivable; this job means it is
+ * never needed.
  */
 @Injectable()
 export class AuditPartitionService {
@@ -36,9 +26,8 @@ export class AuditPartitionService {
       this.dataSource,
       LOCK_KEYS.auditPartition,
       async () => {
-        // Checked first: a row sitting in the default partition is what stops
-        // the month it belongs to from being created, so it explains any
-        // failure that follows rather than being buried under it.
+        // First, because a stranded default row is what stops its month from
+        // being created — it explains any failure that follows.
         await this.reportDefaultPartitionRows()
         await this.ensureUpcomingPartitions()
       },
@@ -50,12 +39,9 @@ export class AuditPartitionService {
   }
 
   /**
-   * Creates any of the next twelve months that does not exist yet, and returns
-   * the ones this run had to create.
-   *
-   * The arithmetic lives in `audit.ensure_month_partition`, which is
-   * idempotent — the job's whole task is deciding *when*, not reproducing the
-   * naming and boundary rules in a second language.
+   * Creates any of the next twelve months that is missing, and returns them.
+   * The naming and boundary arithmetic stays in
+   * `audit.ensure_month_partition` rather than being restated in TypeScript.
    */
   async ensureUpcomingPartitions(): Promise<string[]> {
     const created: string[] = []
@@ -82,12 +68,9 @@ export class AuditPartitionService {
   }
 
   /**
-   * Logs at error level while `audit.logs_default` holds anything.
-   *
-   * This is the alert, and it stays one until Sentry is wired up in Phase 0 §7.
-   * Rows here mean a partition was missing when they were written, and they
-   * also mean the partition for their month cannot be created until they are
-   * moved out — Postgres has to prove no default row belongs in the new range.
+   * The alert, until Sentry lands in Phase 0 §7. Rows here mean a partition
+   * was missing when they were written — and that their month cannot be
+   * created until they are moved out.
    */
   async reportDefaultPartitionRows(): Promise<number> {
     const [{ count }] = (await this.dataSource.query(

@@ -6,13 +6,10 @@ import { MaintenanceScheduler } from './maintenance.scheduler'
 import { RetentionService } from './retention.service'
 
 /**
- * The jobs nobody triggers: retention and audit-log partition upkeep.
+ * The jobs nobody triggers.
  *
- * A top-level module rather than one under `src/modules/`, because those are
- * the domain modules — one per schema, each holding entities and a service
- * that may only see its own org. Everything here deliberately crosses orgs and
- * talks to the database in raw SQL, which is also why the ESLint rule banning
- * a plain `Repository` under `src/modules/**` does not reach it.
+ * Deliberately outside `src/modules/`: everything here crosses orgs in raw
+ * SQL, which is the opposite of what a domain module is allowed to do.
  */
 @Module({
   imports: [ScheduleModule.forRoot()],

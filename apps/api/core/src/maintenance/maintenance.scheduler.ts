@@ -6,18 +6,7 @@ import type { Env } from '../config/env'
 import { AuditPartitionService } from './audit-partition.service'
 import { RetentionService } from './retention.service'
 
-/**
- * When the maintenance jobs run.
- *
- * Kept apart from the services that do the work so that "what retention does"
- * and "when it happens" are separate questions — and so tests can call the
- * services directly without a scheduler in the way.
- *
- * The time zone is named rather than inherited from the host. The deployment
- * is in Thailand and the intent is "the quiet part of the night there", which
- * a container running on UTC would otherwise turn into the middle of the
- * working day.
- */
+/** Named, not inherited from the host: on a UTC container 03:00 is midday. */
 const TIME_ZONE = 'Asia/Bangkok'
 
 @Injectable()
@@ -42,9 +31,8 @@ export class MaintenanceScheduler implements OnModuleInit {
     }
   }
 
-  // Partitions first, and a few minutes clear of retention: the two touch
-  // different tables, but a partition that fails to appear is the more urgent
-  // of the two to see in the logs.
+  // Ten minutes ahead of retention: a missing partition is the more urgent of
+  // the two to find in the logs.
   @Cron('5 3 * * *', { name: 'audit-partitions', timeZone: TIME_ZONE })
   async ensureAuditPartitions(): Promise<void> {
     if (!this.enabled) return

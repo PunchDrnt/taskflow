@@ -13,17 +13,14 @@ import {
 /**
  * Deletes what the retention policy says should no longer exist.
  *
- * Every statement here is raw SQL that crosses organisations, which is exactly
- * what `OrgScopedRepository` exists to prevent everywhere else. That is the
- * point: retention is not a tenant's operation, it is the system's, and
- * expressing it as set-based `DELETE`s rather than loading entities keeps a
- * ninety-day purge from paging a whole table into Node.
+ * Raw cross-org SQL, which is what `OrgScopedRepository` exists to prevent
+ * everywhere else — retention is the system's operation, not a tenant's, and
+ * set-based deletes keep a ninety-day purge out of Node's memory.
  *
- * The audit columns get no help from `AuditColumnsSubscriber` here — there is
- * no request context — so the one statement that writes rather than deletes
- * names `SYSTEM_USER_ID` itself.
+ * No request context out here, so the one statement that writes rather than
+ * deletes names `SYSTEM_USER_ID` itself.
  *
- * See .claude/docs/01-architecture.md#retention--each-kind-of-data-has-its-own-lifetime
+ * See docs/01-architecture.md#where-the-retention-jobs-live
  */
 @Injectable()
 export class RetentionService {
@@ -32,10 +29,8 @@ export class RetentionService {
   constructor(@InjectDataSource() private readonly dataSource: DataSource) {}
 
   /**
-   * Runs every policy, at most once across the cluster.
-   *
-   * One failing step does not stop the rest: sessions growing without bound
-   * because a project purge hit a foreign key would be a bad trade.
+   * Runs every policy, at most once across the cluster. One failing step does
+   * not stop the rest.
    */
   async run(): Promise<void> {
     const attempt = await withAdvisoryLock(
@@ -78,22 +73,16 @@ export class RetentionService {
   }
 
   /**
-   * Hard-deletes soft-deleted rows once they are past the ninety-day window,
-   * children before parents.
+   * Hard-deletes soft-deleted rows past the ninety-day window, children first.
    *
-   * A table that fails is logged and stepped over rather than allowed to end
-   * the sweep. The failure this guards against is real rather than
-   * hypothetical: a soft-deleted project whose tasks were somehow not
-   * soft-deleted with it cannot be removed, because `tasks.project_id` is
-   * RESTRICT. One such row must not mean that nothing anywhere is ever purged
-   * again. It does hold up the rest of its own table — the batch is one
-   * statement — so the log names the table, and those rows go on the next run
-   * once whatever is holding them is dealt with.
+   * A table that fails is logged and stepped over. The case is real: a
+   * soft-deleted project whose tasks were not soft-deleted with it cannot be
+   * removed (`tasks.project_id` is RESTRICT), and one such row must not stop
+   * everything else from ever being purged. It does hold up the rest of its
+   * own table, since a batch is one statement.
    *
-   * Cascades are left to do their work. Deleting a soft-deleted organisation
-   * takes its projects with it whether or not they were soft-deleted too — the
-   * org is ninety days gone, and `ON DELETE CASCADE` is the safety net the
-   * schema documents for exactly this.
+   * Cascades are left alone — deleting an org ninety days gone takes its
+   * projects whether or not they were soft-deleted too.
    */
   async purgeSoftDeleted(): Promise<number> {
     const targets = await resolvePurgeOrder(this.dataSource)
@@ -129,19 +118,14 @@ export class RetentionService {
 
   /**
    * Strips the personal details from users who asked to be deleted and did not
-   * come back, leaving the row itself in place so everything they created
-   * still has an author.
+   * come back, leaving the row so their work still has an author.
    *
-   * The clock runs from `deletion_requested_at`, which exists only while the
-   * status is `pending_deletion` and is set at the moment the person asks.
-   * `deleted_at` marks the other end of the window — it is set here, by this
-   * method — and `updated_at` would restart the countdown every time anything
-   * touched the row.
+   * The clock runs from `deletion_requested_at` — `deleted_at` marks the far
+   * end of the window and is set here, by this method. Both halves of each
+   * pair are written together because the table CHECKs them.
    *
-   * `status = 'deleted'` and `deleted_at` are set together — the table has a
-   * CHECK tying them, and another tying `deleted_at` to `deleted_by`. The
-   * partial unique index on email excludes deleted rows, so the address is
-   * released for reuse at the same moment it stops being stored.
+   * The email unique index is partial on `status <> 'deleted'`, so the address
+   * is freed for reuse at the moment it stops being stored.
    */
   async anonymisePendingDeletionUsers(): Promise<number> {
     const result = (await this.dataSource.query(
@@ -190,11 +174,7 @@ export class RetentionService {
     )
   }
 
-  /**
-   * Sessions that are revoked or expired. The week of slack is so that "who
-   * was logged in when this happened" is still answerable for a few days
-   * afterwards; `audit.logs` keeps the permanent record.
-   */
+  /** Revoked or expired. The week of slack is for after-the-fact questions. */
   async purgeFinishedSessions(): Promise<number> {
     return this.deleteInBatches(
       `DELETE FROM identity.sessions
@@ -208,10 +188,7 @@ export class RetentionService {
     )
   }
 
-  /**
-   * Reset tokens, valid for ten minutes and kept for a day so a support
-   * question about a link that did not work has something to look at.
-   */
+  /** Valid for ten minutes, kept a day so a "my link failed" ticket has data. */
   async purgePasswordResetTokens(): Promise<number> {
     return this.deleteInBatches(
       `DELETE FROM identity.password_reset_tokens
@@ -225,11 +202,9 @@ export class RetentionService {
   }
 
   /**
-   * Repeats a batched `DELETE` until it stops filling a batch.
-   *
-   * Each batch is its own transaction, so a sweep interrupted halfway leaves
-   * the rows it already removed removed — retention has no state to be
-   * consistent about, and resuming means running again tomorrow.
+   * Repeats a batched `DELETE` until it stops filling a batch. Each batch is
+   * its own transaction: there is no state to be consistent about, and a sweep
+   * cut short simply resumes tomorrow.
    */
   private async deleteInBatches(
     sql: string,

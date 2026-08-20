@@ -1,49 +1,25 @@
 import type { DataSource } from 'typeorm'
 
 /**
- * How long each kind of data lives.
- *
- * These are the numbers from
- * .claude/docs/01-architecture.md#retention--each-kind-of-data-has-its-own-lifetime
- * and they are policy, not deployment configuration — an environment where
- * sessions survive a year is not a differently-tuned deployment, it is a
- * different promise to the people whose data it is. Changing one is a change
- * to the document.
- *
- * `audit.logs` is absent on purpose: it is never deleted.
+ * How long each kind of data lives, from docs/01-architecture.md. Policy
+ * rather than deployment config: changing one is a change to the document.
+ * `audit.logs` is absent because it is never deleted.
  */
 export const RETENTION_DAYS = {
-  /** Soft-deleted rows, on every table that has `deleted_at`. The bin. */
   softDeleted: 90,
-  /** A user who asked to be deleted, measured from the request. */
   pendingDeletionUser: 30,
-  /** Notifications already delivered. */
   sentNotification: 30,
-  /** Sessions past their expiry or explicitly revoked. */
   finishedSession: 7,
-  /** Password reset tokens, which are only valid for ten minutes anyway. */
   passwordResetToken: 1,
 } as const
 
-/**
- * Rows deleted per statement.
- *
- * A single unbounded `DELETE` holds locks on every row it touches until it
- * commits. That is invisible at twenty users and unpleasant the first time
- * somebody purges an org's history, so the sweep loops in batches instead.
- */
+/** An unbounded DELETE locks every row it touches until it commits. */
 export const PURGE_BATCH_SIZE = 1_000
 
 /**
- * Tables with `deleted_at` that the sweep must never hard-delete.
- *
- * `identity.users` is the whole list. Every table's `created_by` points at it
- * with `ON DELETE RESTRICT`, which is the decision that history survives the
- * people in it — so a user is *anonymised* (see
- * `RetentionService.anonymisePendingDeletionUsers`), never removed. A sweep
- * that tried would either fail on the foreign key or, worse, succeed on a user
- * who happened to have created nothing yet, making the behaviour depend on
- * how much work someone did before they left.
+ * Every `created_by` points at `identity.users` with RESTRICT, so users are
+ * anonymised rather than removed. A sweep that tried would succeed only on
+ * people who had created nothing yet.
  */
 export const NEVER_PURGED = ['identity.users']
 
@@ -60,18 +36,13 @@ interface CatalogRow extends PurgeTarget {
 }
 
 /**
- * Every soft-deletable table, ordered so that deleting them in sequence never
- * hits a foreign key.
+ * Every soft-deletable table, ordered so the deletes never hit a foreign key.
  *
- * Read from the catalog rather than kept as a list in this file. A hand-written
- * order is wrong in a way nothing detects: adding a table and forgetting to
- * place it leaves rows that are never purged, and misplacing one only fails on
- * the first day real data reaches ninety days old. The catalog always describes
- * the schema that exists.
- *
- * Most parent-child foreign keys here are `CASCADE`, so deleting the parent
- * would take the children anyway — but not all of them: `task.tasks` points at
- * `project.projects` with `RESTRICT`, so tasks genuinely have to go first.
+ * Read from the catalog, not kept as a list here: a hand-written order fails
+ * in a way nothing detects — a forgotten table is rows that are never purged,
+ * and a misplaced one only breaks the first day real data turns ninety days
+ * old. `task.tasks` → `project.projects` is RESTRICT, so the order is load-
+ * bearing rather than tidiness.
  */
 export async function resolvePurgeOrder(
   dataSource: DataSource,
@@ -101,9 +72,8 @@ export async function resolvePurgeOrder(
              '{}'
            ) AS parents
       FROM purgeable t
-      -- Self-references (tasks.parent_task_id, comments.parent_comment_id) are
-      -- excluded by p.oid <> t.oid: they are cycles in the graph but not in the
-      -- deletion, since both rows live in the same table and both are CASCADE.
+      -- p.oid <> t.oid drops self-references (tasks.parent_task_id): cycles in
+      -- the graph, but not in the deletion — same table, and CASCADE.
       LEFT JOIN pg_constraint con ON con.conrelid = t.oid AND con.contype = 'f'
       LEFT JOIN purgeable p ON p.oid = con.confrelid AND p.oid <> t.oid
      GROUP BY t.name, t.qualified
@@ -115,12 +85,7 @@ export async function resolvePurgeOrder(
   return sortChildrenFirst(rows)
 }
 
-/**
- * Kahn's algorithm over "this table points at that one".
- *
- * A table can be deleted once nothing left in the set references it, so the
- * count tracked per table is how many of its children are still waiting.
- */
+/** Kahn's algorithm: a table is ready once nothing left in the set points at it. */
 function sortChildrenFirst(rows: CatalogRow[]): PurgeTarget[] {
   const remaining = new Map(rows.map((row) => [row.name, row]))
   const childCount = new Map(rows.map((row) => [row.name, 0]))
