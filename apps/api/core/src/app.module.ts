@@ -12,9 +12,12 @@ import { AppController } from './app.controller'
 import { AppService } from './app.service'
 import { validateEnv, type Env } from './config/env'
 import { DatabaseModule } from './database/database.module'
+import { FeatureModule } from './feature/feature.module'
 import { HealthModule } from './health/health.module'
 import { MaintenanceModule } from './maintenance/maintenance.module'
 import { AuditModule } from './modules/audit/audit.module'
+import { NotifyModule } from './modules/notify/notify.module'
+import { StorageModule } from './modules/storage/storage.module'
 import { PermissionModule } from './permission/permission.module'
 import { RequestContextMiddleware } from './shared/request-context.middleware'
 import { SharedModule } from './shared/shared.module'
@@ -53,7 +56,10 @@ const rootEnvFile = join(__dirname, '..', '..', '..', '..', '.env')
     DatabaseModule,
     SharedModule,
     PermissionModule,
+    FeatureModule,
+    StorageModule,
     AuditModule,
+    NotifyModule,
     HealthModule,
     MaintenanceModule,
   ],

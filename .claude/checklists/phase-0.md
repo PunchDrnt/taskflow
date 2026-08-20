@@ -129,10 +129,17 @@
 
 ## 6. Service wrapper
 
-- [ ] `EmailService` ห่อ Resend + `notify.outbox` + worker (retry 3 ครั้ง exponential backoff → mark failed + Sentry)
-- [ ] `StorageService` ห่อ MinIO — bucket **private** เข้าผ่าน presigned URL เท่านั้น
-- [ ] `FeatureService.can(org, feature)` — return `true` เสมอ (Phase 1 ใช้ดัก `public_registration`)
-- [ ] เพิ่ม `minio` เข้า `docker-compose.yml` (volume แยกจาก DB)
+- [x] `EmailService` ห่อ Resend + `notify.outbox` + worker — [`src/modules/notify/`](../../apps/api/core/src/modules/notify/)
+  - `enqueue(manager, notification)` รับ `EntityManager` แล้ว throw ถ้าไม่มี transaction เหมือน `AuditService` · เหตุผลอ่อนกว่านิดหน่อย (อีเมลที่ส่งไปแล้วเรียกคืนไม่ได้ ส่วนอีเมลที่มาช้ายังโอเค) แต่รูปเดียวกัน
+  - Worker retry 3 ครั้ง backoff 1 / 5 / 25 นาที → `status='failed'` แล้วหยุด · **ยังไม่มี Sentry** log level `error` ไปก่อน (§7)
+  - `FOR UPDATE SKIP LOCKED` + advisory lock — at-least-once โดยตั้งใจ · process ตายกลางคันแล้วส่งซ้ำ ดีกว่า mark sent ก่อนส่งแล้วหาย
+  - Template ที่ยังไม่มีคน implement **ไม่ throw** — ส่งแบบดิบไปก่อน ไม่งั้นจะวนอยู่ใน retry loop จนถูก mark failed
+  - Test — [`test/outbox.spec.ts`](../../apps/api/core/test/outbox.spec.ts) 9 เคส
+- [x] `StorageService` ห่อ MinIO — bucket **private** เข้าผ่าน presigned URL เท่านั้น
+  - MinIO ล่มแล้ว API ยัง boot ได้ · `/health/ready` เป็น 503 พร้อมบอกว่า storage down ส่วน `/health/live` ยัง 200 (ทดสอบจริงแล้ว)
+  - `RESEND_API_KEY` เป็น optional — ไม่ตั้ง = เขียนลง log · แต่ `NODE_ENV=production` แล้วไม่ตั้ง = **boot ไม่ผ่าน** ไม่งั้น notification ของจริงจะหายลง stdout
+- [x] `FeatureService.can(org, feature)` — return `true` เสมอ ([`src/feature/`](../../apps/api/core/src/feature/))
+- [x] เพิ่ม `minio` เข้า `docker-compose.yml` (volume แยกจาก DB — ไฟล์กู้จาก DB backup ไม่ได้ ต้อง restore แยกกันได้)
 
 ## 7. Deploy — อย่าเลื่อน
 
@@ -161,6 +168,7 @@
 |---|---|
 | Postgres 18 | data dir ย้ายไป subdirectory ที่มีเลขเวอร์ชัน · mount ที่ `/var/lib/postgresql` ไม่ใช่ `/var/lib/postgresql/data` (เจอมาแล้วตอนตั้ง compose) |
 | Port 5432 | เครื่อง dev มี Postgres รันอยู่แล้ว → ตั้ง `POSTGRES_PORT` ใน `.env` |
+| Port 9000/9001 | เรื่องเดียวกัน MinIO ของโปรเจกต์อื่นจองไว้แล้ว · อาการคือ `S3Error: signature does not match` ไม่ใช่ connection refused เพราะมีตัวจริงตอบอยู่ แค่คนละ instance → ตั้ง `MINIO_PORT` / `MINIO_CONSOLE_PORT` |
 | Partitioned table | PK ต้องมี partition key อยู่ด้วย → `audit.logs` เป็น composite PK |
 | `migration:create` | ไฟล์ที่ออกมา `import { MigrationInterface, QueryRunner }` **พังใน ESM** (เป็น type ล้วน ไม่มีใน `typeorm/index.mjs`) · ผ่าน `nest build` แต่ Vitest ตาย · eslint `consistent-type-imports` เปิดเฉพาะโฟลเดอร์ `migrations/` แก้ให้ตอน commit — เปิดทั้ง repo จะไปลบ metadata ที่ NestJS DI ใช้ |
 | แก้ migration ที่รันไปแล้ว | DB ที่บันทึกว่ารันแล้วจะไม่รันซ้ำ → test DB ค้างอยู่กับ schema เก่าเงียบ ๆ · `test/database.ts` เลย reset ก่อนทุกครั้ง |

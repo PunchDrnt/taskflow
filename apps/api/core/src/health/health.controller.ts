@@ -3,9 +3,12 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger'
 import {
   HealthCheck,
   HealthCheckService,
+  HealthIndicatorService,
   MemoryHealthIndicator,
   TypeOrmHealthIndicator,
 } from '@nestjs/terminus'
+
+import { StorageService } from '../modules/storage/storage.service'
 
 const HEAP_LIMIT_BYTES = 512 * 1024 * 1024
 const RSS_LIMIT_BYTES = 1024 * 1024 * 1024
@@ -17,7 +20,18 @@ export class HealthController {
     private readonly health: HealthCheckService,
     private readonly memory: MemoryHealthIndicator,
     private readonly db: TypeOrmHealthIndicator,
+    private readonly storage: StorageService,
+    private readonly indicators: HealthIndicatorService,
   ) {}
+
+  // Attachments are unreadable without MinIO, so an instance that cannot reach
+  // it is not ready — but the process is fine, so this never goes in live().
+  private async storageCheck() {
+    const indicator = this.indicators.check('storage')
+    return (await this.storage.isReachable())
+      ? indicator.up()
+      : indicator.down({ message: 'MinIO is unreachable' })
+  }
 
   @Get()
   @HealthCheck()
@@ -27,6 +41,7 @@ export class HealthController {
       () => this.memory.checkHeap('memory_heap', HEAP_LIMIT_BYTES),
       () => this.memory.checkRSS('memory_rss', RSS_LIMIT_BYTES),
       () => this.db.pingCheck('database'),
+      () => this.storageCheck(),
     ])
   }
 
@@ -51,6 +66,7 @@ export class HealthController {
       // It belongs here and never in `live()` — a transient blip should pull
       // the instance out of the load balancer, not restart the container.
       () => this.db.pingCheck('database'),
+      () => this.storageCheck(),
     ])
   }
 }

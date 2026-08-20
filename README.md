@@ -145,6 +145,18 @@ The activity log is written in the same transaction as the change it describes, 
 
 `audit/` is also the first full module, and the pattern the rest should follow: `provideOrgRepository(Entity)` in its providers, `@InjectOrgRepository(Entity)` in the constructor, and only the service exported — no other module touches `audit.logs`.
 
+### Service wrappers
+
+Three things the API talks to that are not the database, each behind one class so the rest of the code never holds a vendor SDK.
+
+[EmailService](apps/api/core/src/modules/notify/email.service.ts) queues into `notify.outbox` and sends nothing — `enqueue(manager, notification)` takes the caller's transaction, the same shape as the audit log, so a notification for a change that rolled back is never queued. [OutboxWorker](apps/api/core/src/modules/notify/outbox.worker.ts) delivers afterwards, retrying three times at one, five and twenty-five minutes before marking the row `failed` and leaving it as the record that someone was never told. Delivery is at-least-once on purpose: a process that dies mid-send leaves the row pending and it goes again, which is a better failure than marking it sent first and losing it.
+
+`RESEND_API_KEY` is the one optional variable in [env.ts](apps/api/core/src/config/env.ts). Without it email goes to the log, so a developer with no Resend account can still run the API — and `NODE_ENV=production` without it fails at boot, so that affordance cannot become a silent production outage.
+
+[StorageService](apps/api/core/src/modules/storage/storage.service.ts) wraps MinIO. The bucket is private and files reach the browser only through presigned URLs that expire; a public bucket would make every attachment in every organisation readable by anyone who has seen one URL, which is where the `org_id` scoping would stop mattering. MinIO being unreachable is a failing readiness check, not a refusal to start — verified by booting with it down: `/health/live` stays 200 while `/health/ready` returns 503 naming storage.
+
+[FeatureService](apps/api/core/src/feature/feature.service.ts) answers `can(org, feature)` with `true`, always. It exists so the call sites are written now instead of being retrofitted into every controller at once when plans arrive.
+
 ## Scripts
 
 Run from the repo root, fanned out to every workspace via Turborepo:

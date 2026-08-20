@@ -45,4 +45,5 @@ export async function withAdvisoryLock<T>(
 export const LOCK_KEYS = {
   retention: 8_147_001,
   auditPartition: 8_147_002,
+  outbox: 8_147_003,
 } as const

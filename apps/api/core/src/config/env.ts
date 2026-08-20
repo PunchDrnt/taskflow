@@ -5,27 +5,51 @@ import { z } from 'zod'
  * ones here: a bad value must stop the process, not surface as `undefined`
  * mid-request. Still to come in Phase 0: `MINIO_*`, `JWT_*`, `RESEND_API_KEY`.
  */
-export const envSchema = z.object({
-  NODE_ENV: z
-    .enum(['development', 'test', 'production'])
-    .default('development'),
-  PORT: z.coerce.number().int().positive().default(3001),
-  LOG_LEVEL: z
-    .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
-    .default('info'),
-  // No default on purpose: a fallback like localhost would let a
-  // misconfigured deployment boot and quietly talk to the wrong database.
-  DATABASE_URL: z
-    .string()
-    .min(1)
-    .refine((value) => /^postgres(ql)?:\/\//.test(value), {
-      message: 'must be a postgres:// or postgresql:// connection string',
-    }),
-  // On by default: a deployment that quietly stops deleting personal data is
-  // the failure that matters. Off for a dev machine on a shared database — a
-  // second container is already covered by the advisory lock.
-  JOBS_ENABLED: z.stringbool().default(true),
-})
+export const envSchema = z
+  .object({
+    NODE_ENV: z
+      .enum(['development', 'test', 'production'])
+      .default('development'),
+    PORT: z.coerce.number().int().positive().default(3001),
+    LOG_LEVEL: z
+      .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
+      .default('info'),
+    // No default on purpose: a fallback like localhost would let a
+    // misconfigured deployment boot and quietly talk to the wrong database.
+    DATABASE_URL: z
+      .string()
+      .min(1)
+      .refine((value) => /^postgres(ql)?:\/\//.test(value), {
+        message: 'must be a postgres:// or postgresql:// connection string',
+      }),
+    // On by default: a deployment that quietly stops deleting personal data is
+    // the failure that matters. Off for a dev machine on a shared database — a
+    // second container is already covered by the advisory lock.
+    JOBS_ENABLED: z.stringbool().default(true),
+
+    // MinIO. No defaults, for the same reason DATABASE_URL has none: a
+    // deployment pointed at the wrong bucket should not start.
+    MINIO_ENDPOINT: z.string().min(1),
+    MINIO_PORT: z.coerce.number().int().positive().default(9000),
+    MINIO_USE_SSL: z.stringbool().default(false),
+    MINIO_ACCESS_KEY: z.string().min(1),
+    MINIO_SECRET_KEY: z.string().min(1),
+    MINIO_BUCKET: z.string().min(1),
+
+    // Optional, unlike the rest — a developer has no Resend account, and
+    // without a key EmailService writes the message to the log instead of
+    // sending it. The refine below makes that a development-only affordance:
+    // production fails at boot rather than delivering notifications to stdout.
+    RESEND_API_KEY: z.string().min(1).optional(),
+    EMAIL_FROM: z.string().min(1).default('Taskflow <noreply@taskflow.local>'),
+  })
+  .refine(
+    (env) => env.NODE_ENV !== 'production' || Boolean(env.RESEND_API_KEY),
+    {
+      path: ['RESEND_API_KEY'],
+      message: 'is required when NODE_ENV=production',
+    },
+  )
 
 export type Env = z.infer<typeof envSchema>
 

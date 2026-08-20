@@ -2,8 +2,14 @@ import { describe, expect, it } from 'vitest'
 
 import { validateEnv } from './env'
 
-// The one variable with no default — every case below has to supply it.
-const required = { DATABASE_URL: 'postgres://app:app@localhost:5432/app' }
+// The variables with no default — every case below has to supply them.
+const required = {
+  DATABASE_URL: 'postgres://app:app@localhost:5432/app',
+  MINIO_ENDPOINT: 'localhost',
+  MINIO_ACCESS_KEY: 'minio',
+  MINIO_SECRET_KEY: 'minio12345',
+  MINIO_BUCKET: 'taskflow',
+}
 
 describe('validateEnv', () => {
   it('applies defaults when optional variables are absent', () => {
@@ -36,7 +42,31 @@ describe('validateEnv', () => {
 
   it('rejects a DATABASE_URL that is not a postgres connection string', () => {
     expect(() =>
-      validateEnv({ DATABASE_URL: 'mysql://app@localhost:3306/app' }),
+      validateEnv({
+        ...required,
+        DATABASE_URL: 'mysql://app@localhost:3306/app',
+      }),
     ).toThrow(/DATABASE_URL/)
+  })
+
+  it('lets a developer boot without a Resend key', () => {
+    // Without this, nobody without a Resend account can run the API at all.
+    expect(validateEnv({ ...required }).RESEND_API_KEY).toBeUndefined()
+  })
+
+  it('refuses to boot production without one', () => {
+    // The other half of the bargain: the fallback writes notifications to the
+    // log, which must never be what a real deployment does.
+    expect(() => validateEnv({ ...required, NODE_ENV: 'production' })).toThrow(
+      /RESEND_API_KEY/,
+    )
+
+    expect(() =>
+      validateEnv({
+        ...required,
+        NODE_ENV: 'production',
+        RESEND_API_KEY: 're_live_key',
+      }),
+    ).not.toThrow()
   })
 })

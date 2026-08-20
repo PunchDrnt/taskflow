@@ -1,8 +1,8 @@
 # Local development services.
 #
-# Phase 0 adds the api, web, minio and caddy services here. For now this
-# provides the two databases: one that survives restarts for development,
-# and a throwaway one for the integration suite.
+# Phase 0 adds the api, web and caddy services here. For now this provides
+# the two databases — one that survives restarts, one thrown away by the
+# integration suite — and MinIO.
 
 services:
   postgres:
@@ -43,5 +43,27 @@ services:
       timeout: 5s
       retries: 10
 
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minio12345}
+    ports:
+      - '${MINIO_PORT:-9000}:9000'
+      - '${MINIO_CONSOLE_PORT:-9001}:9001'
+    volumes:
+      # Its own volume, not a directory inside the database's. Files cannot be
+      # recovered from a database backup, so the two are backed up separately
+      # and must be able to be restored separately.
+      - minio-data:/data
+    healthcheck:
+      test: ['CMD', 'mc', 'ready', 'local']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
 volumes:
   postgres-data:
+  minio-data:
