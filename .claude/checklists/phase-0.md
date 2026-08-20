@@ -53,8 +53,13 @@
   - `is_system` + `password_hash` nullable — system user login ไม่ได้ในระดับ schema ไม่ใช่แค่ตกลงกันไว้
   - ⚠️ `ON DELETE RESTRICT` กันแถวนี้ไม่ได้ (อ้างตัวเอง ลบแล้วตัวอ้างหายพร้อมกัน) → ต้องมี trigger `BEFORE DELETE`
   - ทดสอบครบ 7 ทาง: system user ซ้ำ · system user มีรหัสผ่าน · `deleted_at` ไม่ตรง `status` · `created_by` ชี้ผี · `status` ผิดค่า · ลบ system user · อีเมลซ้ำ — ฟ้องหมดทุกข้อ
-- [ ] 🔒 `audit.logs` — `PARTITION BY RANGE (occurred_at)` + **`PRIMARY KEY (id, occurred_at)`** (Postgres บังคับให้ partition key อยู่ใน PK · `PRIMARY KEY (id)` เฉยๆ สร้างไม่ผ่าน)
+- [x] 🔒 `audit.logs` — `PARTITION BY RANGE (occurred_at)` + **`PRIMARY KEY (id, occurred_at)`** (Postgres บังคับให้ partition key อยู่ใน PK · `PRIMARY KEY (id)` เฉยๆ สร้างไม่ผ่าน — ลองแล้วได้ `lacks column "occurred_at"`)
+  - ไม่มี FK สักตัว รวม `actor_id` — log ต้องอยู่รอดแม้แถวที่มันอธิบายหายไป
+  - ไม่ใช้ base entity: `occurred_at` + `actor_id` ทำหน้าที่แทน `created_at`/`created_by` แล้ว ส่วน `updated_*` / `deleted_*` ไม่มีความหมายเพราะแถวไม่เคยถูกแก้หรือลบ
+  - สร้าง partition ล่วงหน้า 12 เดือน + `logs_default` รับท้าย ([เหตุผลและราคาของ DEFAULT](../docs/02-database.md#schema-audit))
 - [ ] Job สร้าง partition เดือนถัดไปล่วงหน้า
+  - [x] ฝั่ง DB พร้อมแล้ว — `audit.ensure_month_partition(date)` เรียกซ้ำได้ไม่มีผลข้างเคียง เหลือแค่ตัวตั้งเวลามาเรียก
+  - [ ] Alert เมื่อ `audit.logs_default` มีแถว — แปลว่า partition ขาด และเดือนนั้นจะสร้าง partition ไม่ได้จนกว่าจะย้ายออก
 - [ ] ตารางที่เหลือตาม [`02-database.md`](../docs/02-database.md#5-full-schema) — **ครบทุกตารางตั้งแต่รอบนี้** ยกเว้น `chat.*` (Phase 2)
 
 **ตรวจก่อนปิดข้อนี้**

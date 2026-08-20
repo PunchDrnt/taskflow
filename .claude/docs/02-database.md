@@ -426,7 +426,18 @@ logs
   --    audit.logs จึงเป็นตารางเดียวที่ไม่ได้ใช้ base entity ตรงๆ
   -- ห้ามลบ · archive หลัง 2 ปี
   -- index ตัวที่สองใช้กับ assignee picker (คนที่เพิ่ง assign ล่าสุด)
+  -- changes_json เป็น NOT NULL DEFAULT '{}' — action อย่าง 'created' ไม่มี diff
 ```
+
+**Partition — สร้างล่วงหน้า 12 เดือน + มี `DEFAULT` รับท้าย**
+
+`audit.ensure_month_partition(date)` สร้าง partition ของเดือนนั้นถ้ายังไม่มี · เรียกซ้ำได้ไม่มีผลข้างเคียง · job รายเดือนแค่เรียกฟังก์ชันนี้ ไม่ต้องไปคำนวณชื่อกับขอบเขตเองในโค้ด
+
+**`audit.logs_default` มีไว้เพราะ audit row เขียนใน transaction เดียวกับ business logic** — แถวที่ไม่มี partition ให้ลงไม่ได้แค่ทำ log หาย แต่**ทำให้งานของผู้ใช้ล้มไปด้วย** · partition ที่ลืมสร้างจึงต้องเป็นเรื่องที่รอดได้ ไม่ใช่เรื่องที่ทำระบบเขียนไม่ได้
+
+> ⚠️ ราคาของ `DEFAULT`: ตราบใดที่ยังมีแถวของเดือนไหนค้างอยู่ใน `logs_default` จะ **สร้าง partition ของเดือนนั้นไม่ได้** (Postgres ต้องพิสูจน์ว่าไม่มีแถวใน default ที่ควรอยู่ใน range ใหม่) · ขึ้น error ชัดเจนว่า `would be violated by some row` ไม่ได้เงียบ
+>
+> **ถือว่ามีแถวใน `logs_default` = alert** ต้องย้ายออกก่อนสร้าง partition ของเดือนนั้น
 
 ### Schema `discussion`
 
