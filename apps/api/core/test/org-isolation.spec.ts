@@ -185,6 +185,25 @@ describe.skipIf(!hasTestDatabase)('cross-org isolation', () => {
     expect(row?.deleted_at).not.toBeNull()
   })
 
+  it('hides a soft-deleted row from subsequent reads', async () => {
+    const project = await asOrg(orgA, () =>
+      projects.save(projects.create({ name: 'disappearing' })),
+    )
+
+    expect(
+      await asOrg(orgA, () => projects.findById(project.id)),
+    ).not.toBeNull()
+    await asOrg(orgA, () => projects.softDeleteById(project.id))
+
+    // @DeleteDateColumn makes TypeORM add "deleted_at IS NULL" to reads, but
+    // softDeleteById sets the column through update() rather than softDelete(),
+    // so it is worth proving the two still agree.
+    expect(await asOrg(orgA, () => projects.findById(project.id))).toBeNull()
+    expect(
+      (await asOrg(orgA, () => projects.find())).map((p) => p.name),
+    ).not.toContain('disappearing')
+  })
+
   it('fills createdBy from the context when the caller omits it', async () => {
     const project = await asOrg(orgA, () =>
       projects.save(projects.create({ name: 'unattributed' })),
