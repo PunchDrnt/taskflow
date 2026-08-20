@@ -14,6 +14,58 @@ import {
 import { requireRequestContext } from './request-context'
 
 /**
+ * A SelectQueryBuilder that cannot drop the org condition.
+ *
+ * `where` replaces every condition set so far; `orWhere` widens past them.
+ * Both would silently unscope a query that looks scoped.
+ */
+export type ScopedQueryBuilder<T extends ObjectLiteral> = Omit<
+  SelectQueryBuilder<T>,
+  'where' | 'orWhere'
+>
+
+/**
+ * Wraps a builder so `where` and `orWhere` throw, at every hop of a chain.
+ *
+ * The type-level omission only holds for the first call — `andWhere` returns
+ * `this`, which TypeScript resolves back to the full builder. Re-wrapping
+ * anything a method hands back keeps the guarantee for the rest of the chain.
+ */
+function guardScopedBuilder<T extends ObjectLiteral>(
+  builder: SelectQueryBuilder<T>,
+  alias: string,
+): ScopedQueryBuilder<T> {
+  const proxy: SelectQueryBuilder<T> = new Proxy(builder, {
+    get(target, property) {
+      if (property === 'where' || property === 'orWhere') {
+        return () => {
+          throw new Error(
+            `${String(property)}() would drop the organisation condition from ` +
+              `this query on "${alias}". Use andWhere (with Brackets for OR), ` +
+              'or createUnscopedQueryBuilder if the query really must cross orgs.',
+          )
+        }
+      }
+
+      const value = Reflect.get(target, property, target) as unknown
+      if (typeof value !== 'function') return value
+
+      return (...args: unknown[]) => {
+        const result = (value as (...a: unknown[]) => unknown).apply(
+          target,
+          args,
+        )
+        // Builder methods return themselves for chaining; hand back the proxy
+        // so the guard survives.
+        return result === target ? proxy : result
+      }
+    },
+  })
+
+  return proxy
+}
+
+/**
  * A repository that cannot return another organisation's rows.
  *
  * Every read merges `org_id = <current org>` into the where clause and every
@@ -173,16 +225,41 @@ export class OrgScopedRepository<T extends ObjectLiteral> {
   }
 
   /**
-   * A query builder with the org condition already applied.
+   * A query builder with the org condition already applied, and `where` /
+   * `orWhere` taken away.
    *
-   * ⚠️ Chain with `andWhere`. Calling `.where()` on the returned builder
-   * *replaces* the org condition, which is the one way to defeat this class by
-   * accident.
+   * Those two are the only way to defeat this class by accident: `.where()`
+   * *replaces* every condition set so far, org included, and `.orWhere()`
+   * widens past it. `andWhere` and `Brackets` cover everything they were
+   * needed for.
+   *
+   * Guarded twice, because neither alone is enough. The type omits them, which
+   * catches the mistake where it is normally made — the first call. But
+   * `andWhere` is declared as returning `this`, so the omission does not
+   * survive a chain, and a Proxy re-applies it at every hop and throws if
+   * either is reached at runtime.
+   *
+   * Use `createUnscopedQueryBuilder` when a query genuinely has to cross orgs.
    */
-  createQueryBuilder(alias: string): SelectQueryBuilder<T> {
-    return this.repository
+  createQueryBuilder(alias: string): ScopedQueryBuilder<T> {
+    const builder = this.repository
       .createQueryBuilder(alias)
       .where(`${alias}.${this.scopeColumn} = :__orgId`, { __orgId: this.orgId })
+
+    return guardScopedBuilder(builder, alias)
+  }
+
+  /**
+   * A query builder with no org condition at all.
+   *
+   * Named so that it is obvious in review and greppable in the codebase. Every
+   * caller should be able to say which org's data it is reaching for and why
+   * the scoped builder could not do it — a reporting query spanning orgs, or
+   * the Phase 7 back-office. If the answer is "it was easier", it is the wrong
+   * method.
+   */
+  createUnscopedQueryBuilder(alias: string): SelectQueryBuilder<T> {
+    return this.repository.createQueryBuilder(alias)
   }
 }
 

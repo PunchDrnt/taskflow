@@ -213,6 +213,54 @@ describe.skipIf(!hasTestDatabase)('cross-org isolation', () => {
     expect(project.updatedBy).toBe(SYSTEM_USER)
   })
 
+  it('rejects .where() on the scoped builder, at every hop of a chain', async () => {
+    await asOrg(orgA, () => {
+      const builder = projects.createQueryBuilder('project')
+
+      // The type omits it; this is the runtime half, which is what still
+      // holds after andWhere returns `this` and TypeScript stops helping.
+      expect(() =>
+        (builder as unknown as { where: (c: string) => unknown }).where(
+          '1 = 1',
+        ),
+      ).toThrow(/would drop the organisation condition/)
+
+      const chained = builder.andWhere('project.name IS NOT NULL')
+      expect(() =>
+        (chained as unknown as { where: (c: string) => unknown }).where(
+          '1 = 1',
+        ),
+      ).toThrow(/would drop the organisation condition/)
+
+      expect(() =>
+        (chained as unknown as { orWhere: (c: string) => unknown }).orWhere(
+          '1 = 1',
+        ),
+      ).toThrow(/would drop the organisation condition/)
+    })
+  })
+
+  it('still runs a normal chained query through the guard', async () => {
+    const rows = await asOrg(orgA, () =>
+      projects
+        .createQueryBuilder('project')
+        .andWhere('project.name IS NOT NULL')
+        .orderBy('project.name', 'ASC')
+        .getMany(),
+    )
+
+    expect(rows.every((project) => project.orgId === orgA.id)).toBe(true)
+  })
+
+  it('the unscoped builder is the only way across orgs, and says so by name', async () => {
+    const all = await asOrg(orgA, () =>
+      projects.createUnscopedQueryBuilder('project').getMany(),
+    )
+
+    const orgIds = new Set(all.map((project) => project.orgId))
+    expect(orgIds.size).toBeGreaterThan(1)
+  })
+
   it('refuses to query at all with no request context', () => {
     // Synchronously, at the call site — not as a rejected promise somewhere
     // later, and never as an unscoped query that quietly returns everything.

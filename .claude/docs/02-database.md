@@ -415,6 +415,8 @@ tasks
   parent_task_id      uuid       null · FK → task.tasks (self)
   depth               int        default 0 · คำนวณตอน insert (parent.depth + 1)
                                  MAX_TASK_DEPTH = 1 ใน Phase 2 (2 ชั้น) · 2 ใน Phase 5 (3 ชั้น)
+                                 บังคับสองฝั่ง: CHECK ใน DB + constant ใน @repo/shared
+                                 ขยับเพดาน = ต้องเขียน migration ไม่ใช่แก้ constant อย่างเดียว
 
   completed_by        uuid       null · reset เป็น null เมื่อเปลี่ยนกลับจาก done
   completed_at        timestamptz  null · reset พร้อมกัน

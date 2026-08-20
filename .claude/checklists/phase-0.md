@@ -58,6 +58,7 @@
 - [x] `CHECK` บนคอลัมน์ที่ partial index อ่านค่าตรง ๆ ([เหตุผล](../docs/02-database.md#check-vs-enum)) — `users` · `sprints` · `outbox` `.status`
 - [x] ไม่มี `CREATE TYPE ... AS ENUM` ที่ไหนเลย
 - [x] Composite index ขึ้นต้นด้วย `org_id` — ยกเว้น `outbox_pending_idx` ที่ worker ตั้งใจสแกนข้าม org
+- [x] `tasks.depth` มีเพดานทั้งสองฝั่ง — CHECK ใน DB + `MAX_TASK_DEPTH` ใน `@repo/shared` · [`test/schema-invariants.spec.ts`](../../apps/api/core/test/schema-invariants.spec.ts) เช็คว่าสองฝั่งตรงกัน (เลขใน migration เขียนตรง ๆ ไม่ import — migration ที่เปลี่ยนความหมายเมื่อมีคนแก้ constant ไม่ใช่บันทึกของสิ่งที่ทำไปแล้ว)
 
 ## 3. Base entity + org scoping
 
@@ -93,6 +94,7 @@
 - [ ] Test: invariant ที่ app บังคับ (DB ไม่ได้) — ต้องมีใน Phase 1:
   - [ ] org ต้องมี role='owner' ≥1 แถวเสมอ
   - [ ] project ต้องมี status.is_done_type=true ≥1 อัน
+  - [ ] `tasks.completed_at`/`completed_by` ต้องมีค่า **ก็ต่อเมื่อ** status ของ task นั้นเป็น `is_done_type` — ข้ามตาราง CHECK ไม่ได้ · ต้องคุมทั้งตอนเปลี่ยน status ของ task และตอนแก้ `is_done_type` ของ status ที่มี task ใช้อยู่
 - [ ] 🔒 **`AuditService` เขียน audit row ใน transaction เดียวกับ business logic** ไม่ผ่าน event emitter ([เหตุผล](../docs/01-architecture.md#how-the-activity-log-is-written))
 - [ ] `@nestjs/event-emitter` ติดตั้งไว้ใช้กับ **notification เท่านั้น**
 - [ ] `AuditService` เปิด method เฉพาะ ตั้งชื่อเป็นภาษาของ audit (`getRecentActorTargets` ไม่ใช่ `getRecentAssignees`)

@@ -60,6 +60,13 @@ export class CreateTask1787190804974 implements MigrationInterface {
           CHECK ((parent_task_id IS NULL) = (depth = 0)),
         CONSTRAINT tasks_depth_non_negative_check
           CHECK (depth >= 0),
+        -- Matches MAX_TASK_DEPTH in @repo/shared: 1 means two levels, a task
+        -- and a sub-task. Raising it is a migration, not a constant edit —
+        -- spelled out here rather than imported, because a migration that
+        -- changes meaning when someone edits a shared file is not a record of
+        -- what was done. A test asserts the two still agree.
+        CONSTRAINT tasks_depth_within_limit_check
+          CHECK (depth <= 1),
         -- A sub-task rides its parent's sprint rather than holding its own.
         CONSTRAINT tasks_subtask_has_no_sprint_check
           CHECK (depth = 0 OR sprint_id IS NULL),
