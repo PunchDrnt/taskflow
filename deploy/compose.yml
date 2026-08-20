@@ -1,23 +1,34 @@
 # The deployable stack. Everything reaches the outside world through Caddy;
 # no other service publishes a port.
 #
-#     docker compose -f docker-compose.prod.yml up -d --build
+#     cd deploy && cp .env.example .env    # then fill it in
+#     docker compose pull && docker compose up -d
 #
-# Deliberately a separate file rather than an override on docker-compose.yml.
-# Compose can add a service but cannot remove one, and the development file
-# carries two that must never run here — postgres-test, which truncates
-# tables, and garage-ui, which holds the admin token. The services these two
-# files share are configured differently anyway: nothing below publishes a
-# port, and Postgres runs the application as a role it creates rather than as
-# the superuser.
+# No flags: `compose.yml` and a sibling `.env` are what docker compose picks up
+# on its own. Everything this mounts sits beside it, so deploy/ plus that .env
+# is what a server needs and nothing else from the repository.
+#
+#   config/  mounted read-only, and re-read on the next `up -d`
+#   init/    run once against an empty volume, and ignored ever after
+#
+# Both `image:` and `build:` are set on the three app services. The server
+# pulls what CI already built and tested; `up -d --build` still works on a
+# machine with the source, which is how the stack is smoke-tested locally.
+# IMAGE_TAG is what makes a rollback possible: CI tags every image with the
+# commit SHA as well as latest, so going back is setting it and pulling.
+#
+# A separate file from the repository root's, not an override: Compose can add
+# a service but never remove one, and the development file carries two that
+# must not run here — postgres-test truncates tables, garage-ui holds the
+# admin token.
 
 services:
   postgres:
     image: postgres:18-alpine
     restart: unless-stopped
     environment:
-      # The superuser. The application does not use it — postgres-init.sh
-      # creates APP_DB_USER, and DATABASE_URL names that one.
+      # The superuser. The application connects as APP_DB_USER instead,
+      # which init/postgres.sh creates.
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
@@ -25,9 +36,8 @@ services:
       APP_DB_PASSWORD: ${APP_DB_PASSWORD}
     volumes:
       - postgres-data:/var/lib/postgresql
-      # Runs once, on an empty data directory. Changing it later does nothing
-      # until the volume is gone.
-      - ./docker/postgres-init.sh:/docker-entrypoint-initdb.d/10-app-role.sh:ro
+      # Runs once, on an empty data directory.
+      - ./init/postgres.sh:/docker-entrypoint-initdb.d/10-app-role.sh:ro
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER}']
       interval: 5s
@@ -41,9 +51,8 @@ services:
       GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET}
       GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN}
     volumes:
-      - ./docker/garage.toml:/etc/garage.toml:ro
-      # Separate from the database's, and from each other. A database backup
-      # cannot restore a file, so the two are backed up and restored apart.
+      - ./config/garage.toml:/etc/garage.toml:ro
+      # Separate from the database's: a database backup cannot restore a file.
       - garage-meta:/var/lib/garage/meta
       - garage-data:/var/lib/garage/data
     healthcheck:
@@ -65,18 +74,17 @@ services:
       S3_SECRET_KEY: ${S3_SECRET_KEY}
       S3_BUCKET: ${S3_BUCKET}
     volumes:
-      - ./docker/garage-init.sh:/init.sh:ro
+      - ./init/garage.sh:/init.sh:ro
     entrypoint: ['sh', '/init.sh']
     restart: on-failure
 
-  # Migrations as their own one-shot container, for the reason `migrationsRun`
-  # is false in data-source.options.ts: two API replicas starting together
-  # would race on the DDL. This runs to completion before either starts.
-  #
-  # It needs DATABASE_URL and nothing else — see data-source.ts.
+  # One-shot, for the reason `migrationsRun` is false: two API replicas
+  # starting together would race on the DDL. Needs DATABASE_URL and nothing
+  # else — see data-source.ts.
   api-migrate:
+    image: ${IMAGE_PREFIX:-ghcr.io/punchdrnt/taskflow}-api:${IMAGE_TAG:-latest}
     build:
-      context: .
+      context: ..
       dockerfile: apps/api/core/Dockerfile
     depends_on:
       postgres:
@@ -94,8 +102,9 @@ services:
     restart: on-failure
 
   api:
+    image: ${IMAGE_PREFIX:-ghcr.io/punchdrnt/taskflow}-api:${IMAGE_TAG:-latest}
     build:
-      context: .
+      context: ..
       dockerfile: apps/api/core/Dockerfile
     restart: unless-stopped
     depends_on:
@@ -109,8 +118,7 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
       DATABASE_URL: postgresql://${APP_DB_USER}:${APP_DB_PASSWORD}@postgres:5432/${POSTGRES_DB}
       JOBS_ENABLED: ${JOBS_ENABLED:-true}
-      # Inside the network, so Garage's own ports rather than the 4xxx the
-      # development file publishes.
+      # Inside the network: Garage's own port, not the 4xxx dev publishes.
       S3_ENDPOINT: garage
       S3_PORT: 3900
       S3_USE_SSL: 'false'
@@ -120,7 +128,7 @@ services:
       S3_REGION: ${S3_REGION:-us-east-1}
       RESEND_API_KEY: ${RESEND_API_KEY}
       EMAIL_FROM: ${EMAIL_FROM}
-      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_DSN: ${SENTRY_DSN}
       SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-production}
     healthcheck:
       test:
@@ -136,16 +144,23 @@ services:
       start_period: 20s
 
   web:
+    image: ${IMAGE_PREFIX:-ghcr.io/punchdrnt/taskflow}-web:${IMAGE_TAG:-latest}
     build:
-      context: .
+      context: ..
       dockerfile: apps/web/client/Dockerfile
+      # Build arguments, not environment: NEXT_PUBLIC_* is baked into the
+      # browser bundle when it is compiled. Changing either one needs --build.
+      args:
+        NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_SENTRY_DSN:-}
+        NEXT_PUBLIC_SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-production}
     restart: unless-stopped
     environment:
       NODE_ENV: production
       PORT: 3000
       HOSTNAME: 0.0.0.0
-      NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_SENTRY_DSN:-}
-      NEXT_PUBLIC_SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-production}
+      # The server half reads these at runtime, unlike the two above.
+      SENTRY_DSN: ${SENTRY_DSN}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-production}
 
   caddy:
     image: caddy:2-alpine
@@ -160,9 +175,9 @@ services:
       - '${HTTPS_PORT:-443}:443'
       - '${HTTPS_PORT:-443}:443/udp'
     volumes:
-      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
-      # Certificates and the ACME account key. Losing this volume means
-      # re-issuing every certificate, and Let's Encrypt rate-limits that.
+      - ./config/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Certificates and the ACME account key. Losing it means re-issuing
+      # every certificate, which Let's Encrypt rate-limits.
       - caddy-data:/data
       - caddy-config:/config
 

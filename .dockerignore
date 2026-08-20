@@ -15,12 +15,14 @@ node_modules
 **/*.log
 coverage
 **/coverage
+backups
 .claude
 .impeccable
 .vscode
 .idea
 .DS_Store
 docker-compose*.yml
+deploy
 **/Dockerfile
 .dockerignore
 README.md

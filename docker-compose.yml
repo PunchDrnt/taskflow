@@ -56,7 +56,8 @@ services:
       # Host side only: inside the network Garage keeps its own 3900/3903.
       - '${S3_PORT:-4900}:3900'
     volumes:
-      - ./docker/garage.toml:/etc/garage.toml:ro
+      # Shared with deploy/compose.yml, so dev and the server cannot drift.
+      - ./deploy/config/garage.toml:/etc/garage.toml:ro
       # Metadata and data on separate volumes, both apart from the database's.
       # Files cannot be recovered from a database backup, so the two are backed
       # up separately and must be restorable separately.
@@ -95,7 +96,7 @@ services:
       S3_SECRET_KEY: ${S3_SECRET_KEY}
       S3_BUCKET: ${S3_BUCKET}
     volumes:
-      - ./docker/garage-init.sh:/init.sh:ro
+      - ./deploy/init/garage.sh:/init.sh:ro
     entrypoint: ['sh', '/init.sh']
     restart: on-failure
 

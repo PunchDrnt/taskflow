@@ -13,6 +13,9 @@ node_modules/
 # builds
 .next/
 dist/
+
+# backups written by docker/backup.sh
+backups/
 build/
 out/
 next-env.d.ts
