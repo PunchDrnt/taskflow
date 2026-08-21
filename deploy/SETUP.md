@@ -343,6 +343,42 @@ secret and the server are holding different keys.
 To revoke this key later, delete its line from `~/.ssh/authorized_keys` on the
 server. Nothing else is affected.
 
+### Checking what you already have
+
+```bash
+# Every key file, and its permissions
+ls -la ~/.ssh/
+
+# Fingerprint, type and bit length of each public key
+for f in ~/.ssh/*.pub; do ssh-keygen -lf "$f"; done
+
+# A key with no .pub beside it — a .pem from a provider, usually. This
+# derives the public half, which is not secret
+ssh-keygen -yf ~/.ssh/some-key.pem
+
+# ...and its fingerprint and type
+ssh-keygen -lf ~/.ssh/some-key.pem
+
+# What the agent is holding. "no identities" is normal on macOS unless
+# something added them
+ssh-add -l
+
+# Which key ssh would actually offer to a host, after ~/.ssh/config is
+# applied. Answers "why is it using that one" without connecting
+ssh -G <host> | grep -iE '^(hostname|user|identityfile)'
+
+# Watch the negotiation, including every key offered and which was accepted
+ssh -v <host> 2>&1 | grep -iE 'offering|accepted|authenticated'
+
+# Anything a private key should not be
+find ~/.ssh -maxdepth 1 -type f ! -name '*.pub' ! -name 'known_hosts*' \
+     ! -name 'config' -perm +077
+```
+
+`ED25519` and `RSA 2048` both appear in the wild. RSA 2048 still works;
+ed25519 is shorter, faster and what `ssh-keygen` gives you by default now,
+which is why the keys in this document are all ed25519.
+
 ## 9. GitHub settings
 
 **Settings → Secrets and variables → Actions → Secrets**
