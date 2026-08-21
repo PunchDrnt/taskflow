@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { MAX_TASK_DEPTH } from '@repo/shared'
 
+import { SYSTEM_PERMISSIONS } from '../src/permission/system-permissions'
 import { SYSTEM_USER_ID } from '../src/shared/system-user'
 import { createMigratedTestDataSource, hasTestDatabase } from './database'
 
@@ -56,5 +57,19 @@ describe.skipIf(!hasTestDatabase)('schema invariants', () => {
     )) as { id: string }[]
 
     expect(seeded?.id).toBe(SYSTEM_USER_ID)
+  })
+
+  it('seeds exactly the system permission keys the code names', async () => {
+    // Same shape as above: the migration lists the keys literally so editing
+    // SYSTEM_PERMISSIONS cannot change what it already did on a live
+    // database. Nothing reads these until Phase 7, which is exactly why a
+    // key added to one side and not the other would go unnoticed for months.
+    const rows = (await dataSource.query(
+      `SELECT key FROM identity.permissions WHERE deleted_at IS NULL ORDER BY key`,
+    )) as { key: string }[]
+
+    expect(rows.map((row) => row.key)).toEqual(
+      [...Object.values(SYSTEM_PERMISSIONS)].sort(),
+    )
   })
 })
