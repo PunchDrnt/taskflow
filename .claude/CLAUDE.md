@@ -41,7 +41,7 @@ The full list with rationale is in [`docs/00-overview.md`](./docs/00-overview.md
 - Primary keys are UUIDs; `sort_order` is `text COLLATE "C"` with fractional indexing
 - One `external_channel_id` maps to exactly one org
 
-Also settled, and easy to get wrong: DB is `snake_case` while TypeScript is `camelCase` (handled once by TypeORM's naming strategy, not per-column); writes get transactions, reads don't; RLS is deliberately deferred to Phase 2.
+Also settled, and easy to get wrong: DB is `snake_case` while TypeScript is `camelCase` (handled once by TypeORM's naming strategy, not per-column); writes get transactions, reads don't; RLS is deliberately deferred to Phase 2; and the frontend and API share one origin through Caddy (`app.x.com/api`), which is what makes `SameSite=Lax` sufficient without a CSRF token — splitting them onto separate subdomains later moves four things at once, and doing the first of them alone opens a hole, so keep the cookie attributes in one place when auth is written (docs/01-architecture.md#csrf).
 
 ## Domain vocabulary
 

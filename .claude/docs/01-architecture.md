@@ -741,5 +741,29 @@ POST /auth/reset-password { code, newPassword, confirmNewPassword }
 
 ### CSRF
 
-- `SameSite=Lax` + วาง frontend/API ใต้ domain เดียวกันผ่าน Caddy (`app.x.com/api`) ← แนะนำ ง่ายที่สุด
-- ถ้าแยก subdomain (`app.x.com` → `api.x.com`) ต้องเพิ่ม double-submit CSRF token
+**ตัดสินแล้ว: origin เดียว** — frontend กับ API อยู่ใต้ domain เดียวกันผ่าน Caddy
+(`app.x.com` และ `app.x.com/api`) · ทำจริงแล้วใน
+[`deploy/config/Caddyfile`](../../deploy/config/Caddyfile) ซึ่ง `handle_path /api/*`
+ตัด prefix ทิ้งก่อนส่งต่อ ทำให้ API ไม่รู้ตัวว่าถูก mount ใต้ path
+
+ผลคือ **`SameSite=Lax` พอในตัวมันเอง ไม่ต้องมี CSRF token** ทุก request จาก
+frontend เป็น same-site
+
+> เดิมข้อนี้เขียนเป็นข้อเสนอ ("แนะนำ ง่ายที่สุด") ทั้งที่โค้ดเลือกไปแล้ว · การแยก
+> subdomain ไม่ใช่สิ่งที่เกิดกับเรา — เราเขียน Caddyfile เอง ถ้าจะแยกคือเลือกเอง
+
+**ถ้าวันหนึ่งจะแยกเป็น `api.x.com` จริง ต้องขยับสี่อย่างพร้อมกัน**
+
+1. cookie `SameSite=Lax` → `None; Secure` — ไม่งั้น browser ไม่ส่ง cookie ไปกับ
+   fetch ข้าม site เลย และ **auth พังทั้งอัน** ไม่ใช่แค่ CSRF อ่อนลง
+2. CORS ฝั่ง API ระบุ origin ตรง ๆ + `Allow-Credentials: true`
+3. double-submit CSRF token — ออกตอน login, ตรวจทุก request ที่เขียนข้อมูล
+4. frontend แนบ header นั้นให้ทุก mutation
+
+> ⚠️ **ข้อ 1 ทำคนเดียวแล้วค่อยตามข้อ 3 ทีหลัง = เปิดช่อง CSRF ทิ้งไว้** ซึ่งเป็นลำดับ
+> ที่คนทำตอนรีบพอดี เพราะข้อ 1 อย่างเดียวก็ทำให้ login กลับมาทำงาน · สี่ข้อนี้เป็น
+> ชุดเดียวกัน ไม่ใช่ backlog สี่ใบ
+
+**เพราะงั้นตอนเขียน auth (Phase 1): attribute ของ cookie ต้องอยู่ที่เดียว** พร้อม
+test ที่ปักค่าไว้ · การเปลี่ยนใจทีหลังจะได้เป็นการแก้จุดเดียวที่เห็นชัดใน diff
+ไม่ใช่ไล่หาว่ามีกี่ที่ที่ set cookie
