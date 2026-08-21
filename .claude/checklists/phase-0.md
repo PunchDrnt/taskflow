@@ -37,12 +37,12 @@
 - [x] `002` schema ทั้ง 11 ตัว
 - [x] 🔒 `003` `identity.users` + seed system user — `is_system` · `password_hash` NULL · trigger กันลบ
 - [x] 🔒 `004` `audit.logs` — `PARTITION BY RANGE (occurred_at)` + **`PRIMARY KEY (id, occurred_at)`** · partition ล่วงหน้า 12 เดือน + `logs_default`
-- [x] ตารางที่เหลือตาม [`02-database.md`](../docs/02-database.md#5-full-schema) ยกเว้น `chat.*` (Phase 2)
+- [x] ตารางที่เหลือตาม [`02-database.md`](../docs/02-database.md#5-full-schema) ยกเว้น `chat.*` (Phase 2) และ `identity.oauth_accounts` (Phase 1 — migrate พร้อมโค้ด Google login)
 - [x] Test กัน entity หลุดจาก migration — [`test/schema-drift.spec.ts`](../../apps/api/core/test/schema-drift.spec.ts)
 - [x] Job สร้าง partition เดือนถัดไป — cron `audit-partitions` 03:05 เติมให้ครบ 12 เดือนล่วงหน้าทุกวัน ([`src/maintenance/`](../../apps/api/core/src/maintenance/))
-- [x] Alert เมื่อ `audit.logs_default` มีแถว — ตอนนี้เป็น log level `error` · กลายเป็น alert จริงเมื่อ Sentry เข้าใน §7
+- [x] Alert เมื่อ `audit.logs_default` มีแถว — `alerts.condition()` เข้า Sentry แล้ว (§7 ทำไปแล้ว) · log บรรทัดเดิมยังอยู่
 
-> **28 ตาราง · 10 schema · 12 migration** — revert ทั้งหมดแล้วเหลือ 0 ตาราง 0 schema 0 extension · run ใหม่ได้ 28 เท่าเดิม
+> **28 ตาราง · 10 schema · 12 migration (+1 seed)** — revert ทั้งหมดแล้วเหลือ 0 ตาราง 0 schema 0 extension · run ใหม่ได้ 28 เท่าเดิม · `02-database.md` ระบุ 29 ตาราง ส่วนที่ต่างคือ `identity.oauth_accounts` ที่ตั้งใจเลื่อนไป Phase 1
 
 **ตรวจก่อนปิดข้อนี้** — รันด้วย query กับ DB จริงแล้วทุกข้อ
 
@@ -81,7 +81,7 @@
 - [x] `@SkipOrgScope()` decorator สำหรับ endpoint ที่ต้องข้ามจริงๆ
 - [x] 🔒 **Integration test: query จาก org A ต้องมองไม่เห็นข้อมูล org B** — [`test/org-isolation.spec.ts`](../../apps/api/core/test/org-isolation.spec.ts)
   - [x] โครง integration test — [`test/database.ts`](../../apps/api/core/test/database.ts) reset DB แล้วรัน migration ให้เองทุกครั้ง
-- [x] Entity ครบทั้ง 28 ตาราง (ยกเว้น `chat.*` ที่เป็น Phase 2) — drift test คุมทั้ง schema แล้ว
+- [x] Entity ครบทั้ง 28 ตาราง (ยกเว้น `chat.*` = Phase 2 และ `identity.oauth_accounts` = Phase 1) — drift test คุมทั้ง schema แล้ว
   - เจอ 10 จุดตอนใส่ครบ **ไม่มีข้อไหนเป็นชื่อหรือ type ผิดเลย** ทั้งหมดเป็นเรื่อง `DEFAULT` ที่ entity ไม่ได้ประกาศให้ตรง
   - `jsonb` ใช้ `{ default: {} }` ไม่ใช่ `() => "'{}'::jsonb"` · คอลัมน์ที่ DB มี default ต้องประกาศฝั่ง entity ด้วย
   - `audit.logs.id` ต้องเป็น `@PrimaryGeneratedColumn('uuid')` คู่กับ `@PrimaryColumn` ของ `occurred_at` — ถ้าใส่ `@PrimaryColumn` + default เอง schema builder จะเสนอ drop-then-set วนไม่จบ

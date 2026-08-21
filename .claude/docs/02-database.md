@@ -18,7 +18,7 @@
 
 | Schema         | ตาราง                                                                                    | Module          |
 | -------------- | ---------------------------------------------------------------------------------------- | --------------- |
-| `identity`     | users, sessions, password_reset_tokens, roles, permissions, role_permissions, user_roles | `identity/`     |
+| `identity`     | users, sessions, password_reset_tokens, roles, permissions, role_permissions, user_roles · oauth_accounts _(ยังไม่สร้าง)_ | `identity/`     |
 | `organization` | organizations, members, teams, team_members                                              | `organization/` |
 | `project`      | projects, members, statuses, sprints                                                     | `project/`      |
 | `task`         | tasks, assignees                                                                         | `task/`         |
@@ -302,7 +302,8 @@ password_reset_tokens
   used_at             timestamptz null   ใช้ได้ครั้งเดียว
   CREATE INDEX ON identity.password_reset_tokens (token_hash) WHERE used_at IS NULL;
 
-oauth_accounts                           -- 1 แถว = 1 provider ที่ user คนนั้นผูกไว้
+oauth_accounts        ⚠ ยังไม่สร้าง — migrate ตอน Phase 1 พร้อมโค้ด Google login
+                      -- 1 แถว = 1 provider ที่ user คนนั้นผูกไว้
   user_id             uuid  FK → identity.users · ON DELETE CASCADE
   provider            text        'google' (เผื่อ 'line' ทีหลัง)
   provider_user_id    text        `sub` ที่ provider ให้มา — ไม่ใช่อีเมล เพราะอีเมลเปลี่ยนได้
@@ -316,6 +317,8 @@ oauth_accounts                           -- 1 แถว = 1 provider ที่ u
   CREATE UNIQUE INDEX ON identity.oauth_accounts (user_id, provider)
     WHERE deleted_at IS NULL;
 ```
+
+**ตารางนี้ยังไม่มีในฐานข้อมูล** — ต่างจาก `identity.roles` / `permissions` / `role_permissions` / `user_roles` ที่ migrate ไว้ตั้งแต่ Phase 0 ทั้งที่ไม่มีใครอ่านจนถึง Phase 7 · เหตุผลที่ไม่ทำแบบเดียวกัน: สี่ตารางนั้นถูก seed ด้วย migration ตั้งแต่แรก (`SYSTEM_PERMISSIONS`) ส่วนตารางนี้ว่างเปล่าจนกว่าจะมีคนกดล็อกอินด้วย Google จริง · schema ข้างบนคือข้อตกลงที่ตัดสินแล้ว ไม่ใช่ร่าง — Phase 1 เขียน migration ตามนี้ได้เลยโดยไม่ต้องออกแบบใหม่
 
 **ไม่มีคอลัมน์เก็บ access / refresh token ของ provider** — Taskflow ใช้แค่ identity ตอน login ไม่ได้เรียก API ของ Google ต่อ · เก็บไว้คือถือ credential ของคนอื่นที่ไม่ได้ใช้
 
