@@ -301,7 +301,27 @@ password_reset_tokens
   expires_at          timestamptz   +10 นาที
   used_at             timestamptz null   ใช้ได้ครั้งเดียว
   CREATE INDEX ON identity.password_reset_tokens (token_hash) WHERE used_at IS NULL;
+
+oauth_accounts                           -- 1 แถว = 1 provider ที่ user คนนั้นผูกไว้
+  user_id             uuid  FK → identity.users · ON DELETE CASCADE
+  provider            text        'google' (เผื่อ 'line' ทีหลัง)
+  provider_user_id    text        `sub` ที่ provider ให้มา — ไม่ใช่อีเมล เพราะอีเมลเปลี่ยนได้
+  provider_email      text        อีเมลฝั่ง provider ตอน link · ไว้สืบย้อน ไม่ใช่ตัวจับคู่
+
+  CHECK (provider IN ('google'))
+  -- กัน Google account เดียวถูกอ้างโดยสอง user — ถ้าไม่มี คือช่องยึดบัญชี
+  CREATE UNIQUE INDEX ON identity.oauth_accounts (provider, provider_user_id)
+    WHERE deleted_at IS NULL;
+  -- 1 คน ผูก provider ละบัญชีเดียว · ผ่อนทีหลังแค่ drop index
+  CREATE UNIQUE INDEX ON identity.oauth_accounts (user_id, provider)
+    WHERE deleted_at IS NULL;
 ```
+
+**ไม่มีคอลัมน์เก็บ access / refresh token ของ provider** — Taskflow ใช้แค่ identity ตอน login ไม่ได้เรียก API ของ Google ต่อ · เก็บไว้คือถือ credential ของคนอื่นที่ไม่ได้ใช้
+
+`ON DELETE CASCADE` ต่างจาก `created_by` ที่เป็น RESTRICT ทั้งระบบ เพราะแถวนี้ไม่ใช่ประวัติ — มันคือ "ปัจจุบันผูกอยู่กับอะไร" · user ถูก anonymize เมื่อไหร่ การผูกกับ Google ต้องหายไปด้วย ไม่ใช่ค้างอยู่ให้ล็อกอินกลับเข้ามาได้
+
+จับคู่ด้วย `provider_user_id` ไม่ใช่อีเมล — คนเปลี่ยนอีเมลใน Google ได้ แต่ `sub` คงที่ตลอด · อีเมลใช้แค่ตอน**ครั้งแรก**ที่ยังไม่มีแถวนี้ เพื่อหา user เดิมมา link ([policy เต็ม](./01-architecture.md#auth))
 
 **RBAC ระดับระบบ — สิทธิ์ทั้งเว็บ ไม่ใช่ระดับ org**
 
@@ -502,7 +522,7 @@ attachments                                      (Phase 3)
   file_name           text
   file_size           bigint
   mime_type           text
-  storage_key         text   key ใน MinIO
+  storage_key         text   key ใน object storage
   CREATE INDEX ON discussion.attachments (org_id, entity_type, entity_id);
 ```
 

@@ -663,6 +663,18 @@ CREATE TABLE audit.logs_2026_08 PARTITION OF audit.logs
 - **`JOBS_ENABLED=false`** ปิด job ทั้งสองในโปรเซสนั้น (default `true`) — มีไว้สำหรับเครื่อง dev ที่ต่อ DB ร่วมกัน
 - ตารางที่ลบไม่ผ่าน (เช่น project ที่ soft delete แล้วแต่ task ยังไม่ถูกลบตาม) จะ log แล้วข้าม ไม่ล้มทั้ง sweep · แต่ตารางนั้นค้างจนกว่าจะแก้ต้นเหตุ เพราะ batch เดียวคือ statement เดียว
 
+#### Redis / Queue — ยังไม่มี และเงื่อนไขที่จะมี
+
+**ไม่ใช้กับ email / notification** — [`EmailService.enqueue(manager, …)`](../../apps/api/core/src/modules/notify/email.service.ts) รับ transaction ของ caller เข้าไป แถวใน `notify.outbox` จึง commit พร้อมกับสิ่งที่มันประกาศ · Redis กับ Postgres commit ร่วมกันไม่ได้ ย้ายไป `queue.add()` เมื่อไหร่ได้ **dual write** ทันที — rollback แล้วเมลออก หรือ commit แล้ว job หาย โดยไม่มี error ที่ไหนเลย
+
+วิธีแก้มาตรฐานของ dual write คือเขียนลง DB ให้ commit ก่อนแล้วค่อย relay เข้า queue ซึ่งก็คือ outbox ที่มีอยู่แล้ว — queue จึง**เพิ่มชั้นให้ ไม่ได้แทนที่** วันที่เอามาจริง `OutboxWorker` เปลี่ยนจาก "ส่งเอง" เป็น "โยนเข้า queue" ส่วน `EmailService` ไม่ต้องแก้
+
+**ถ้า poll ทุก 15 วินาทีช้าไป** — `pg_notify` ใน transaction เดียวกับที่ insert (ส่งจริงตอน commit เท่านั้น จึงได้การรับประกันเดิม) แล้วให้ worker `LISTEN` · ได้ latency ของ queue โดยไม่เพิ่ม service · poll คงไว้เป็นตาข่ายรองกรณี connection ขาด
+
+**จะเพิ่ม Redis เมื่อ** รัน API ตั้งแต่ 2 instance ขึ้นไป **และ** ต้องการอย่างใดอย่างหนึ่งใน — websocket pub/sub (in-app notification, Phase 3) · rate limit ข้าม instance · session revocation cache ที่เช็คทุก request · ทั้งสามคือ _state ที่ใช้ร่วมกันระหว่าง process_ ซึ่งเป็นเส้นแบ่งว่าอะไรควรอยู่ Redis อะไรควรอยู่ Postgres
+
+**ไม่ตั้งรอไว้ล่วงหน้า** — service ที่ไม่มีใครใช้ไม่มี health check ไม่มี backup ไม่มีเทสต์ และไม่มีใครรู้ตอนมันดับ (เทียบกับ Garage ที่ขึ้นตั้งแต่ Phase 0 แต่มาพร้อม `StorageService`, `/health/ready`, `backup.sh`, `storage.spec.ts`) · และค่าที่ต้องตั้งตอบต่างกันคนละทางระหว่าง cache กับ queue — `allkeys-lru` ลบ job ทิ้งเงียบๆ ตอนความจำเต็ม จึงตัดสินตอนรู้ว่าจะใช้ทำอะไรเท่านั้น
+
 ---
 
 ### Auth
@@ -700,6 +712,71 @@ Cookie flags: `httpOnly · Secure · SameSite=Lax`
 ข้อ 2 ทำให้ deactivate / logout / ลบ account **มีผลเกือบทันที** ไม่ต้องรอ token หมดอายุ
 
 ต้นทุนต่ำเพราะไม่ได้ใส่ role ใน token อยู่แล้ว — ยังไงก็ต้องดึงข้อมูล user
+
+**ข้อ 3 เกิดใน guard และต้องใช้ `enterWith` ไม่ใช่ `run`**
+
+Auth ทั้งก้อนอยู่ใน guard ที่เดียว — verify token, เช็ค session, เปิด request context · guard เห็น route metadata (`@Public()`, `Reflector`) ซึ่ง middleware มองไม่เห็น จึงไม่ต้องแยกงานเป็นสองชั้นให้มีอะไรลืมได้
+
+แต่มีกับดักหนึ่งข้อ: `AsyncLocalStorage.run(ctx, () => true)` ใน guard **ใช้ไม่ได้** เพราะ `canActivate` คืน boolean แล้วจบ scope ก่อน handler จะรัน ต้องใช้ `enterWith` ซึ่งเซ็ต store ให้ async context ปัจจุบันแล้วอยู่ยาว
+
+วัดกับ Nest จริงแล้ว ไม่ได้อนุมาน:
+
+| ทำอะไรใน guard                  | controller เห็นอะไร |
+| ------------------------------ | ------------------ |
+| `als.run(ctx, () => true)`     | `null`             |
+| `als.enterWith(ctx)`           | ได้ค่าถูกต้อง          |
+| `enterWith` หลัง `await` สองชั้น   | ได้ค่าถูกต้อง          |
+| 20 request ซ้อนกัน คนละ org        | 0 อันเห็น org ผิด    |
+
+ข้อสุดท้ายสำคัญที่สุด — `enterWith` มีชื่อเสียงว่าอันตรายเพราะไปแก้ store ของ async resource ปัจจุบัน ถ้ามันรั่วข้าม request คือ cross-org leak ทันที · ทดสอบแล้วไม่รั่ว แต่ **ห้ามเปลี่ยนโครงตรงนี้โดยไม่รันเทสต์ซ้ำ**
+
+`runWithRequestContext` (ที่ใช้ `run`) ยังเป็นตัวที่ถูกสำหรับ background job, seed และเทสต์ — สองแบบอยู่คู่กันโดยตั้งใจ
+
+| ชั้น                        | หน้าที่                                                                |
+| -------------------------- | -------------------------------------------------------------------- |
+| `AuthGuard` (`APP_GUARD`)  | verify JWT → เช็ค session → `enterWith({ userId, orgId })` → allow/deny |
+| Guard ตัวถัดไป                | `PermissionService.assert` — ใช้ context ที่ตัวแรกเปิดไว้ได้เลย              |
+| `RequestContextMiddleware` | เลิกใช้เมื่อ `AuthGuard` มาแล้ว — ตอนนี้ยังอยู่เพราะยังไม่มี auth                |
+
+**Library**
+
+| ทำอะไร         | ใช้                          | ไม่ใช้ และทำไม                                                                              |
+| ------------- | --------------------------- | ------------------------------------------------------------------------------------------ |
+| JWT ของเราเอง   | `@nestjs/jwt` + guard เขียนเอง | `@nestjs/passport` — จ่าย 3 dependency ยุค callback เพื่อ `ExtractJwt` ที่เขียนเองบรรทัดเดียว        |
+| Google OAuth  | `arctic` หลัง `OAuthService`   | `passport-google-oauth20` · ถ้าอยากได้ OIDC ตาม spec เป๊ะกว่านี้ใช้ `openid-client`                  |
+| Session       | ตารางของเราเอง                  | Better Auth / Auth.js / Lucia — เข้ามาเป็นเจ้าของ schema แล้วต้องสู้กับ rotation + grace + reuse ที่มีอยู่ |
+
+`OAuthService` ห่อ library ไว้แบบเดียวกับ `StorageService` (S3) และ `EmailService` (Resend) — หน้าที่แคบมาก แค่ _"เอา authorization code ไปแลกเป็น `{ providerUserId, email, emailVerified, name, avatar }` ที่ verify แล้ว"_ · เปลี่ยน library ทีหลังแก้ไฟล์เดียว
+
+**ไม่เก็บ access/refresh token ของ Google** — ใช้แค่ identity ไม่ได้เรียก API ต่อ เก็บไว้คือถือของมีค่าที่ไม่ได้ใช้
+
+**Login ด้วย Google — ตัดสินใจแล้ว**
+
+```
+Google ตอบกลับมา
+   ↓
+email_verified = false → ปฏิเสธทันที (ไม่ link ไม่สร้าง)
+   ↓
+มี oauth_accounts (provider='google', provider_user_id) แล้ว → login เลย
+   ↓
+ไม่มี แต่มี user ที่อีเมลตรงกัน
+   ├─ status = 'active'            → ถาม "มีบัญชีนี้อยู่แล้ว จะเชื่อมกันมั้ย" → link
+   ├─ status = 'pending_deletion'  → ปลดล็อกกลับเป็น active แล้ว link
+   │                                 (ล้าง deletion_requested_at พร้อมกัน — CHECK ผูกไว้)
+   └─ อื่นๆ (deactivated / deleted)  → ปฏิเสธ เหมือน flow login ปกติ
+   ↓
+ไม่มี user เลย → ขึ้นกับ feature flag public_registration
+   ├─ เปิด → สร้าง user ใหม่ (password_hash = NULL)
+   └─ ปิด → ปฏิเสธ ไม่สร้างเงียบๆ
+   ↓
+ทุกกรณีที่ link สำเร็จ → audit.logs + ส่งเมลแจ้งเจ้าตัว
+```
+
+`pending_deletion` ปลดล็อกได้เพราะ login ด้วย Google ก็คือการพิสูจน์ตัวตนแบบหนึ่ง ตรงกับที่ [Delete Account](./04-features.md#delete-account) เขียนไว้ว่า login ภายใน 30 วันกู้บัญชีคืน — ไม่ใช่กฎใหม่
+
+**prompt ถามก่อน link เป็น UX ไม่ใช่ security** — คนที่เห็นหน้าจอนั้นคือคนที่เพิ่งพิสูจน์ว่าคุมอีเมลนั้นได้ ถ้าเป็นคนร้ายก็กด "ใช่" เหมือนกัน · ที่กันจริงคือ `email_verified`
+
+**และทำไมไม่ต้องกรอก password เดิมยืนยัน** — คนที่คุม mailbox นั้นยึดบัญชีได้อยู่แล้วผ่าน forgot-password ซึ่งส่งลิงก์ไปกล่องเดียวกัน การ link จึงไม่ได้เปิดประตูบานใหม่ · ความต่างเดียวคือ forgot-password _ประกาศตัวเอง_ เพราะเมลไปโผล่ในกล่องของเหยื่อ ส่วน auto-link เงียบ — **เมลแจ้งหลัง link คือสิ่งที่ปิดช่องว่างนั้น** ไม่ใช่ช่องกรอกรหัสผ่าน (ซึ่งยังพังกับบัญชีที่สมัครผ่าน Google ตั้งแต่แรกและไม่มี password ให้กรอก)
 
 **Session = 1 การ login จาก 1 เครื่อง**
 
