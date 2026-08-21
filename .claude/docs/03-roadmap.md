@@ -211,7 +211,7 @@
 | 1   | 🟡  | Mobile / PWA               | ใช้งานบนมือถือได้เต็มรูปแบบ                                            |
 | 2   | 🟡  | Global search              | ค้นข้ามทุก project ทุกประเภทข้อมูล                                     |
 | 3   | 🟡  | Performance tuning         | —                                                                |
-| 4   | 🟢  | Dark mode                  | ต้นทุนต่ำมาก (palette เป็น token อยู่แล้ว แค่เปลี่ยน mapping) แทรกทำได้ตลอด |
+| 4   | 🟢  | Light mode                 | แอปเป็นดาร์กธีมเดียวตั้งแต่ Phase 0 · เพิ่มโหมดสว่างไม่ใช่แค่สลับ mapping — ต้องเลือกขั้นสีของ text ใหม่ทุก component เพราะ `-light` อ่านได้บนพื้นมืดและหายไปบนพื้นขาว |
 | 5   | 🟢  | **Chat — Microsoft Teams** | Chat adapter ตัวที่สาม (ต้องผ่าน Microsoft app approval ใช้เวลานาน)    |
 | 6   | 🟢  | Integration อื่น             | Google Calendar, webhook ทั่วไป                                    |
 | 7   | 🟢  | Real-time collaboration    | เห็นการแก้ไขของคนอื่นทันที                                             |
@@ -232,7 +232,7 @@
 
 | Feature          | สัญญาณที่บอกว่าควรทำก่อน            |
 | ---------------- | ------------------------------ |
-| Dark mode        | มีคนขอ (ต้นทุนต่ำมาก ทำแทรกได้ตลอด) |
+| Light mode       | มีคนขอ (ไม่ใช่งานถูก — ดูตาราง Phase 6) |
 | Mobile / PWA     | analytics ชี้ว่ามีคนเปิดบนมือถือเยอะ  |
 | Nested 3 ชั้น      | คนชนเพดาน 2 ชั้นบ่อย              |
 | Recurring task   | มีคนถามเกิน 3 ทีม                 |

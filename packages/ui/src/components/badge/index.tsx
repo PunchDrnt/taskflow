@@ -43,20 +43,24 @@ const badgeVariants = cva(
         variant: 'secondary',
         color: 'primary',
         className:
-          'bg-primary-soft text-primary-dark [a]:hover:bg-primary-hover',
+          'bg-primary-soft text-primary-light [a]:hover:bg-primary-hover',
       },
       {
         variant: 'outline',
         color: 'primary',
         className:
-          'border-primary-outlined-border text-primary-dark [a]:hover:bg-primary-hover',
+          'border-primary-outlined-border bg-primary-soft text-primary-light [a]:hover:bg-primary-hover',
       },
       {
         variant: 'ghost',
         color: 'primary',
-        className: 'text-primary-dark hover:bg-primary-hover',
+        className: 'text-primary-light hover:bg-primary-hover',
       },
-      { variant: 'link', color: 'primary', className: 'text-primary-dark' },
+      {
+        variant: 'link',
+        color: 'primary',
+        className: 'text-primary-light',
+      },
 
       // secondary
       {
@@ -69,20 +73,24 @@ const badgeVariants = cva(
         variant: 'secondary',
         color: 'secondary',
         className:
-          'bg-secondary-soft text-secondary-dark [a]:hover:bg-secondary-hover',
+          'bg-secondary-soft text-secondary-light [a]:hover:bg-secondary-hover',
       },
       {
         variant: 'outline',
         color: 'secondary',
         className:
-          'border-secondary-outlined-border text-secondary-dark [a]:hover:bg-secondary-hover',
+          'border-secondary-outlined-border bg-secondary-soft text-secondary-light [a]:hover:bg-secondary-hover',
       },
       {
         variant: 'ghost',
         color: 'secondary',
-        className: 'text-secondary-dark hover:bg-secondary-hover',
+        className: 'text-secondary-light hover:bg-secondary-hover',
       },
-      { variant: 'link', color: 'secondary', className: 'text-secondary-dark' },
+      {
+        variant: 'link',
+        color: 'secondary',
+        className: 'text-secondary-light',
+      },
 
       // error
       {
@@ -93,20 +101,24 @@ const badgeVariants = cva(
       {
         variant: 'secondary',
         color: 'error',
-        className: 'bg-error-soft text-error-dark [a]:hover:bg-error-hover',
+        className: 'bg-error-soft text-error-light [a]:hover:bg-error-hover',
       },
       {
         variant: 'outline',
         color: 'error',
         className:
-          'border-error-outlined-border text-error-dark [a]:hover:bg-error-hover',
+          'border-error-outlined-border bg-error-soft text-error-light [a]:hover:bg-error-hover',
       },
       {
         variant: 'ghost',
         color: 'error',
-        className: 'text-error-dark hover:bg-error-hover',
+        className: 'text-error-light hover:bg-error-hover',
       },
-      { variant: 'link', color: 'error', className: 'text-error-dark' },
+      {
+        variant: 'link',
+        color: 'error',
+        className: 'text-error-light',
+      },
 
       // warning
       {
@@ -119,20 +131,24 @@ const badgeVariants = cva(
         variant: 'secondary',
         color: 'warning',
         className:
-          'bg-warning-soft text-warning-dark [a]:hover:bg-warning-hover',
+          'bg-warning-soft text-warning-light [a]:hover:bg-warning-hover',
       },
       {
         variant: 'outline',
         color: 'warning',
         className:
-          'border-warning-outlined-border text-warning-dark [a]:hover:bg-warning-hover',
+          'border-warning-outlined-border bg-warning-soft text-warning-light [a]:hover:bg-warning-hover',
       },
       {
         variant: 'ghost',
         color: 'warning',
-        className: 'text-warning-dark hover:bg-warning-hover',
+        className: 'text-warning-light hover:bg-warning-hover',
       },
-      { variant: 'link', color: 'warning', className: 'text-warning-dark' },
+      {
+        variant: 'link',
+        color: 'warning',
+        className: 'text-warning-light',
+      },
 
       // info
       {
@@ -143,20 +159,24 @@ const badgeVariants = cva(
       {
         variant: 'secondary',
         color: 'info',
-        className: 'bg-info-soft text-info-dark [a]:hover:bg-info-hover',
+        className: 'bg-info-soft text-info-light [a]:hover:bg-info-hover',
       },
       {
         variant: 'outline',
         color: 'info',
         className:
-          'border-info-outlined-border text-info-dark [a]:hover:bg-info-hover',
+          'border-info-outlined-border bg-info-soft text-info-light [a]:hover:bg-info-hover',
       },
       {
         variant: 'ghost',
         color: 'info',
-        className: 'text-info-dark hover:bg-info-hover',
+        className: 'text-info-light hover:bg-info-hover',
       },
-      { variant: 'link', color: 'info', className: 'text-info-dark' },
+      {
+        variant: 'link',
+        color: 'info',
+        className: 'text-info-light',
+      },
 
       // success
       {
@@ -169,20 +189,24 @@ const badgeVariants = cva(
         variant: 'secondary',
         color: 'success',
         className:
-          'bg-success-soft text-success-dark [a]:hover:bg-success-hover',
+          'bg-success-soft text-success-light [a]:hover:bg-success-hover',
       },
       {
         variant: 'outline',
         color: 'success',
         className:
-          'border-success-outlined-border text-success-dark [a]:hover:bg-success-hover',
+          'border-success-outlined-border bg-success-soft text-success-light [a]:hover:bg-success-hover',
       },
       {
         variant: 'ghost',
         color: 'success',
-        className: 'text-success-dark hover:bg-success-hover',
+        className: 'text-success-light hover:bg-success-hover',
       },
-      { variant: 'link', color: 'success', className: 'text-success-dark' },
+      {
+        variant: 'link',
+        color: 'success',
+        className: 'text-success-light',
+      },
 
       // neutral
       {

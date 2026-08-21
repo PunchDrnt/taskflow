@@ -4,7 +4,7 @@ import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@repo/ui/lib/utils'
 
 const buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-primary-main focus-visible:ring-3 focus-visible:ring-primary-focus-visible active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-error-main aria-invalid:ring-3 aria-invalid:ring-error-focus aria-expanded:bg-action-hover aria-expanded:text-text-primary [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-body-md font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-primary-main focus-visible:ring-3 focus-visible:ring-primary-focus-visible active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-error-main aria-invalid:ring-3 aria-invalid:ring-error-focus aria-expanded:bg-action-hover aria-expanded:text-text-primary [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
@@ -17,7 +17,7 @@ const buttonVariants = cva(
       size: {
         default:
           'h-8 gap-1.5 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2',
-        xs: "h-6 gap-1 rounded-[min(var(--radius-md),10px)] px-2 text-xs in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3",
+        xs: "h-6 gap-1 rounded-[min(var(--radius-md),10px)] px-2 text-body-sm in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3",
         sm: "h-7 gap-1 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5",
         lg: 'h-9 gap-1.5 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2',
         icon: 'size-8',
@@ -49,24 +49,25 @@ const buttonVariants = cva(
         variant: 'outline',
         color: 'primary',
         className:
-          'border-primary-outlined-border bg-transparent text-primary-dark hover:bg-primary-hover active:bg-primary-selected disabled:border-divider disabled:bg-transparent disabled:text-text-disabled',
+          'border-primary-outlined-border bg-primary-soft text-primary-light hover:bg-primary-hover active:bg-primary-selected disabled:border-divider disabled:bg-transparent disabled:text-text-disabled',
       },
       {
         variant: 'secondary',
         color: 'primary',
         className:
-          'bg-primary-soft text-primary-dark hover:bg-primary-hover active:bg-primary-selected disabled:bg-action-disabled-background disabled:text-text-disabled',
+          'bg-primary-soft text-primary-light hover:bg-primary-hover active:bg-primary-selected disabled:bg-action-disabled-background disabled:text-text-disabled',
       },
       {
         variant: 'ghost',
         color: 'primary',
         className:
-          'bg-transparent text-primary-dark hover:bg-primary-hover active:bg-primary-selected disabled:text-text-disabled',
+          'bg-transparent text-primary-light hover:bg-primary-soft active:bg-primary-selected disabled:text-text-disabled',
       },
       {
         variant: 'link',
         color: 'primary',
-        className: 'text-primary-dark disabled:text-text-disabled',
+        className:
+          'text-primary-light hover:text-primary-dark disabled:text-text-disabled',
       },
 
       // secondary
@@ -80,24 +81,25 @@ const buttonVariants = cva(
         variant: 'outline',
         color: 'secondary',
         className:
-          'border-secondary-outlined-border bg-transparent text-secondary-dark hover:bg-secondary-hover active:bg-secondary-selected disabled:border-divider disabled:bg-transparent disabled:text-text-disabled',
+          'border-secondary-outlined-border bg-secondary-soft text-secondary-light hover:bg-secondary-hover active:bg-secondary-selected disabled:border-divider disabled:bg-transparent disabled:text-text-disabled',
       },
       {
         variant: 'secondary',
         color: 'secondary',
         className:
-          'bg-secondary-soft text-secondary-dark hover:bg-secondary-hover active:bg-secondary-selected disabled:bg-action-disabled-background disabled:text-text-disabled',
+          'bg-secondary-soft text-secondary-light hover:bg-secondary-hover active:bg-secondary-selected disabled:bg-action-disabled-background disabled:text-text-disabled',
       },
       {
         variant: 'ghost',
         color: 'secondary',
         className:
-          'bg-transparent text-secondary-dark hover:bg-secondary-hover active:bg-secondary-selected disabled:text-text-disabled',
+          'bg-transparent text-secondary-light hover:bg-secondary-soft active:bg-secondary-selected disabled:text-text-disabled',
       },
       {
         variant: 'link',
         color: 'secondary',
-        className: 'text-secondary-dark disabled:text-text-disabled',
+        className:
+          'text-secondary-light hover:text-secondary-dark disabled:text-text-disabled',
       },
 
       // error
@@ -111,24 +113,25 @@ const buttonVariants = cva(
         variant: 'outline',
         color: 'error',
         className:
-          'border-error-outlined-border bg-transparent text-error-dark hover:bg-error-hover active:bg-error-selected disabled:border-divider disabled:bg-transparent disabled:text-text-disabled',
+          'border-error-outlined-border bg-error-soft text-error-light hover:bg-error-hover active:bg-error-selected disabled:border-divider disabled:bg-transparent disabled:text-text-disabled',
       },
       {
         variant: 'secondary',
         color: 'error',
         className:
-          'bg-error-soft text-error-dark hover:bg-error-hover active:bg-error-selected disabled:bg-action-disabled-background disabled:text-text-disabled',
+          'bg-error-soft text-error-light hover:bg-error-hover active:bg-error-selected disabled:bg-action-disabled-background disabled:text-text-disabled',
       },
       {
         variant: 'ghost',
         color: 'error',
         className:
-          'bg-transparent text-error-dark hover:bg-error-hover active:bg-error-selected disabled:text-text-disabled',
+          'bg-transparent text-error-light hover:bg-error-soft active:bg-error-selected disabled:text-text-disabled',
       },
       {
         variant: 'link',
         color: 'error',
-        className: 'text-error-dark disabled:text-text-disabled',
+        className:
+          'text-error-light hover:text-error-dark disabled:text-text-disabled',
       },
 
       // warning
@@ -142,24 +145,25 @@ const buttonVariants = cva(
         variant: 'outline',
         color: 'warning',
         className:
-          'border-warning-outlined-border bg-transparent text-warning-dark hover:bg-warning-hover active:bg-warning-selected disabled:border-divider disabled:bg-transparent disabled:text-text-disabled',
+          'border-warning-outlined-border bg-warning-soft text-warning-light hover:bg-warning-hover active:bg-warning-selected disabled:border-divider disabled:bg-transparent disabled:text-text-disabled',
       },
       {
         variant: 'secondary',
         color: 'warning',
         className:
-          'bg-warning-soft text-warning-dark hover:bg-warning-hover active:bg-warning-selected disabled:bg-action-disabled-background disabled:text-text-disabled',
+          'bg-warning-soft text-warning-light hover:bg-warning-hover active:bg-warning-selected disabled:bg-action-disabled-background disabled:text-text-disabled',
       },
       {
         variant: 'ghost',
         color: 'warning',
         className:
-          'bg-transparent text-warning-dark hover:bg-warning-hover active:bg-warning-selected disabled:text-text-disabled',
+          'bg-transparent text-warning-light hover:bg-warning-soft active:bg-warning-selected disabled:text-text-disabled',
       },
       {
         variant: 'link',
         color: 'warning',
-        className: 'text-warning-dark disabled:text-text-disabled',
+        className:
+          'text-warning-light hover:text-warning-dark disabled:text-text-disabled',
       },
 
       // info
@@ -173,24 +177,25 @@ const buttonVariants = cva(
         variant: 'outline',
         color: 'info',
         className:
-          'border-info-outlined-border bg-transparent text-info-dark hover:bg-info-hover active:bg-info-selected disabled:border-divider disabled:bg-transparent disabled:text-text-disabled',
+          'border-info-outlined-border bg-info-soft text-info-light hover:bg-info-hover active:bg-info-selected disabled:border-divider disabled:bg-transparent disabled:text-text-disabled',
       },
       {
         variant: 'secondary',
         color: 'info',
         className:
-          'bg-info-soft text-info-dark hover:bg-info-hover active:bg-info-selected disabled:bg-action-disabled-background disabled:text-text-disabled',
+          'bg-info-soft text-info-light hover:bg-info-hover active:bg-info-selected disabled:bg-action-disabled-background disabled:text-text-disabled',
       },
       {
         variant: 'ghost',
         color: 'info',
         className:
-          'bg-transparent text-info-dark hover:bg-info-hover active:bg-info-selected disabled:text-text-disabled',
+          'bg-transparent text-info-light hover:bg-info-soft active:bg-info-selected disabled:text-text-disabled',
       },
       {
         variant: 'link',
         color: 'info',
-        className: 'text-info-dark disabled:text-text-disabled',
+        className:
+          'text-info-light hover:text-info-dark disabled:text-text-disabled',
       },
 
       // success
@@ -204,24 +209,25 @@ const buttonVariants = cva(
         variant: 'outline',
         color: 'success',
         className:
-          'border-success-outlined-border bg-transparent text-success-dark hover:bg-success-hover active:bg-success-selected disabled:border-divider disabled:bg-transparent disabled:text-text-disabled',
+          'border-success-outlined-border bg-success-soft text-success-light hover:bg-success-hover active:bg-success-selected disabled:border-divider disabled:bg-transparent disabled:text-text-disabled',
       },
       {
         variant: 'secondary',
         color: 'success',
         className:
-          'bg-success-soft text-success-dark hover:bg-success-hover active:bg-success-selected disabled:bg-action-disabled-background disabled:text-text-disabled',
+          'bg-success-soft text-success-light hover:bg-success-hover active:bg-success-selected disabled:bg-action-disabled-background disabled:text-text-disabled',
       },
       {
         variant: 'ghost',
         color: 'success',
         className:
-          'bg-transparent text-success-dark hover:bg-success-hover active:bg-success-selected disabled:text-text-disabled',
+          'bg-transparent text-success-light hover:bg-success-soft active:bg-success-selected disabled:text-text-disabled',
       },
       {
         variant: 'link',
         color: 'success',
-        className: 'text-success-dark disabled:text-text-disabled',
+        className:
+          'text-success-light hover:text-success-dark disabled:text-text-disabled',
       },
 
       // neutral

@@ -30,7 +30,7 @@ function Textarea({
     <textarea
       data-slot="textarea"
       className={cn(
-        'border-divider placeholder:text-text-secondary disabled:bg-action-disabled-background bg-action-hover flex field-sizing-content min-h-16 w-full rounded-lg border px-2.5 py-2 text-base transition-colors outline-none focus-visible:ring-3 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm',
+        'border-divider placeholder:text-text-secondary disabled:bg-action-disabled-background bg-action-hover text-body-lg md:text-body-md flex field-sizing-content min-h-16 w-full rounded-lg border px-2.5 py-2 transition-colors outline-none focus-visible:ring-3 disabled:cursor-not-allowed disabled:opacity-50',
         colorClasses[color],
         'aria-invalid:border-error-main aria-invalid:ring-error-focus aria-invalid:ring-3',
         className,

@@ -94,7 +94,10 @@ export default function FormsPage() {
           {colors
             .filter((c) => c !== 'neutral')
             .map((color) => (
-              <label key={color} className="flex items-center gap-2 text-sm">
+              <label
+                key={color}
+                className="text-body-md flex items-center gap-2"
+              >
                 <Checkbox color={color} defaultChecked />
                 {color}
               </label>
@@ -108,7 +111,10 @@ export default function FormsPage() {
           {colors
             .filter((c) => c !== 'neutral')
             .map((color) => (
-              <label key={color} className="flex items-center gap-2 text-sm">
+              <label
+                key={color}
+                className="text-body-md flex items-center gap-2"
+              >
                 <Switch color={color} defaultChecked />
                 {color}
               </label>
@@ -120,7 +126,7 @@ export default function FormsPage() {
         <span className="label-small text-text-secondary">Radio group</span>
         <RadioGroup defaultValue="primary" className="flex flex-row gap-4">
           {(['primary', 'error', 'success'] as const).map((color) => (
-            <label key={color} className="flex items-center gap-2 text-sm">
+            <label key={color} className="text-body-md flex items-center gap-2">
               <RadioGroupItem value={color} color={color} />
               {color}
             </label>

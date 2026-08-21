@@ -1,7 +1,5 @@
 import Link from 'next/link'
 
-import { ThemeToggle } from './theme-toggle'
-
 const navItems = [
   { href: '/design-system', label: 'Overview' },
   { href: '/design-system/colors', label: 'Colors' },
@@ -19,16 +17,15 @@ export default function DesignSystemLayout({
   children: React.ReactNode
 }) {
   return (
-    <div className="bg-white-secondary text-text-primary min-h-screen">
+    <div className="bg-default text-text-primary min-h-screen">
       <div className="mx-auto max-w-5xl px-6 pb-24">
-        <header className="border-divider flex items-center justify-between border-b py-6">
+        <header className="border-divider flex items-center border-b py-6">
           <div>
             <h1 className="h2">Design System</h1>
             <p className="body-2 text-text-secondary">
               Live reference for every token and component in @repo/ui.
             </p>
           </div>
-          <ThemeToggle />
         </header>
 
         <nav className="border-divider flex flex-wrap gap-1 border-b py-3">

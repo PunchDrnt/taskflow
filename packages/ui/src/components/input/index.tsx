@@ -31,7 +31,7 @@ function Input({
       type={type}
       data-slot="input"
       className={cn(
-        'border-divider file:text-text-primary placeholder:text-text-secondary disabled:bg-action-disabled-background bg-action-hover h-8 w-full min-w-0 rounded-lg border px-2.5 py-1 text-base transition-colors outline-none file:inline-flex file:h-6 file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:ring-3 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm',
+        'border-divider file:text-text-primary placeholder:text-text-secondary disabled:bg-action-disabled-background bg-action-hover text-body-lg file:text-body-md md:text-body-md h-8 w-full min-w-0 rounded-lg border px-2.5 py-1 transition-colors outline-none file:inline-flex file:h-6 file:border-0 file:bg-transparent file:font-medium focus-visible:ring-3 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50',
         colorClasses[color],
         'aria-invalid:border-error-main aria-invalid:ring-error-focus aria-invalid:ring-3',
         className,

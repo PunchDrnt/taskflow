@@ -756,7 +756,7 @@ task.task_embeddings (
 
 ### Phase 6 — Polish `v2.1.0`
 
-- Dark mode (palette เป็น token อยู่แล้ว → แค่เปลี่ยน mapping)
+- Light mode (แอปเป็นดาร์กธีมเดียว — ดูข้อควรระวังใน [`03-roadmap.md`](./03-roadmap.md))
 - Mobile responsive / PWA
 - Global search
 - Real-time collaboration
