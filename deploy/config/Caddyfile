@@ -1,6 +1,12 @@
-# One origin for both apps, which is what makes SameSite=Lax cookies enough on
-# their own — a separate api.* subdomain would need double-submit CSRF tokens.
-# See .claude/docs/01-architecture.md#csrf
+# Each site proxies its own /api/* to the same Nest, so every browser request is
+# same-origin: SameSite=Lax is enough on its own, with no CORS and no CSRF
+# token. Collapsing these into one api.domain.com would give up both.
+#
+# /api/* belongs to Nest on every site. A Next route handler under app/api/
+# would never be reached and would not error — put those under /bff/*, which
+# App Router allows (the /api convention is a Pages Router holdover).
+#
+# See .claude/docs/01-architecture.md#csrf and #path-ownership
 #
 # SITE_ADDRESS is a hostname in production, so Caddy provisions TLS itself. Set
 # it to :80 locally, where there is no domain to get a certificate for.

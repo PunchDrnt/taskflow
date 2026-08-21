@@ -41,7 +41,7 @@ The full list with rationale is in [`docs/00-overview.md`](./docs/00-overview.md
 - Primary keys are UUIDs; `sort_order` is `text COLLATE "C"` with fractional indexing
 - One `external_channel_id` maps to exactly one org
 
-Also settled, and easy to get wrong: DB is `snake_case` while TypeScript is `camelCase` (handled once by TypeORM's naming strategy, not per-column); writes get transactions, reads don't; RLS is deliberately deferred to Phase 2; and the frontend and API share one origin through Caddy (`app.x.com/api`), which is what makes `SameSite=Lax` sufficient without a CSRF token — splitting them onto separate subdomains later moves four things at once, and doing the first of them alone opens a hole, so keep the cookie attributes in one place when auth is written (docs/01-architecture.md#csrf).
+Also settled, and easy to get wrong: DB is `snake_case` while TypeScript is `camelCase` (handled once by TypeORM's naming strategy, not per-column); writes get transactions, reads don't; RLS is deliberately deferred to Phase 2; and each web app proxies its own `/api/*` to the one Nest, so every browser request is same-origin and `SameSite=Lax` needs no CSRF token and no CORS — never collapse that into a shared `api.domain.com`. Note that SameSite compares _site_, not origin: `www.x.com` → `api.x.com` still sends a Lax cookie, only a different registrable domain does not (measured; table in docs/01-architecture.md#csrf). Back-office is a separate app on a separate registrable domain so the cookie jars are split by the browser rather than by a guard. Keep the cookie attributes in one place when auth is written.
 
 ## Domain vocabulary
 

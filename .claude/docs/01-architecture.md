@@ -33,8 +33,9 @@ Stack, การแบ่ง module, และ convention ที่ทุก mod
 
 ```
 apps/
-  api/core/     NestJS          (@api/core)
-  web/client/   Next.js 16      (@web/client)
+  api/core/       NestJS          (@api/core)
+  web/client/     Next.js 16      (@web/client)     · www.domain.com
+  web/backoffice/ Next.js 16      (@web/backoffice) · admin.otherdomain.com  (Phase 7)
 packages/
   shared/       zod schema + types + enums + constants   (@repo/shared)
   ui/           component library on @base-ui/react      (@repo/ui)
@@ -55,7 +56,7 @@ packages/
 
 | `docker-compose.yml` (dev) | `deploy/compose.yml` (Bangmod) |
 | --- | --- |
-| `postgres` `postgres-test` `garage` `garage-init` `garage-ui` | `postgres` `garage` `garage-init` `api-migrate` `api` `web` `caddy` |
+| `postgres` `postgres-test` `garage` `garage-init` `garage-ui` | `postgres` `garage` `garage-init` `api-migrate` `api` `web` `caddy` (+ `backoffice` ตอน Phase 7) |
 | publish port ออกมาหมด (4xxx / 54xx) | มีแค่ `caddy` ที่ publish |
 | ต่อ DB ด้วย superuser ของ image | ต่อด้วย role ที่ `deploy/init/postgres.sh` สร้าง ไม่ใช่ superuser |
 
@@ -344,14 +345,32 @@ Org  (ลูกค้าสร้างกันเอง)
 
 4. **บังคับ 2FA สำหรับคนที่มี system role** (Phase หลัง)
 
-**Back-office: รวมใน app เดียว แยก route + guard**
+**Back-office: app แยก คนละ registrable domain**
 
 ```
-/admin/*         → SystemAdminGuard
-/api/v1/admin/*  → API ฝั่ง system
+www.domain.com          → @web/client       ผู้ใช้ทั่วไป
+admin.otherdomain.com   → @web/backoffice   system role
 ```
 
-แชร์ entity/service ได้หมด ไม่ต้องดูแลสองระบบ
+> เดิมข้อนี้เขียนว่า "รวมใน app เดียว แยก route + guard" · เปลี่ยนเป็นแยก app
+> เพราะสองเว็บนี้คนละหน้าที่กันจริง และการแยก **registrable domain** ทำให้
+> cookie jar แยกโดย browser ไม่ใช่โดย guard ที่เราต้องไม่ลืมเขียน
+
+**ทำไมต้องคนละ registrable domain ไม่ใช่แค่คนละ subdomain** — SameSite นับทุก
+subdomain ใต้ domain เดียวกันเป็นพวกเดียวกัน ([ตารางที่วัดไว้](#csrf)) · คนละ
+registrable domain เท่านั้นที่ browser ปฏิเสธ cookie ให้เอง
+
+**account เดียวมีทั้ง system role และ org membership ได้** — ไม่ห้าม และไม่ต้องมี
+constraint ห้าม เพราะขอบเขตมาจาก domain ไม่ได้มาจาก role: account เดียวก็ยังต้อง
+login สองรอบ และแต่ละ session ถือสิทธิ์เฉพาะฝั่งของตัวเอง
+
+- **แนะนำให้แยก account** (`punch@` / `punch.admin@`) — ถ้าตัวหนึ่งโดน phish
+  ความเสียหายจำกัดอยู่ฝั่งเดียว · เป็นคำแนะนำ ไม่ใช่กฎที่บังคับใน schema
+- **สิ่งที่ต้องมีจริงคือ audit ต้องระบุบทบาท** ตามกติกาข้อ 2 ข้างบน — account เดียว
+  สองบทบาทจึงยังไล่ย้อนได้ว่าตอนนั้นทำในฐานะไหน
+
+แชร์โค้ดผ่าน `@repo/ui` กับ `@repo/shared` — component หรือ type ที่ใช้สองฝั่ง
+ต้องดันขึ้น package ไม่ใช่ก๊อปสองที่
 
 > Phase 0 สร้างแค่ตาราง + seed permission keys · **ไม่มีโค้ดอ่านจนถึง Phase 7** — flag ที่ข้าม `org_id` scoping เป็นช่องโหว่ที่อันตรายที่สุด ควรทำตอนระบบนิ่งและมี test ครอบคลุม · งาน support ช่วงแรกใช้ psql/Postman พอ
 
@@ -741,29 +760,58 @@ POST /auth/reset-password { code, newPassword, confirmNewPassword }
 
 ### CSRF
 
-**ตัดสินแล้ว: origin เดียว** — frontend กับ API อยู่ใต้ domain เดียวกันผ่าน Caddy
-(`app.x.com` และ `app.x.com/api`) · ทำจริงแล้วใน
-[`deploy/config/Caddyfile`](../../deploy/config/Caddyfile) ซึ่ง `handle_path /api/*`
-ตัด prefix ทิ้งก่อนส่งต่อ ทำให้ API ไม่รู้ตัวว่าถูก mount ใต้ path
+**ตัดสินแล้ว: แต่ละเว็บมี `/api/*` ของตัวเอง** — client กับ back-office เป็นคนละ
+app คนละ domain และ **แต่ละ origin proxy `/api/*` ไป Nest ตัวเดียวกัน** ทุก request
+จาก browser จึงเป็น same-origin เสมอ
 
-ผลคือ **`SameSite=Lax` พอในตัวมันเอง ไม่ต้องมี CSRF token** ทุก request จาก
-frontend เป็น same-site
+```
+www.domain.com        → @web/client        www.domain.com/api/*   → @api/core
+admin.otherdomain.com → @web/backoffice    admin.otherdomain.com/api/* → @api/core
+```
 
-> เดิมข้อนี้เขียนเป็นข้อเสนอ ("แนะนำ ง่ายที่สุด") ทั้งที่โค้ดเลือกไปแล้ว · การแยก
-> subdomain ไม่ใช่สิ่งที่เกิดกับเรา — เราเขียน Caddyfile เอง ถ้าจะแยกคือเลือกเอง
+ผลคือ **`SameSite=Lax` พอในตัวมันเอง ไม่ต้องมี CSRF token และไม่ต้องมี CORS**
+ทั้งสองฝั่ง
 
-**ถ้าวันหนึ่งจะแยกเป็น `api.x.com` จริง ต้องขยับสี่อย่างพร้อมกัน**
+> 🚫 **ห้ามยุบ `/api` ไปเป็น `api.domain.com` ตัวเดียวร่วมกัน** — จะกลายเป็น
+> cross-origin ทันที ต้องเปิด CORS และฝั่งที่คนละ registrable domain จะไม่ได้
+> cookie เลย · ที่ได้มาคือ "ประหยัด route ใน Caddy หนึ่งบล็อก" ซึ่งไม่คุ้ม
 
-1. cookie `SameSite=Lax` → `None; Secure` — ไม่งั้น browser ไม่ส่ง cookie ไปกับ
-   fetch ข้าม site เลย และ **auth พังทั้งอัน** ไม่ใช่แค่ CSRF อ่อนลง
-2. CORS ฝั่ง API ระบุ origin ตรง ๆ + `Allow-Credentials: true`
-3. double-submit CSRF token — ออกตอน login, ตรวจทุก request ที่เขียนข้อมูล
-4. frontend แนบ header นั้นให้ทุก mutation
+**SameSite ดูที่ *site* ไม่ใช่ *origin*** — จุดนี้เข้าใจผิดกันบ่อย และเคยเขียนผิด
+ไว้ในไฟล์นี้เอง · วัดด้วย headless Chrome จริง:
 
-> ⚠️ **ข้อ 1 ทำคนเดียวแล้วค่อยตามข้อ 3 ทีหลัง = เปิดช่อง CSRF ทิ้งไว้** ซึ่งเป็นลำดับ
-> ที่คนทำตอนรีบพอดี เพราะข้อ 1 อย่างเดียวก็ทำให้ login กลับมาทำงาน · สี่ข้อนี้เป็น
-> ชุดเดียวกัน ไม่ใช่ backlog สี่ใบ
+| หน้าเว็บอยู่ที่      | ยิงไปที่               | `Lax` | `None; Secure` | ต้องมี CORS |
+| ------------------- | -------------------- | ----- | -------------- | ---------- |
+| `www.example.test`  | `www.example.test/api` | ส่ง   | –              | ไม่ต้อง     |
+| `www.example.test`  | `api.example.test`   | **ส่ง** | ส่ง            | ต้องมี      |
+| `other.test`        | `api.example.test`   | ไม่ส่ง | ส่ง            | ต้องมี      |
 
-**เพราะงั้นตอนเขียน auth (Phase 1): attribute ของ cookie ต้องอยู่ที่เดียว** พร้อม
-test ที่ปักค่าไว้ · การเปลี่ยนใจทีหลังจะได้เป็นการแก้จุดเดียวที่เห็นชัดใน diff
+แถวกลางคือจุดที่คนคิดว่าจะไม่ส่ง — `www.example.test` กับ `api.example.test`
+คนละ origin แต่ **registrable domain เดียวกัน** จึงนับเป็น same-site · แถวล่างคือ
+cross-site จริง ถึงจะไม่ส่ง
+
+> เพราะงั้นการแยก subdomain ใต้ domain เดิม **ไม่ได้ทำให้ auth พัง** สิ่งที่ต้อง
+> เพิ่มจริงคือ CORS · ส่วนเหตุผลที่ยังควรมี CSRF token เมื่อมีหลาย subdomain คือ
+> SameSite นับทุก subdomain เป็นพวกเดียวกัน — subdomain ที่โดนยึดหรือที่ให้ user
+> อัปโหลด content ได้ จะยิง request พร้อม cookie ได้โดย SameSite ไม่กัน
+
+**ตอนเขียน auth (Phase 1): attribute ของ cookie ต้องอยู่ที่เดียว** พร้อม test ที่
+ปักค่าไว้ · การเปลี่ยน topology ทีหลังจะได้เป็นการแก้จุดเดียวที่เห็นชัดใน diff
 ไม่ใช่ไล่หาว่ามีกี่ที่ที่ set cookie
+
+### Path ownership
+
+`handle_path /api/*` กิน namespace `/api` ทั้งก้อน — วาง route handler ของ Next
+ไว้ใต้ `app/api/` แล้วมันจะ **ไม่ถูกเรียกถึงเลย และไม่มี error** แค่ได้ response
+จาก Nest แทน ซึ่งหาสาเหตุยาก
+
+| path            | เจ้าของ                                          |
+| --------------- | ----------------------------------------------- |
+| `/api/*`        | `@api/core` — Caddy จองไว้ ทั้งสอง domain          |
+| `/bff/*`        | Next route handler (`app/bff/**/route.ts`)      |
+| `/monitoring`   | Sentry tunnel (rewrite ที่ `withSentryConfig` ใส่ให้) |
+| `/_next/*`      | Next asset                                       |
+| ที่เหลือ          | Next page                                        |
+
+> **App Router ไม่ได้บังคับให้ route handler อยู่ใต้ `/api`** — `app/api/` เป็น
+> ธรรมเนียมตกทอดจาก Pages Router ที่บังคับจริง · ไฟล์ `route.ts` วางที่ไหนก็เป็น
+> endpoint ที่ path นั้น เพราะงั้นใช้ `/bff/*` แล้วไม่ต้องแตะ Caddy เลย
