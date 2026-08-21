@@ -173,8 +173,9 @@
       `SYSTEM_PERMISSIONS` ใน [`src/permission/system-permissions.ts`](../../apps/api/core/src/permission/system-permissions.ts)
       · migration เขียน key เป็น literal (เหตุผลเดียวกับ `SYSTEM_USER_ID`) · `schema-invariants.spec.ts` จับ drift
       · **ไม่ seed role กับ mapping** เพราะ spec ตั้งใจให้แก้ใน DB ได้โดยไม่ต้อง deploy
-- [ ] `yarn build` / `lint` / `check-types` / `test` ผ่านหมด
-- [ ] Tag `v0.1.0`
+- [x] `yarn build` / `lint` / `check-types` / `test` ผ่านหมด — 126 tests / 16 files
+- [ ] Tag `v0.1.0` ← **รอ deploy ขึ้น Bangmod ก่อน** · tag คือคำประกาศว่า Phase 0 จบ
+      ซึ่งยังไม่จริงตราบใดที่ §7 ข้อ 🔴 ยังไม่ได้ทำ · การเลื่อน tag ถูกกว่าการย้าย tag ทีหลัง
 
 ---
 
