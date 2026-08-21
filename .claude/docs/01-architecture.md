@@ -451,13 +451,14 @@ users.queryBuilder.base('user')                         // identity ไม่ม
 
 > type อย่างเดียวไม่พอ — `andWhere` ประกาศว่าคืน `this` พอ chain แล้ว TypeScript คืน type เต็มกลับมา · มี Proxy ห่อซ้ำที่ throw ถ้าเรียกสองชื่อนี้ ไม่ว่าจะลึกแค่ไหน
 
-สามจุดที่พลาดง่ายและมี test คุมไว้แล้ว:
+สี่จุดที่พลาดง่ายและมี test คุมไว้แล้ว:
 
 | จุด | ถ้าทำผิด |
 | --- | --- |
 | `where` แบบ array คือ **OR** — ต้องใส่เงื่อนไข org ลงทุก branch | ใส่ข้างนอกครั้งเดียว query จะกว้างขึ้นไม่ใช่แคบลง |
 | caller ระบุ org อื่นมาเอง → **ตัด branch นั้นทิ้ง** ไม่ใช่เขียนทับ | เขียนทับแล้วตอบคนละคำถามกับที่ถาม (`findById(orgB)` คืน org A) |
 | `softDelete()` ของ TypeORM **ไม่ยิง subscriber** ต้องเซ็ต `deletedBy` เอง | ได้ `deleted_at` แต่ไม่มี `deleted_by` → CHECK ฟ้อง |
+| `save()` ที่มี `id` มาด้วยกลายเป็น `UPDATE ... WHERE id` — ต้อง**เช็คก่อนว่า org นี้เป็นเจ้าของ** ไม่ใช่แค่ประทับ org ลงไป | ประทับอย่างเดียว = ส่ง id ของ org อื่นมาแล้ว**ย้ายแถวนั้นเข้ามาเป็นของตัวเอง** · ฝั่ง read กันไว้หมดแล้วแต่ฝั่ง write เปิดอยู่ |
 
 - ทุก service ใช้ตัวนี้ ไม่ inject `Repository` ตรง
 - ตั้ง ESLint rule ห้าม inject `Repository<T>` ธรรมดา (เปิดที่ `src/modules/**`)

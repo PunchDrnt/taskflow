@@ -67,8 +67,9 @@
 - [x] TypeORM subscriber เติม `createdBy` / `updatedBy` / `deletedBy` จาก request context
   - [x] ไม่เดาค่าเมื่อไม่มี context — migration/job ต้องบอกเองว่าทำในนามใคร (system user มีไว้เพื่อการนี้)
 - [x] `shared/request-context.ts` — `AsyncLocalStorage<{ orgId, userId }>`
-- [x] ~~Guard~~ **Middleware** ใส่ค่า context ตอนต้น request
-  - guard ทำไม่ได้ — มันคืน boolean แล้ว scope ของ `AsyncLocalStorage` ปิดทันที handler จะรันนอก context (พิสูจน์แล้ว) · middleware เรียก `next()` จากในนั้นได้
+- [x] **Middleware** ใส่ค่า context ตอนต้น request (Phase 1 ให้ `AuthGuard` รับช่วง)
+  - ที่ guard ทำไม่ได้คือ `run()` — มันคืน boolean แล้ว scope ปิดก่อน handler รัน (พิสูจน์แล้ว) · middleware เรียก `next()` จากในนั้นได้
+  - แต่ `enterWith()` ทำได้ และวัดแล้วว่าอยู่รอดข้าม `await` และแยกกันจริงตอน request ชนกัน — auth จึงไปอยู่ที่ guard เพราะมีแต่ guard ที่เห็น `@Public()` ([รายละเอียด](../docs/01-architecture.md#auth))
 - [x] `OrgScopedRepository<T>` — ทุก service ใช้ตัวนี้ ห้าม inject `Repository<T>` ตรง
   - [x] `organization.organizations` scope ด้วย `id` ไม่ใช่ `org_id` (ตารางเดียวที่ต่าง)
   - [x] `where` แบบ array (= OR ใน TypeORM) ต้องใส่เงื่อนไข org ลง**ทุก branch** ไม่ใช่ใส่ข้างนอกครั้งเดียว
@@ -106,7 +107,7 @@
 - [x] `pg_try_advisory_lock` กันสอง instance ยิงพร้อมกัน · `JOBS_ENABLED=false` ปิดได้ทั้งโปรเซส
 - [x] `SYSTEM_USER_ID` ย้ายมาที่ [`src/shared/system-user.ts`](../../apps/api/core/src/shared/system-user.ts) — job ไม่มี request context ต้องบอกเองว่าเขียนในนามใคร · [`test/schema-invariants.spec.ts`](../../apps/api/core/test/schema-invariants.spec.ts) เช็คว่าตรงกับ uuid ที่ migration seed ไว้
 - [x] Test — [`test/retention.spec.ts`](../../apps/api/core/test/retention.spec.ts) — รวมเคสที่ลบไม่ผ่านแล้วต้องข้ามไม่ล้มทั้ง sweep
-- [x] ย้าย alert (`audit.logs_default`, retention step ที่ fail) จาก log ไป Sentry — `src/maintenance/alert.ts`
+- [x] ย้าย alert (`audit.logs_default`, retention step ที่ fail) จาก log ไป Sentry — `src/shared/alert.ts` (ย้ายออกจาก `maintenance/` ตอน `OutboxWorker` ต้องใช้ด้วย)
       · log บรรทัดเดิมยังอยู่ (ไว้อ่านตอนเปิดดูอยู่แล้ว) Sentry คือตัวที่มาตามให้ไปดู · ไม่มี DSN = เงียบ
 
 ## 5. Permission + Activity log
@@ -132,7 +133,7 @@
 
 - [x] `EmailService` ห่อ Resend + `notify.outbox` + worker — [`src/modules/notify/`](../../apps/api/core/src/modules/notify/)
   - `enqueue(manager, notification)` รับ `EntityManager` แล้ว throw ถ้าไม่มี transaction เหมือน `AuditService` · เหตุผลอ่อนกว่านิดหน่อย (อีเมลที่ส่งไปแล้วเรียกคืนไม่ได้ ส่วนอีเมลที่มาช้ายังโอเค) แต่รูปเดียวกัน
-  - Worker retry 3 ครั้ง backoff 1 / 5 / 25 นาที → `status='failed'` แล้วหยุด · **ยังไม่มี Sentry** log level `error` ไปก่อน (§7)
+  - Worker พยายาม 3 ครั้ง — ครั้งแรกทันที แล้ว +5 นาที แล้ว +25 นาที (3 ครั้ง = 2 ช่องว่าง) → `status='failed'` แล้วหยุด · `failed` ไม่มีใคร retry ต่อ จึงยิง Sentry ด้วย ไม่ใช่แค่ log `error`
   - `FOR UPDATE SKIP LOCKED` + advisory lock — at-least-once โดยตั้งใจ · process ตายกลางคันแล้วส่งซ้ำ ดีกว่า mark sent ก่อนส่งแล้วหาย
   - Template ที่ยังไม่มีคน implement **ไม่ throw** — ส่งแบบดิบไปก่อน ไม่งั้นจะวนอยู่ใน retry loop จนถูก mark failed
   - Test — [`test/outbox.spec.ts`](../../apps/api/core/test/outbox.spec.ts)

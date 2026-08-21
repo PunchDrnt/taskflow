@@ -13,7 +13,13 @@ import { renderTemplate } from './templates'
 
 /** Give up after this many tries and leave the row for someone to look at. */
 export const MAX_ATTEMPTS = 3
-/** 1 minute, then 5, then 25. */
+/**
+ * The wait before a retry is `60 * 5^attempts`, but `attempts = 0` is claimed
+ * immediately rather than waiting, so the schedule a row actually sees is
+ * send now, +5 minutes, +25 minutes, then `failed` — two waits, because three
+ * attempts leave two gaps. The 60s this constant would give at `attempts = 0`
+ * is never used; a notification nobody has tried to send yet should go now.
+ */
 export const BACKOFF_BASE_SECONDS = 60
 const BATCH_SIZE = 20
 const EVERY_15_SECONDS = 15_000
