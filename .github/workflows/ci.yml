@@ -25,12 +25,17 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # Before setup-node, not after, and that ordering is the whole point:
+      # `cache: yarn` makes setup-node run `yarn cache dir` to find the folder
+      # to cache, and the runner's global yarn is 1.x, which refuses to run in
+      # a project whose packageManager says yarn@4. Enabling Corepack first
+      # replaces /usr/local/bin/yarn with a shim, so that lookup gets 4.17.1.
+      - run: corepack enable
+
       - uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
           cache: yarn
-
-      - run: corepack enable
 
       - run: yarn install --immutable
 
