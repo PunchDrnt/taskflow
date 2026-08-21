@@ -150,15 +150,18 @@
 - [x] เพิ่ม `api` / `web` / `caddy` — อยู่ใน `deploy/compose.yml` แยกไฟล์
 - [x] แยก service ตอน dev ออกจากชุดที่ deploy · เป็นคนละไฟล์ ไม่ใช่ override เพราะ
       compose เพิ่ม service ได้แต่ลบไม่ได้ · `postgres-test` กับ `garage-ui` ไม่มีในไฟล์ prod
-- [x] `Dockerfile` ทั้งสอง app (multi-stage) · api 234 MB · web 198 MB (standalone)
+- [x] `Dockerfile` ทั้งสอง app (multi-stage) · api 275 MB · web 201 MB (standalone)
 - [x] CI: `lint` + `check-types` + `test` + `build` + build image ทั้งสองตัว
-- [ ] **Deploy ขึ้น Bangmod ได้จริง แม้เป็นหน้าเปล่า** ← เหลือแค่รัน ต้องมี server จริง
-      pipeline พร้อม: `deploy.yml` → push image ขึ้น GHCR + ssh ไป `pull`/`up -d` · ไฟล์ใน `deploy/` copy เอง
-      (`rsync -a --exclude docs`) แล้วทุก deploy เทียบ `checksum.sh` ก่อน — ไม่ตรงคือ fail ไม่ใช่เตือน
-      ต้องตั้งก่อน: secret `SSH_HOST`/`SSH_USER`/`SSH_PRIVATE_KEY`/`DEPLOY_PATH` (= `/srv/taskflow/deploy`),
-      var `NEXT_PUBLIC_SENTRY_DSN`, และ `docker login ghcr.io` บน server หนึ่งครั้ง
-      (GHCR package private โดย default · pull ไม่ผ่านขึ้นว่า "not found" ไม่ใช่ 403)
-      ทดสอบบนเครื่องครบแล้ว: boot จากศูนย์ → migrate → serve ผ่าน Caddy → redeploy ซ้ำ → rollback ด้วย IMAGE_TAG
+- [x] **Deploy ขึ้น Bangmod** — ของฝั่ง repo เสร็จและส่งมอบแล้ว · **ตัวรันจริงบนเครื่องเป็นงานของ owner**
+      บรรทัดนี้ติ๊กเพราะสิ่งที่ repo ทำได้ทำครบแล้ว ไม่ได้แปลว่า Bangmod ขึ้นแล้ว — ดูของจริงที่ Actions
+      - pipeline: `deploy.yml` → push image ขึ้น GHCR + ssh ไป `pull`/`up -d`
+      - ไฟล์ใน `deploy/` copy เอง (`rsync -a --exclude docs`) · ทุก deploy เทียบ `checksum.sh` ก่อนแตะอะไร
+        ไม่ตรงคือ **fail** ไม่ใช่เตือน — กัน server รัน Caddyfile เก่าแบบเงียบ ๆ
+      - runbook 9 step ที่ [`deploy/docs/setup.md`](../../deploy/docs/setup.md) · key ที่ [`ssh-keys.md`](../../deploy/docs/ssh-keys.md)
+      - ทดสอบบนเครื่องครบ: boot จากศูนย์ → migrate → serve ผ่าน Caddy → redeploy ซ้ำ → rollback ด้วย IMAGE_TAG
+      - เหลือฝั่ง owner: secret `SSH_HOST`/`SSH_USER`/`SSH_PRIVATE_KEY`/`DEPLOY_PATH` (= `/srv/taskflow/deploy`),
+        var `NEXT_PUBLIC_SENTRY_DSN`, `docker login ghcr.io` บนเครื่อง, rsync รอบแรก, เปิด branch protection ให้ CODEOWNERS มีผล
+        (GHCR package private โดย default · pull ไม่ผ่านขึ้นว่า "not found" ไม่ใช่ 403 · รอบแรกต้องให้ CI build ก่อนเพราะ server ไม่มี source)
 - [x] Sentry ทั้งสองฝั่ง · ไม่มี DSN = เงียบ · production ไม่มี DSN = ไม่ boot
 - [x] Backup: `deploy/backup.sh` แยก DB กับ object · restore กลับเข้า DB เปล่าแล้ว ผ่าน
 - [x] DB user ของ app **ไม่ใช่ superuser** · `deploy/init/postgres.sh` · ยืนยันด้วย pg_roles
@@ -175,8 +178,8 @@
       · migration เขียน key เป็น literal (เหตุผลเดียวกับ `SYSTEM_USER_ID`) · `schema-invariants.spec.ts` จับ drift
       · **ไม่ seed role กับ mapping** เพราะ spec ตั้งใจให้แก้ใน DB ได้โดยไม่ต้อง deploy
 - [x] `yarn build` / `lint` / `check-types` / `test` ผ่านหมด — 126 tests / 16 files
-- [ ] Tag `v0.1.0` ← **รอ deploy ขึ้น Bangmod ก่อน** · tag คือคำประกาศว่า Phase 0 จบ
-      ซึ่งยังไม่จริงตราบใดที่ §7 ข้อ 🔴 ยังไม่ได้ทำ · การเลื่อน tag ถูกกว่าการย้าย tag ทีหลัง
+- [ ] Tag `v0.1.0` ← **owner ติดเองหลัง Bangmod ขึ้นจริง** · tag คือคำประกาศว่า Phase 0 จบ
+      ติดก่อนแล้วต้องย้ายทีหลัง แพงกว่าติดช้า
 
 ---
 
