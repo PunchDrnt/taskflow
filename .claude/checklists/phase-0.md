@@ -2,8 +2,11 @@
 
 ไล่ตามลำดับที่ทำได้จริง (ไม่ใช่ลำดับ priority ใน [`03-roadmap.md`](../docs/03-roadmap.md)) — ข้อล่างพึ่งข้อบน
 
-> **สถานะไฟล์นี้:** ของชั่วคราว ลบทิ้งได้เมื่อ Phase 0 จบ · ไม่ใช่ spec
-> ตัวสเปกจริงอยู่ที่ [`.claude/docs/`](../docs/) — ถ้าขัดกัน ให้เชื่อ docs
+> ## ✅ Phase 0 จบแล้ว — tag `v0.1.0`
+>
+> เก็บไฟล์นี้ไว้เป็นบันทึกว่าทำอะไรไปบ้างและทำไม ไม่ต้องไล่ติ๊กต่อ · ข้อที่ยังว่างอยู่คือของที่ **ตั้งใจเลื่อนไป Phase 1** ไม่ใช่ของค้าง (§8 — invariant ที่ต้องมี service ก่อนถึงจะบังคับได้ · กติกาย้ายไป [`04-features.md`](../docs/04-features.md) และ [`definition-of-done.md`](./definition-of-done.md) เรียบร้อยแล้ว)
+>
+> **สถานะไฟล์นี้:** ไม่ใช่ spec · ตัวสเปกจริงอยู่ที่ [`.claude/docs/`](../docs/) — ถ้าขัดกัน ให้เชื่อ docs
 >
 > 🔒 = [binding decision](../docs/00-overview.md#binding-decisions) ผิดแล้วแก้ย้อนหลังไม่ได้
 
@@ -178,9 +181,12 @@
       `SYSTEM_PERMISSIONS` ใน [`src/permission/system-permissions.ts`](../../apps/api/core/src/permission/system-permissions.ts)
       · migration เขียน key เป็น literal (เหตุผลเดียวกับ `SYSTEM_USER_ID`) · `schema-invariants.spec.ts` จับ drift
       · **ไม่ seed role กับ mapping** เพราะ spec ตั้งใจให้แก้ใน DB ได้โดยไม่ต้อง deploy
-- [x] `yarn build` / `lint` / `check-types` / `test` ผ่านหมด — 126 tests / 16 files
-- [ ] Tag `v0.1.0` ← **owner ติดเองหลัง Bangmod ขึ้นจริง** · tag คือคำประกาศว่า Phase 0 จบ
-      ติดก่อนแล้วต้องย้ายทีหลัง แพงกว่าติดช้า
+- [x] `yarn build` / `lint` / `check-types` / `test` ผ่านหมด — 150 tests / 21 files
+- [x] Tag `v0.1.0` — ติดแล้ว
+      เดิมเขียนไว้ว่า "owner ติดเองหลัง Bangmod ขึ้นจริง · ติดก่อนแล้วต้องย้ายทีหลัง แพงกว่าติดช้า"
+      **เปลี่ยนเป็นติดก่อน deploy** เพราะแยก deploy ออกเป็นงานต่างหาก — tag นี้ประกาศว่า
+      *โค้ด* พร้อม ไม่ได้ประกาศว่าเครื่องที่ Bangmod ขึ้นแล้ว · ถ้า deploy จริงแล้วต้องแก้โค้ด
+      ก็ออก `v0.1.1` ไม่ต้องย้าย tag เดิม ซึ่งถูกกว่าการย้ายอยู่ดี
 
 ---
 
