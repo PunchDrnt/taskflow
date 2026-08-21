@@ -106,7 +106,8 @@
 - [x] `pg_try_advisory_lock` กันสอง instance ยิงพร้อมกัน · `JOBS_ENABLED=false` ปิดได้ทั้งโปรเซส
 - [x] `SYSTEM_USER_ID` ย้ายมาที่ [`src/shared/system-user.ts`](../../apps/api/core/src/shared/system-user.ts) — job ไม่มี request context ต้องบอกเองว่าเขียนในนามใคร · [`test/schema-invariants.spec.ts`](../../apps/api/core/test/schema-invariants.spec.ts) เช็คว่าตรงกับ uuid ที่ migration seed ไว้
 - [x] Test — [`test/retention.spec.ts`](../../apps/api/core/test/retention.spec.ts) 21 เคส รวมเคสที่ลบไม่ผ่านแล้วต้องข้ามไม่ล้มทั้ง sweep
-- [ ] ย้าย alert (`audit.logs_default`, retention step ที่ fail) จาก log ไป Sentry — รอ §7
+- [x] ย้าย alert (`audit.logs_default`, retention step ที่ fail) จาก log ไป Sentry — `src/maintenance/alert.ts`
+      · log บรรทัดเดิมยังอยู่ (ไว้อ่านตอนเปิดดูอยู่แล้ว) Sentry คือตัวที่มาตามให้ไปดู · ไม่มี DSN = เงียบ
 
 ## 5. Permission + Activity log
 
@@ -151,11 +152,11 @@
       compose เพิ่ม service ได้แต่ลบไม่ได้ · `postgres-test` กับ `garage-ui` ไม่มีในไฟล์ prod
 - [x] `Dockerfile` ทั้งสอง app (multi-stage) · api 234 MB · web 198 MB (standalone)
 - [x] CI: `lint` + `check-types` + `test` + `build` + build image ทั้งสองตัว
-- [ ] **Deploy ขึ้น Bangmod ได้จริง แม้เป็นหน้าเปล่า** ← เหลือแค่รัน ยังไม่ได้ยิงจริง
-      pipeline พร้อมแล้ว: `.github/workflows/deploy.yml` push image ขึ้น GHCR แล้ว ssh ไป
-      `pull` + `up -d` · ต้องตั้ง secret `SSH_HOST`/`SSH_USER`/`SSH_PRIVATE_KEY`/`DEPLOY_PATH`,
-      var `NEXT_PUBLIC_SENTRY_DSN` และ `docker login ghcr.io` บน server หนึ่งครั้ง
-      (GHCR package เป็น private โดย default · pull ไม่ผ่านจะขึ้นว่า "not found" ไม่ใช่ 403)
+- [ ] **Deploy ขึ้น Bangmod ได้จริง แม้เป็นหน้าเปล่า** ← เหลือแค่รัน ต้องมี server จริง
+      pipeline พร้อม: `deploy.yml` → `git checkout` ไฟล์ใน `deploy/` + push image ขึ้น GHCR + ssh ไป `pull`/`up -d`
+      ต้องตั้งก่อน: secret `SSH_HOST`/`SSH_USER`/`SSH_PRIVATE_KEY`/`DEPLOY_PATH` (= clone ของ repo ไม่ใช่ `deploy/`),
+      var `NEXT_PUBLIC_SENTRY_DSN`, และ `docker login ghcr.io` บน server หนึ่งครั้ง
+      (GHCR package private โดย default · pull ไม่ผ่านขึ้นว่า "not found" ไม่ใช่ 403)
       ทดสอบบนเครื่องครบแล้ว: boot จากศูนย์ → migrate → serve ผ่าน Caddy → redeploy ซ้ำ → rollback ด้วย IMAGE_TAG
 - [x] Sentry ทั้งสองฝั่ง · ไม่มี DSN = เงียบ · production ไม่มี DSN = ไม่ boot
 - [x] Backup: `deploy/backup.sh` แยก DB กับ object · restore กลับเข้า DB เปล่าแล้ว ผ่าน
@@ -165,8 +166,13 @@
 
 ## 8. ปิด Phase 0
 
-- [ ] Seed script สำหรับ dev/demo
-- [ ] Seed permission key ของ RBAC ระดับระบบ (**ไม่มีโค้ดอ่าน** — back-office มา Phase 7)
+- [x] Seed script สำหรับ dev/demo — `yarn workspace @api/core db:seed` ([`src/database/seed.ts`](../../apps/api/core/src/database/seed.ts))
+      1 org · 4 คน (owner/admin/member×2) · team · project ที่มี status ครบชุด + sprint active · task 3 + sub-task 2
+      รันซ้ำได้ (ลบของเดิมก่อน) · `NODE_ENV=production` แล้วปฏิเสธ exit 1
+- [x] Seed permission key ของ RBAC ระดับระบบ (**ไม่มีโค้ดอ่าน** — back-office มา Phase 7)
+      `SYSTEM_PERMISSIONS` ใน [`src/permission/system-permissions.ts`](../../apps/api/core/src/permission/system-permissions.ts)
+      · migration เขียน key เป็น literal (เหตุผลเดียวกับ `SYSTEM_USER_ID`) · `schema-invariants.spec.ts` จับ drift
+      · **ไม่ seed role กับ mapping** เพราะ spec ตั้งใจให้แก้ใน DB ได้โดยไม่ต้อง deploy
 - [ ] `yarn build` / `lint` / `check-types` / `test` ผ่านหมด
 - [ ] Tag `v0.1.0`
 

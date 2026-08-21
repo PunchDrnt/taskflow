@@ -193,6 +193,8 @@ Unit tests sit next to the code as `src/**/*.spec.ts`. Integration tests live in
 | [storage.spec.ts](apps/api/core/test/storage.spec.ts)                         | The bucket is private: a presigned URL works, the plain one gets 403                                 |
 | [sentry.spec.ts](apps/api/core/test/sentry.spec.ts)                           | Unhandled errors are reported; an `HttpException` is an answer, not a fault                          |
 
+`yarn workspace @api/core db:seed` fills a development database with one organisation, four people, a team, a project with a full set of statuses and an active sprint, and tasks two levels deep. It deletes what it made before making it again, so it can be re-run, and refuses outright when `NODE_ENV=production`.
+
 The permission layer joins them once it exists.
 
 ## Deploying

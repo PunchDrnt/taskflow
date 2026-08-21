@@ -106,8 +106,20 @@ jobs:
           envs: GITHUB_SHA
           script: |
             set -eu
+            # DEPLOY_PATH is a clone of this repository, not the deploy
+            # directory inside it.
             cd ${{ secrets.DEPLOY_PATH }}
             export IMAGE_TAG="$GITHUB_SHA"
+
+            # Images are only half of a deploy: compose.yml and everything
+            # under deploy/config are read from disk, so without this a change
+            # to the Caddyfile ships a green workflow and an unchanged server.
+            # --force discards local edits to tracked files; deploy/.env is
+            # untracked and survives.
+            git fetch --depth 1 origin prod
+            git checkout --force FETCH_HEAD
+
+            cd deploy
             # No flags: compose.yml and .env sit in this directory.
             docker compose pull
             # `up -d` recreates api-migrate too, so migrations run against the

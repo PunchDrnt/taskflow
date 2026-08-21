@@ -47,12 +47,22 @@ directory whose whole purpose is being copied to a server.
 
 ## Updating
 
-`docker compose pull && docker compose up -d` brings new **images**, and that
-is all `.github/workflows/deploy.yml` does today.
+`.github/workflows/deploy.yml` does both halves on a push to `prod`: it checks
+this directory out at the deployed commit, then pulls the images CI built and
+restarts.
 
-It does **not** update the files in this directory. Change `config/Caddyfile`
-or `compose.yml`, deploy, and the workflow goes green while the server keeps
-running the old ones — so for now those changes have to reach the box by hand.
-Making this directory a checkout of `prod` and adding a `git checkout` before
-the pull would close that, and is the reason it is one self-contained
-directory.
+That means the server's `DEPLOY_PATH` is a **clone of the repository**, not
+this directory on its own — `git fetch` needs a remote to fetch from. The
+checkout is `--force`, so a tracked file edited on the box is discarded on the
+next deploy; `.env` is untracked and survives.
+
+To deploy by hand, or to roll back:
+
+```bash
+cd deploy
+IMAGE_TAG=<commit-sha> docker compose pull
+IMAGE_TAG=<commit-sha> docker compose up -d
+```
+
+Nothing under `init/` re-runs, whichever way the deploy happens — those scripts
+only ever see an empty volume.
