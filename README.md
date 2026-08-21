@@ -185,17 +185,17 @@ Vitest, configured in `@api/core` ([vitest.config.mts](apps/api/core/vitest.conf
 
 Unit tests sit next to the code as `src/**/*.spec.ts`. Integration tests live in [apps/api/core/test/](apps/api/core/test/) and run against the `postgres-test` service in [docker-compose.yml](docker-compose.yml) — ephemeral, backed by tmpfs — pinned to `fileParallelism: false` since they share one database. They read `DATABASE_URL_TEST` — and `storage.spec.ts` reads `S3_HOST` — and **skip when unset**, so a fresh checkout can run `yarn test` without Docker; CI must set it. See [test/README.md](apps/api/core/test/README.md).
 
-| Suite                                                                         | Covers                                                                                               |
-| ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| [org-isolation.spec.ts](apps/api/core/test/org-isolation.spec.ts)             | 🔒 A query from org A must never see org B's rows                                                    |
-| [schema-drift.spec.ts](apps/api/core/test/schema-drift.spec.ts)               | Entities still describe the schema the migrations built                                              |
-| [schema-invariants.spec.ts](apps/api/core/test/schema-invariants.spec.ts)     | Facts the schema and the code both rely on, such as the task-depth ceiling matching `MAX_TASK_DEPTH` |
-| [retention.spec.ts](apps/api/core/test/retention.spec.ts)                     | The maintenance jobs: purge order, anonymisation, partition upkeep, the advisory lock                |
-| [cascade-soft-delete.spec.ts](apps/api/core/test/cascade-soft-delete.spec.ts) | What TypeORM hides on its own, and that an aggregate goes down whole                                 |
-| [audit.spec.ts](apps/api/core/test/audit.spec.ts)                             | 🔒 The activity log commits and rolls back with the change it describes                              |
-| [outbox.spec.ts](apps/api/core/test/outbox.spec.ts)                           | Notification queue and delivery: retries, backoff, and giving up                                     |
-| [storage.spec.ts](apps/api/core/test/storage.spec.ts)                         | The bucket is private: a presigned URL works, the plain one gets 403                                 |
-| [sentry.spec.ts](apps/api/core/test/sentry.spec.ts)                           | Unhandled errors are reported; an `HttpException` is an answer, not a fault                          |
+| Suite                                                                         | Covers                                                                                                |
+| ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| [org-isolation.spec.ts](apps/api/core/test/org-isolation.spec.ts)             | 🔒 A query from org A must never see org B's rows                                                     |
+| [schema-drift.spec.ts](apps/api/core/test/schema-drift.spec.ts)               | Entities still describe the schema the migrations built                                               |
+| [schema-invariants.spec.ts](apps/api/core/test/schema-invariants.spec.ts)     | Facts the schema and the code both rely on, such as the task-depth ceiling matching `MAX_TASK_DEPTH`  |
+| [retention.spec.ts](apps/api/core/test/retention.spec.ts)                     | The maintenance jobs: purge order, anonymisation, partition upkeep, the advisory lock                 |
+| [cascade-soft-delete.spec.ts](apps/api/core/test/cascade-soft-delete.spec.ts) | What TypeORM hides on its own, and that an aggregate goes down whole                                  |
+| [audit.spec.ts](apps/api/core/test/audit.spec.ts)                             | 🔒 The activity log commits and rolls back with the change it describes                               |
+| [outbox.spec.ts](apps/api/core/test/outbox.spec.ts)                           | Notification queue and delivery: retries, backoff, and giving up                                      |
+| [storage.spec.ts](apps/api/core/test/storage.spec.ts)                         | The bucket is private: a presigned URL works, the plain one gets 403                                  |
+| [sentry.spec.ts](apps/api/core/test/sentry.spec.ts)                           | Unhandled errors are reported, an `HttpException` is not — and `./instrument` is still imported first |
 
 `yarn workspace @api/core db:seed` fills a development database with one organisation, four people, a team, a project with a full set of statuses and an active sprint, and tasks two levels deep. It deletes what it made before making it again, so it can be re-run, and refuses outright when `NODE_ENV=production`.
 
@@ -248,7 +248,9 @@ The database goes out as a `pg_dump` custom-format archive, checked with `pg_res
 
 ## Error tracking
 
-Sentry, on both sides, inert without a DSN so a fresh checkout runs unchanged. The API initialises it in [src/instrument.ts](apps/api/core/src/instrument.ts), imported on the first line of `main.ts` — Sentry instruments modules as they load, so anything imported earlier is invisible to it, which is also why that file reads `process.env` directly instead of waiting for `ConfigService`.
+Sentry, on both sides, inert without a DSN so a fresh checkout runs unchanged. The API initialises it in [src/instrument.ts](apps/api/core/src/instrument.ts), imported before anything else in `main.ts` — Sentry instruments modules as they load, so anything imported earlier is invisible to it, which is also why that file reads `process.env` directly instead of waiting for `ConfigService`.
+
+That position is enforced twice, because a comment saying so was not enough to keep it. Prettier's import sorter treats side-effect imports as barriers, which sounds protective and is not: it will not move `./instrument` down, but neither will it move anything back out from above it, and an IDE auto-import lands at line 1. So the shared config names it in `importOrderSafeSideEffects` and gives it the first group, which makes Prettier sort it back to the top on commit — and [sentry.spec.ts](apps/api/core/test/sentry.spec.ts) asserts the result, since a config can be edited. Getting this wrong reports nothing and fails nothing; it is noticed when an exception someone went looking for is not there.
 
 `NEXT_PUBLIC_SENTRY_DSN` is a **build argument**, not an environment variable: Next inlines `NEXT_PUBLIC_*` into the browser bundle when it compiles, so setting it at container start leaves the client half reporting nowhere.
 

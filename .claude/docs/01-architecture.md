@@ -70,6 +70,7 @@ packages/
 - **Caddy รับ origin เดียว** `/api/*` → Nest (ตัด prefix), ที่เหลือ → Next · เป็นเหตุผลที่ `SameSite=Lax` พอโดยไม่ต้องมี CSRF token ([CSRF](#csrf))
 - **backup แยก DB กับ object** (`deploy/backup.sh`) — ไฟล์กู้จาก DB dump ไม่ได้ · object เก็บเป็นไฟล์ธรรมดา ไม่ใช่ data dir ของ Garage เพื่อให้ restore ได้โดยไม่ต้องมี Garage
 - **Sentry บังคับใน production** เหมือน `RESEND_API_KEY` — ไม่มี DSN แล้ว boot ไม่ผ่าน · deployment ที่ไม่ส่ง error ไปไหนคือความพังที่ไม่มีใครรู้
+- **`./instrument` ต้องเป็น import แรกของ `main.ts`** — Sentry patch module ตอนโหลด ของที่ import ก่อนหน้ามันจะไม่ถูก instrument เลย · คอมเมนต์อย่างเดียวไม่พอ เพราะ auto-import ของ IDE ลงบรรทัด 1 เสมอ และ prettier ปล่อยไว้ (side-effect import เป็น barrier: ไม่ย้ายมันลง แต่ก็ไม่ย้ายของที่มาอยู่ข้างบนออก) · คุมสองชั้น — `importOrderSafeSideEffects` ใน `prettier/index.js` ดันมันกลับขึ้นบนตอน commit และ `test/sentry.spec.ts` เช็คผลลัพธ์อีกที เผื่อ config ถูกแก้ · พลาดแล้ว**ไม่มีสัญญาณอะไรเลย** ไม่ error ไม่มีเทสแดง รู้ตอนไปหา error ใน Sentry แล้วไม่เจอ
 
 ---
 

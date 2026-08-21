@@ -165,7 +165,7 @@ yarn workspace @api/core migration:show
 
 - `eslint/base.js` — shared flat config (ESLint 10 + typescript-eslint + eslint-config-prettier), extended by `eslint/nestjs.js`, `eslint/next.js`, and `eslint/react-library.js` for stack-specific rules (e.g. Nest disables some OOP-unfriendly TS rules; Next/react-library add `eslint-plugin-react-hooks` and, for Next, `@next/eslint-plugin-next`).
 - `typescript/base.json` extended by `typescript/nextjs.json`, `typescript/nestjs.json`, `typescript/react-library.json`.
-- `prettier/index.js` — shared Prettier config.
+- `prettier/index.js` — shared Prettier config. Its `importOrderSafeSideEffects` / first `importOrder` entry for `^\./instrument$` is load-bearing rather than cosmetic: see the Sentry note under Deploy before rewriting the import groups.
 - `tailwind/theme.css` — shared Tailwind v4 theme, pulled into `@repo/ui`'s and the web app's global styles.
 
 When changing lint/type/format behavior for more than one workspace, change it here rather than in the individual app.
@@ -180,7 +180,7 @@ Both `Dockerfile`s build from the repository root, because Yarn resolves workspa
 
 `deploy/init/postgres.sh` creates the role the app connects as — `NOSUPERUSER`, owning the database, which is enough for every migration because `citext` is a _trusted_ extension. `deploy/backup.sh` writes the database and the objects to separate directories and verifies the dump with `pg_restore --list` before reporting success.
 
-Sentry is initialised in `src/instrument.ts`, imported on the first line of `main.ts` because Sentry patches modules as they load; that file reads `process.env` directly since `ConfigService` does not exist yet. `NEXT_PUBLIC_SENTRY_DSN` is a **build argument**, not an environment variable — Next inlines `NEXT_PUBLIC_*` at compile time, so setting it at container start leaves the browser half reporting nowhere.
+Sentry is initialised in `src/instrument.ts`, imported before anything else in `main.ts` because Sentry patches modules as they load; that file reads `process.env` directly since `ConfigService` does not exist yet. Two things hold that position, because a comment did not: `prettier/index.js` lists it in `importOrderSafeSideEffects` and gives it the first `importOrder` group, so Prettier sorts it back to the top instead of treating it as a barrier and leaving whatever lands above it in place — an IDE auto-import goes to line 1 — and `test/sentry.spec.ts` asserts the first import in `main.ts` is still `./instrument`, since that config can be edited. The failure is silent otherwise: no error, just exceptions that never arrive. `NEXT_PUBLIC_SENTRY_DSN` is a **build argument**, not an environment variable — Next inlines `NEXT_PUBLIC_*` at compile time, so setting it at container start leaves the browser half reporting nowhere.
 
 CI copies `.env.example` to `.env` instead of listing variables, which makes the committed example a checked artefact. `garage-init` is kept out of `docker compose up --wait`, which exits 1 when any service in its set stops, even successfully.
 
