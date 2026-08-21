@@ -41,7 +41,7 @@ jobs:
       - name: Use the committed example as the environment
         run: cp .env.example .env
 
-      # DATABASE_URL_TEST and S3_ENDPOINT decide whether the integration
+      # DATABASE_URL_TEST and S3_HOST decide whether the integration
       # suites run or skip, and skipping must not be possible here — the
       # cross-org isolation test is 🔒 mandatory. See test/README.md.
       - name: Start Postgres and Garage

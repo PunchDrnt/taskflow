@@ -571,7 +571,7 @@ project.projects
 
 - **Table view**
 - **Comment + thread** (`parent_comment_id`) — โครงแบบ Slack
-- **ไฟล์แนบ** — MinIO + presigned URL
+- **ไฟล์แนบ** — object storage (Garage) + presigned URL
 - **Activity log UI** — ข้อมูลเก็บมาตั้งแต่ Phase 0 แล้ว
 - แจ้งเตือนครบชุด — ใกล้ deadline, mention, comment ใหม่, status เปลี่ยน
 - Tag / Label

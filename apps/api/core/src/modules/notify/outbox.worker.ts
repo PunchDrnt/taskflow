@@ -6,6 +6,7 @@ import { DataSource } from 'typeorm'
 
 import type { Env } from '../../config/env'
 import { LOCK_KEYS, withAdvisoryLock } from '../../maintenance/advisory-lock'
+import { alertsFor } from '../../shared/alert'
 import { SYSTEM_USER_ID } from '../../shared/system-user'
 import { EmailTransport } from './email.transport'
 import { renderTemplate } from './templates'
@@ -16,6 +17,8 @@ export const MAX_ATTEMPTS = 3
 export const BACKOFF_BASE_SECONDS = 60
 const BATCH_SIZE = 20
 const EVERY_15_SECONDS = 15_000
+
+const alerts = alertsFor('notify')
 
 interface Claimed {
   id: string
@@ -74,30 +77,55 @@ export class OutboxWorker {
   }
 
   /**
-   * Rows that are due, locked so a second worker skips them rather than
-   * queueing behind them. The advisory lock already makes that unlikely; this
-   * makes a duplicate send impossible rather than improbable.
+   * Takes the rows that are due, and marks them taken in the same statement.
+   *
+   * Claiming is a write, not a read, and that is the whole point. A plain
+   * `SELECT ... FOR UPDATE SKIP LOCKED` through `dataSource.query()` runs in
+   * its own implicit transaction, so the row locks are released the moment it
+   * returns — measured: a second connection issuing the same query gets the
+   * same rows back. Inside an `UPDATE` the locks are held for the length of
+   * the statement, which is what makes SKIP LOCKED mean anything.
+   *
+   * Bumping `attempts` here rather than on failure also arms the backoff at
+   * the moment of taking: a process that dies mid-send leaves the row pending
+   * and waiting its turn, instead of being picked up again 15 seconds later.
+   *
+   * `attempts` therefore counts attempts made, not failures suffered — a row
+   * sent first time carries 1.
    */
   private async claim(limit: number): Promise<Claimed[]> {
     // A SELECT returns the rows; only INSERT/UPDATE/DELETE come back as
-    // [rows, affected]. Destructuring this one hands back the first row.
+    // [rows, affected]. This statement is a SELECT overall.
     const rows = (await this.dataSource.query(
-      `SELECT o.id, u.email::text AS recipient_email, o.template,
-              o.payload_json, o.attempts
-         FROM notify.outbox o
-         JOIN identity.users u ON u.id = o.recipient_id
-        WHERE o.status = 'pending'
-          AND o.channel = 'email'
-          AND (
-            o.attempts = 0
-            OR o.updated_at < now() - make_interval(
-                 secs => $1 * power(5, o.attempts)::int
+      `WITH claimed AS (
+         UPDATE notify.outbox o
+            SET attempts = o.attempts + 1, updated_at = now(), updated_by = $3
+          WHERE o.id IN (
+            SELECT id
+              FROM notify.outbox
+             WHERE status = 'pending'
+               AND channel = 'email'
+               AND (
+                 attempts = 0
+                 OR updated_at < now() - make_interval(
+                      secs => $1 * power(5, attempts)::int
+                    )
                )
+             ORDER BY created_at
+             LIMIT $2
+             FOR UPDATE SKIP LOCKED
           )
-        ORDER BY o.created_at
-        LIMIT $2
-        FOR UPDATE OF o SKIP LOCKED`,
-      [BACKOFF_BASE_SECONDS, limit],
+         RETURNING o.id, o.recipient_id, o.template, o.payload_json,
+                   o.attempts, o.created_at
+       )
+       SELECT c.id, u.email::text AS recipient_email, c.template,
+              c.payload_json, c.attempts
+         FROM claimed c
+         -- recipient_id is ON DELETE RESTRICT and identity.users is never
+         -- hard-deleted, so this join cannot silently drop a claimed row.
+         JOIN identity.users u ON u.id = c.recipient_id
+        ORDER BY c.created_at`,
+      [BACKOFF_BASE_SECONDS, limit, SYSTEM_USER_ID],
     )) as Claimed[]
 
     return rows
@@ -122,32 +150,33 @@ export class OutboxWorker {
     }
   }
 
+  /** `claim` already counted this attempt, so this only records how it went. */
   private async recordFailure(row: Claimed, error: unknown): Promise<void> {
-    const attempts = row.attempts + 1
-    const giveUp = attempts >= MAX_ATTEMPTS
+    const giveUp = row.attempts >= MAX_ATTEMPTS
     const message = error instanceof Error ? error.message : String(error)
 
     await this.dataSource.query(
       `UPDATE notify.outbox
-          SET attempts = $2, last_error = $3, status = $4,
-              updated_at = now(), updated_by = $5
+          SET last_error = $2, status = $3, updated_at = now(), updated_by = $4
         WHERE id = $1`,
-      [
-        row.id,
-        attempts,
-        message,
-        giveUp ? 'failed' : 'pending',
-        SYSTEM_USER_ID,
-      ],
+      [row.id, message, giveUp ? 'failed' : 'pending', SYSTEM_USER_ID],
     )
 
-    // Sentry replaces this in Phase 0 §7. A row that has given up will not be
-    // retried by anything, so it has to be loud now.
     this.logger[giveUp ? 'error' : 'warn'](
-      { err: error, outboxId: row.id, attempts },
+      { err: error, outboxId: row.id, attempts: row.attempts },
       giveUp
         ? 'Giving up on a notification after the last attempt'
         : 'Notification failed; will retry',
     )
+
+    // 'failed' is terminal: nothing retries it, and the person it was meant
+    // for is never told. The log alone would say so at 03:00 to nobody.
+    if (giveUp) {
+      alerts.failure(error, {
+        outboxId: row.id,
+        template: row.template,
+        attempts: row.attempts,
+      })
+    }
   }
 }

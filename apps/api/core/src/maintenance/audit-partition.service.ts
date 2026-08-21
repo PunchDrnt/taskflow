@@ -2,8 +2,10 @@ import { Injectable, Logger } from '@nestjs/common'
 import { InjectDataSource } from '@nestjs/typeorm'
 import { DataSource } from 'typeorm'
 
+import { alertsFor } from '../shared/alert'
 import { LOCK_KEYS, withAdvisoryLock } from './advisory-lock'
-import { alertCondition } from './alert'
+
+const alerts = alertsFor('maintenance')
 
 /** Large enough that a job stopped for months still has somewhere to write. */
 const MONTHS_AHEAD = 12
@@ -84,7 +86,7 @@ export class AuditPartitionService {
         'until they are moved out'
 
       this.logger.error({ rows: count }, message)
-      alertCondition(message, { rows: count })
+      alerts.condition(message, { rows: count })
     }
 
     return count

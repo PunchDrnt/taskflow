@@ -10,7 +10,7 @@ docker compose up -d
 yarn test
 ```
 
-`storage.spec.ts` needs object storage and skips without `S3_ENDPOINT`;
+`storage.spec.ts` needs object storage and skips without `S3_HOST`;
 `sentry.spec.ts` needs neither, since it collects events in process rather than
 sending them; everything else needs only `postgres-test`. `garage-init` is a one-shot container that lays
 out the cluster on first boot and exits — nothing to start by hand.

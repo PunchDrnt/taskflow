@@ -72,7 +72,7 @@
 | 6   | 🔴  | Activity log (เขียนใน tx เดียวกับ business logic) + event emitter สำหรับ notification | บันทึกทุกการเปลี่ยนแปลง — ข้อมูลย้อนหลังสร้างใหม่ไม่ได้ จึงห้ามพึ่ง event ที่อยู่นอก transaction                                         |
 | 7   | 🔴  | Deploy ขึ้น Bangmod ได้จริง                                                           | pipeline ที่ทำทีหลังมักกลายเป็นคอขวด                                                                                      |
 | 8   | 🔴  | `EmailService` + outbox                                                           | ห่อ Resend · Phase 1 ต้องใช้ทันที                                                                                        |
-| 9   | 🟡  | `StorageService`                                                                  | ห่อ MinIO — Phase 1 ใช้แค่รูปโปรไฟล์ ไฟล์แนบจริงมา Phase 3                                                                 |
+| 9   | 🟡  | `StorageService`                                                                  | ห่อ Garage (S3) — Phase 1 ใช้แค่รูปโปรไฟล์ ไฟล์แนบจริงมา Phase 3                                                                 |
 | 10  | 🟡  | `FeatureService.can()`                                                            | Phase 1 ใช้ดัก `public_registration`                                                                                  |
 | 11  | 🟡  | CI/CD                                                                             | build นอกเครื่อง production                                                                                           |
 | 12  | 🟡  | Sentry                                                                            | รู้บั๊กก่อนคนบ่น                                                                                                          |
@@ -267,7 +267,7 @@
 - `sort_order` แบบ fractional-indexing + `COLLATE "C"` (ไม่ใช่ integer เรียงติดกัน — ตอน drag & drop จะได้ไม่ต้อง update ทุกแถว)
 - ชั้น permission รวมศูนย์ `can(user, action, resource)` (CASL)
 - Role เก็บเป็น string ตรวจที่ application ไม่ใช่ enum ใน DB — เพิ่ม role ใหม่ทีหลังไม่ต้อง migrate
-- `StorageService` ห่อ MinIO — ย้ายไป S3 แก้แค่ env
+- `StorageService` พูด S3 ตรงๆ ผ่าน AWS SDK — ย้ายจาก Garage ไป S3 หรือ R2 แก้แค่ env
 - `EmailService` ห่อ Resend + outbox pattern — เปลี่ยน provider แก้จุดเดียว
 - `users.status` เป็น string ('active' | 'deactivated' | 'pending_deletion' | 'deleted') + partial unique index บนอีเมล
 - `statuses.is_cancelled_type` — แยก "ยกเลิก" ออกจาก "เสร็จ" ตั้งแต่แรก ไม่งั้น progress กับ velocity จะเพี้ยนย้อนหลังแก้ไม่ได้
@@ -280,11 +280,11 @@
 
 ## 4. Cautions
 
-### MinIO
+### Object storage
 
-- แยก volume ของ MinIO ออกจาก DB และ backup แยกกัน — ไฟล์หายกู้จาก DB ไม่ได้
+- แยก volume ของ Garage ออกจาก DB และ backup แยกกัน — ไฟล์หายกู้จาก DB ไม่ได้
 - Bucket เป็น private เข้าถึงผ่าน **presigned URL** เท่านั้น
-- ปิด MinIO console จาก public หรือจำกัด IP
+- `garage-ui` ถือ admin token — ผูก `127.0.0.1` เท่านั้น และไม่ขึ้นบน server (อยู่ใน `docker-compose.yml` ไม่ใช่ `deploy/compose.yml`)
 
 ### Minimum Tests
 

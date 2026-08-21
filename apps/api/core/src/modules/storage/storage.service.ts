@@ -39,7 +39,7 @@ export class StorageService implements OnModuleInit {
     this.bucket = config.get('S3_BUCKET', { infer: true })
 
     const useSsl = config.get('S3_USE_SSL', { infer: true })
-    const host = config.get('S3_ENDPOINT', { infer: true })
+    const host = config.get('S3_HOST', { infer: true })
     const port = config.get('S3_PORT', { infer: true })
 
     this.client = new S3Client({

@@ -3,7 +3,8 @@ import { Column, Entity } from 'typeorm'
 import { BaseEntity } from '../../shared/base.entity'
 
 /**
- * A file in MinIO. Deleting this row must be followed by deleting the object —
+ * A file in object storage. Deleting this row must be followed by deleting
+ * the object —
  * the database cannot cascade into object storage, which is also why the two
  * are backed up separately.
  */
@@ -25,7 +26,7 @@ export class Attachment extends BaseEntity {
   @Column('text')
   mimeType!: string
 
-  /** Key in MinIO. The bucket is private; files go out through presigned URLs. */
+  /** Storage key. The bucket is private; files go out through presigned URLs. */
   @Column('text')
   storageKey!: string
 }

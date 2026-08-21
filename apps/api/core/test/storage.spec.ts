@@ -20,7 +20,7 @@ const storage = new StorageService({
   },
 } as never)
 
-const configured = Boolean(process.env.S3_ENDPOINT)
+const configured = Boolean(process.env.S3_HOST)
 
 describe.skipIf(!configured)('storage', () => {
   const key = `test-org/task/${crypto.randomUUID()}/hello.txt`

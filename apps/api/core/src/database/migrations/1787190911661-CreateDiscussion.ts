@@ -65,7 +65,7 @@ export class CreateDiscussion1787190911661 implements MigrationInterface {
         file_name    text        NOT NULL,
         file_size    bigint      NOT NULL,
         mime_type    text        NOT NULL,
-        -- Key in MinIO. The bucket is private; files are served through
+        -- Storage key. The bucket is private; files are served through
         -- presigned URLs, never directly.
         storage_key  text        NOT NULL,
 
@@ -85,7 +85,7 @@ export class CreateDiscussion1787190911661 implements MigrationInterface {
       CREATE INDEX attachments_entity_idx
         ON discussion.attachments (org_id, entity_type, entity_id)
     `)
-    // Deleting a row here must be followed by deleting the object in MinIO;
+    // Deleting a row here must be followed by deleting the object in storage;
     // the database cannot cascade into object storage. Backups of the two are
     // taken separately for the same reason.
     await queryRunner.query(`

@@ -24,13 +24,14 @@ export class HealthController {
     private readonly indicators: HealthIndicatorService,
   ) {}
 
-  // Attachments are unreadable without MinIO, so an instance that cannot reach
-  // it is not ready — but the process is fine, so this never goes in live().
+  // Attachments are unreadable without object storage, so an instance that
+  // cannot reach it is not ready — but the process is fine, so this never
+  // goes in live().
   private async storageCheck() {
     const indicator = this.indicators.check('storage')
     return (await this.storage.isReachable())
       ? indicator.up()
-      : indicator.down({ message: 'MinIO is unreachable' })
+      : indicator.down({ message: 'Object storage is unreachable' })
   }
 
   @Get()

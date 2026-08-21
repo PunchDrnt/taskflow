@@ -48,7 +48,11 @@ export const envSchema = z
     // Object storage. Named for the protocol rather than the server, which is
     // a deployment choice — Garage in docker-compose.yml, and nothing in the
     // code knows that. No defaults, for the reason DATABASE_URL has none.
-    S3_ENDPOINT: z.string().min(1),
+    // A host, not a URL: the scheme comes from S3_USE_SSL and the port from
+    // S3_PORT, so `localhost` and `garage` are what belong here. Named
+    // S3_ENDPOINT once, which invited a full URL and produced
+    // `http://https://host:4900`.
+    S3_HOST: z.string().min(1),
     S3_PORT: z.coerce.number().int().positive().default(4900),
     S3_USE_SSL: z.stringbool().default(false),
     S3_ACCESS_KEY: z.string().min(1),

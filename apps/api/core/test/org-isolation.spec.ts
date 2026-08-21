@@ -172,6 +172,36 @@ describe.skipIf(!hasTestDatabase)('cross-org isolation', () => {
     await asOrg(orgA, () => projects.softDeleteById(own.id))
   })
 
+  it('updateById cannot reach another org, and reports nothing changed', async () => {
+    const bProject = (await asOrg(orgB, () => projects.find()))[0]!
+
+    expect(
+      await asOrg(orgA, () => projects.updateById(bProject.id, { name: 'x' })),
+    ).toBe(0)
+    expect(
+      (await asOrg(orgB, () => projects.findById(bProject.id)))?.name,
+    ).toBe("B's project")
+  })
+
+  it('updateById skips a soft-deleted row rather than reviving its clock', async () => {
+    const own = await asOrg(orgA, () =>
+      projects.save(projects.create({ name: 'to be deleted' })),
+    )
+    await asOrg(orgA, () => projects.softDeleteById(own.id))
+
+    // TypeORM's update() does not filter soft-deleted rows on its own.
+    expect(
+      await asOrg(orgA, () => projects.updateById(own.id, { name: 'zombie' })),
+    ).toBe(0)
+  })
+
+  it('findAndCount counts within the org, not across the table', async () => {
+    const [rows, total] = await asOrg(orgA, () => projects.findAndCount())
+
+    expect(total).toBe(rows.length)
+    expect(rows.every((project) => project.orgId === orgA.id)).toBe(true)
+  })
+
   it('scopes organizations on id, since that table has no org_id', async () => {
     const fromA = await asOrg(orgA, () => organizations.find())
 

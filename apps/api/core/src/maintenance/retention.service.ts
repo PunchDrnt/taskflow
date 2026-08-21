@@ -2,14 +2,16 @@ import { Injectable, Logger } from '@nestjs/common'
 import { InjectDataSource } from '@nestjs/typeorm'
 import { DataSource } from 'typeorm'
 
+import { alertsFor } from '../shared/alert'
 import { SYSTEM_USER_ID } from '../shared/system-user'
 import { LOCK_KEYS, withAdvisoryLock } from './advisory-lock'
-import { alertFailure } from './alert'
 import {
   PURGE_BATCH_SIZE,
   resolvePurgeOrder,
   RETENTION_DAYS,
 } from './retention.policy'
+
+const alerts = alertsFor('maintenance')
 
 /**
  * Deletes what the retention policy says should no longer exist.
@@ -53,7 +55,7 @@ export class RetentionService {
               { err: error, step: name },
               `Retention step "${name}" failed`,
             )
-            alertFailure(error, { step: name })
+            alerts.failure(error, { step: name })
           }
         }
 
@@ -112,7 +114,7 @@ export class RetentionService {
           `Could not purge ${target.name}: something outside the ninety-day ` +
             'window still references a row inside it',
         )
-        alertFailure(error, { table: target.name })
+        alerts.failure(error, { table: target.name })
       }
     }
 

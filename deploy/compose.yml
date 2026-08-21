@@ -119,7 +119,7 @@ services:
       DATABASE_URL: postgresql://${APP_DB_USER}:${APP_DB_PASSWORD}@postgres:5432/${POSTGRES_DB}
       JOBS_ENABLED: ${JOBS_ENABLED:-true}
       # Inside the network: Garage's own port, not the 4xxx dev publishes.
-      S3_ENDPOINT: garage
+      S3_HOST: garage
       S3_PORT: 3900
       S3_USE_SSL: 'false'
       S3_ACCESS_KEY: ${S3_ACCESS_KEY}

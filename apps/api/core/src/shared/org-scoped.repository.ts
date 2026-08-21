@@ -8,6 +8,7 @@ import {
   type FindOneOptions,
   type FindOptionsWhere,
   type ObjectLiteral,
+  type QueryDeepPartialEntity,
   type Repository,
 } from 'typeorm'
 
@@ -98,6 +99,14 @@ export class OrgScopedRepository<T extends ObjectLiteral> {
     })
   }
 
+  /** `[rows, total]` — the total counted after scoping, for a paged list. */
+  async findAndCount(options: FindManyOptions<T> = {}): Promise<[T[], number]> {
+    const where = this.withScope(options.where)
+    if (!where) return [[], 0]
+
+    return this.repository.findAndCount({ ...options, where })
+  }
+
   count(options: FindManyOptions<T> = {}): Promise<number> {
     const where = this.withScope(options.where)
     if (!where) return Promise.resolve(0)
@@ -167,6 +176,37 @@ export class OrgScopedRepository<T extends ObjectLiteral> {
       ...entity,
       ...this.writeScope(),
     } as DeepPartial<T>) as Promise<T>
+  }
+
+  /**
+   * Changes the columns given, without loading the row first.
+   *
+   * Both extra conditions are load-bearing, and both are invisible from the
+   * call site. `update()` does not apply the soft-delete filter that reads
+   * get, so `deletedAt: IsNull()` is what stops this editing a row that was
+   * deleted — and restarting its ninety-day retention clock. And no entity is
+   * loaded, so AuditColumnsSubscriber never runs and `updatedBy` is written
+   * here, the same reason softDeleteById writes `deletedBy` itself.
+   *
+   * Returns rows affected: 0 for another org's id, or a row already deleted.
+   */
+  async updateById(
+    id: string,
+    patch: QueryDeepPartialEntity<T>,
+  ): Promise<number> {
+    const { userId } = requireRequestContext()
+    const where = this.withScope({
+      id,
+      deletedAt: IsNull(),
+    } as unknown as FindOptionsWhere<T>)
+    if (!where) return 0
+
+    const result = await this.repository.update(where, {
+      ...patch,
+      updatedBy: userId,
+    } as QueryDeepPartialEntity<T>)
+
+    return result.affected ?? 0
   }
 
   /**

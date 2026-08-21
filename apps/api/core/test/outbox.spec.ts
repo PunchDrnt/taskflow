@@ -32,9 +32,14 @@ describe.skipIf(!hasTestDatabase)('notification outbox', () => {
 
   const sent: { to: string; subject: string }[] = []
   let failWith: Error | null = null
+  /** Holds a worker between claiming a row and marking it sent. */
+  let sendDelayMs = 0
 
   const transport = {
     send: vi.fn(async (message: { to: string; subject: string }) => {
+      if (sendDelayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, sendDelayMs))
+      }
       if (failWith) throw failWith
       sent.push(message)
     }),
@@ -86,6 +91,7 @@ describe.skipIf(!hasTestDatabase)('notification outbox', () => {
     await dataSource.query(`DELETE FROM notify.outbox`)
     sent.length = 0
     failWith = null
+    sendDelayMs = 0
   })
 
   describe('queueing', () => {
@@ -188,6 +194,36 @@ describe.skipIf(!hasTestDatabase)('notification outbox', () => {
 
       failWith = null
       expect(await worker().drain()).toBe(0)
+    })
+
+    it('two workers racing send each row once, not twice', async () => {
+      // The dangerous window is not two claims running at the same instant —
+      // it is one claim finishing while the rows it took are still 'pending'
+      // because the first worker is out at the mail server. A slow transport
+      // holds that window open; without the atomic claim the second worker
+      // walks straight into it and sends everything again.
+      for (let i = 0; i < 12; i += 1) await queue()
+      sendDelayMs = 20
+
+      const [a, b] = await Promise.all([
+        worker().drain(),
+        new Promise<number>((resolve) =>
+          setTimeout(() => void worker().drain().then(resolve), 25),
+        ),
+      ])
+
+      expect(sent).toHaveLength(12)
+      expect(a + b).toBe(12)
+      expect((await rows()).every((row) => row.status === 'sent')).toBe(true)
+    })
+
+    it('counts an attempt when the row is taken, not when it fails', async () => {
+      // A process that dies between claiming and sending must leave the row
+      // waiting its backoff, not ready to be picked up again immediately.
+      await queue()
+      await worker().drain()
+
+      expect((await rows())[0]!.attempts).toBe(1)
     })
 
     it('sends a message whose template does not exist yet', async () => {

@@ -5,7 +5,7 @@ import { validateDatabaseUrl, validateEnv } from './env'
 // The variables with no default — every case below has to supply them.
 const required = {
   DATABASE_URL: 'postgres://app:app@localhost:5432/app',
-  S3_ENDPOINT: 'localhost',
+  S3_HOST: 'localhost',
   S3_ACCESS_KEY: 'GK0000000000000000000000de',
   S3_SECRET_KEY: '0'.repeat(63) + '1',
   S3_BUCKET: 'taskflow',

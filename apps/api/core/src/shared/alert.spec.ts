@@ -1,7 +1,7 @@
 import * as Sentry from '@sentry/nestjs'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
-import { alertCondition, alertFailure } from './alert'
+import { alertsFor } from './alert'
 
 /**
  * The failure mode these guard against is their own silence: a job alert that
@@ -37,9 +37,13 @@ afterAll(async () => {
   await Sentry.close(0)
 })
 
-describe('maintenance alerts', () => {
+describe('alerts', () => {
+  const maintenance = alertsFor('maintenance')
+
   it('reports a step that threw, with what it was doing', async () => {
-    alertFailure(new Error('purge-blocked-by-fk'), { step: 'softDeleted' })
+    maintenance.failure(new Error('purge-blocked-by-fk'), {
+      step: 'softDeleted',
+    })
     await Sentry.flush(2000)
 
     const event = captured.find((e) => e.value === 'purge-blocked-by-fk')
@@ -51,7 +55,7 @@ describe('maintenance alerts', () => {
   it('reports a wrong state that threw nothing', async () => {
     // audit.logs_default holding rows is not an exception anywhere — there is
     // no Error to capture, only a count that should be zero.
-    alertCondition('audit.logs_default is not empty', { rows: 12 })
+    maintenance.condition('audit.logs_default is not empty', { rows: 12 })
     await Sentry.flush(2000)
 
     const event = captured.find(
@@ -59,5 +63,13 @@ describe('maintenance alerts', () => {
     )
     expect(event).toBeDefined()
     expect(event?.extra).toMatchObject({ rows: 12 })
+  })
+
+  it('tags each area separately, so one alert rule cannot catch both', async () => {
+    alertsFor('notify').failure(new Error('resend-refused'), { outboxId: 'x' })
+    await Sentry.flush(2000)
+
+    const event = captured.find((e) => e.value === 'resend-refused')
+    expect(event?.tags).toMatchObject({ area: 'notify' })
   })
 })
