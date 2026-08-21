@@ -55,10 +55,13 @@ function PaginationLink({
       size={size}
       className={cn(className)}
       nativeButton={false}
+      // No data-slot here. Button stamps data-slot="button" on whatever it
+      // renders, and two values for one attribute resolved in a different
+      // order on the server than in the browser — a hydration mismatch on
+      // every pagination on the page. Nothing selects "pagination-link".
       render={
         <a
           aria-current={isActive ? 'page' : undefined}
-          data-slot="pagination-link"
           data-active={isActive}
           {...props}
         />

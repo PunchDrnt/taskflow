@@ -43,7 +43,14 @@ function Toast({ className, ...props }: ToastPrimitive.Root.Props) {
     <ToastPrimitive.Root
       data-slot="toast"
       className={cn(
-        'group/toast bg-paper-elevation-2 text-text-primary border-divider focus-visible:border-primary-main focus-visible:ring-primary-focus-visible pointer-events-auto absolute right-0 bottom-0 z-[calc(1000-var(--toast-index))] w-full origin-bottom rounded-2xl border shadow-lg will-change-transform outline-none select-none focus-visible:ring-3',
+        'group/toast bg-paper-elevation-2 text-text-primary border-divider focus-visible:border-primary-main focus-visible:ring-primary-focus-visible pointer-events-auto absolute right-0 bottom-0 z-[calc(1000-var(--toast-index))] w-full origin-bottom rounded-xl border shadow-lg backdrop-blur-lg will-change-transform outline-none select-none focus-visible:ring-3',
+        // A status toast is tinted, not just icon-coloured: the design system
+        // pairs the soft fill with the matching outline so the kind of message
+        // is legible before the icon is read.
+        'data-[type=error]:bg-error-soft data-[type=error]:border-error-outlined-border',
+        'data-[type=warning]:bg-warning-soft data-[type=warning]:border-warning-outlined-border',
+        'data-[type=info]:bg-info-soft data-[type=info]:border-info-outlined-border',
+        'data-[type=success]:bg-success-soft data-[type=success]:border-success-outlined-border',
         '[--gap:0.75rem] [--height:var(--toast-frontmost-height,var(--toast-height))] [--offset-y:calc(var(--toast-offset-y)*-1+calc(var(--toast-index)*var(--gap)*-1)+var(--toast-swipe-movement-y))] [--peek:0.75rem] [--scale:calc(max(0,1-(var(--toast-index)*0.1)))] [--shrink:calc(1-var(--scale))]',
         'h-(--height) transform-[translateX(var(--toast-swipe-movement-x))_translateY(calc(var(--toast-swipe-movement-y)-(var(--toast-index)*var(--peek))-(var(--shrink)*var(--height))))_scale(var(--scale))] [transition:transform_500ms_cubic-bezier(0.22,1,0.36,1),opacity_500ms,height_150ms]',
         "after:absolute after:top-full after:left-0 after:h-[calc(var(--gap)+1px)] after:w-full after:content-['']",
@@ -70,7 +77,7 @@ function ToastContent({ className, ...props }: ToastPrimitive.Content.Props) {
     <ToastPrimitive.Content
       data-slot="toast-content"
       className={cn(
-        'flex h-full items-center gap-3 overflow-hidden p-4 transition-opacity duration-250 ease-[cubic-bezier(0.22,1,0.36,1)] data-behind:opacity-0 data-expanded:opacity-100',
+        'flex h-full items-center gap-2.5 overflow-hidden p-3.5 transition-opacity duration-250 ease-[cubic-bezier(0.22,1,0.36,1)] data-behind:opacity-0 data-expanded:opacity-100',
         className,
       )}
       {...props}
@@ -82,7 +89,7 @@ function ToastTitle({ className, ...props }: ToastPrimitive.Title.Props) {
   return (
     <ToastPrimitive.Title
       data-slot="toast-title"
-      className={cn('text-sm font-medium', className)}
+      className={cn('text-body-md font-semibold', className)}
       {...props}
     />
   )
@@ -95,7 +102,7 @@ function ToastDescription({
   return (
     <ToastPrimitive.Description
       data-slot="toast-description"
-      className={cn('text-text-secondary text-sm', className)}
+      className={cn('text-text-secondary text-label-sm', className)}
       {...props}
     />
   )
@@ -181,7 +188,7 @@ function ToastList() {
   const { toasts } = ToastPrimitive.useToastManager()
 
   return toasts.map((toastItem) => (
-    <Toast key={toastItem.id} toast={toastItem}>
+    <Toast key={toastItem.id} toast={toastItem} data-type={toastItem.type}>
       <ToastContent>
         <ToastIcon type={toastItem.type} />
         <div className="flex min-w-0 flex-1 flex-col gap-1">
