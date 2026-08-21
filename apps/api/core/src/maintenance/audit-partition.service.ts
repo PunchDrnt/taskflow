@@ -3,6 +3,7 @@ import { InjectDataSource } from '@nestjs/typeorm'
 import { DataSource } from 'typeorm'
 
 import { LOCK_KEYS, withAdvisoryLock } from './advisory-lock'
+import { alertCondition } from './alert'
 
 /** Large enough that a job stopped for months still has somewhere to write. */
 const MONTHS_AHEAD = 12
@@ -68,9 +69,8 @@ export class AuditPartitionService {
   }
 
   /**
-   * The alert, until Sentry lands in Phase 0 §7. Rows here mean a partition
-   * was missing when they were written — and that their month cannot be
-   * created until they are moved out.
+   * Rows here mean a partition was missing when they were written, and that
+   * the months they belong to cannot be created until they are moved out.
    */
   async reportDefaultPartitionRows(): Promise<number> {
     const [{ count }] = (await this.dataSource.query(
@@ -78,12 +78,13 @@ export class AuditPartitionService {
     )) as { count: number }[]
 
     if (count > 0) {
-      this.logger.error(
-        { rows: count },
+      const message =
         'audit.logs_default is not empty: rows were written with no partition ' +
-          'to hold them, and the months they belong to cannot be created ' +
-          'until they are moved out',
-      )
+        'to hold them, and the months they belong to cannot be created ' +
+        'until they are moved out'
+
+      this.logger.error({ rows: count }, message)
+      alertCondition(message, { rows: count })
     }
 
     return count
