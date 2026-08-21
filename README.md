@@ -199,7 +199,7 @@ The permission layer joins them once it exists.
 
 ## Deploying
 
-[deploy/](deploy/) is everything the server runs and nothing else from this repository — copy that one directory to the box, create `.env` inside it, and the installation is complete; the apps themselves arrive as images. See [deploy/README.md](deploy/README.md).
+[deploy/](deploy/) is everything the server runs and nothing else from this repository — copy that one directory to the box, create `.env` inside it, and the installation is complete; the apps themselves arrive as images. See [deploy/README.md](deploy/README.md), and [deploy/SETUP.md](deploy/SETUP.md) for taking a bare Ubuntu box to a working deploy.
 
 [deploy/compose.yml](deploy/compose.yml) is a separate file rather than an override on the development one. Compose can add a service but never remove one, and [docker-compose.yml](docker-compose.yml) carries two that must not run on a server: `postgres-test`, which truncates tables, and `garage-ui`, which holds the admin token.
 

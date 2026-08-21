@@ -4,6 +4,10 @@ Everything the server runs, and nothing else from this repository. Copy this
 directory to the box, create `.env` beside `compose.yml`, and that is the whole
 installation — the application itself arrives as images from GHCR.
 
+Setting a server up from nothing is [SETUP.md](SETUP.md): what to buy, which
+Ubuntu, Docker, the firewall, the two SSH keys that point in opposite
+directions, the GitHub settings, and the commands worth keeping.
+
 ```bash
 cd deploy
 cp .env.example .env        # then fill it in
