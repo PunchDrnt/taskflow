@@ -141,6 +141,37 @@ describe.skipIf(!hasTestDatabase)('cross-org isolation', () => {
     ).not.toBeNull()
   })
 
+  it('save refuses an id belonging to another org, rather than taking it', async () => {
+    const bProject = (await asOrg(orgB, () => projects.find()))[0]!
+
+    // Without the ownership check this rewrote the row *and* moved its org_id
+    // to A: writeScope stamps the org, and an id turns the save into an
+    // UPDATE where nothing else names org B.
+    await expect(
+      asOrg(orgA, () =>
+        projects.save({ id: bProject.id, name: 'taken by A' } as never),
+      ),
+    ).rejects.toThrow(/another organisation/)
+
+    const untouched = await asOrg(orgB, () => projects.findById(bProject.id))
+    expect(untouched?.name).toBe("B's project")
+    expect(untouched?.orgId).toBe(orgB.id)
+  })
+
+  it('save still updates a row this org does own', async () => {
+    // Its own row rather than the fixture: later tests read those by name.
+    const own = await asOrg(orgA, () =>
+      projects.save(projects.create({ name: 'A owns this' })),
+    )
+
+    await asOrg(orgA, () => projects.save({ ...own, name: 'renamed by A' }))
+
+    expect((await asOrg(orgA, () => projects.findById(own.id)))?.name).toBe(
+      'renamed by A',
+    )
+    await asOrg(orgA, () => projects.softDeleteById(own.id))
+  })
+
   it('scopes organizations on id, since that table has no org_id', async () => {
     const fromA = await asOrg(orgA, () => organizations.find())
 

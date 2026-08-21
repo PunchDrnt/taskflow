@@ -131,7 +131,38 @@ export class OrgScopedRepository<T extends ObjectLiteral> {
     } as DeepPartial<T>)
   }
 
-  save(entity: DeepPartial<T>): Promise<T> {
+  /**
+   * Refuses an `id` this organisation does not own.
+   *
+   * `writeScope()` stamps the org rather than checking it, which is right for
+   * a new row and wrong for one that already exists: with an `id` present
+   * TypeORM issues `UPDATE ... WHERE id = $1`, so the org stops being a
+   * condition and becomes a value being written — saving another org's id
+   * moved their row into this one, overwriting it on the way. Measured.
+   *
+   * Throws rather than reporting nothing saved, unlike `softDeleteById`: a
+   * delete matching nothing is a real answer to a fair question, but holding
+   * an id from another org means the caller got it somewhere it should not
+   * have, and quietly doing nothing hides that.
+   */
+  async save(entity: DeepPartial<T>): Promise<T> {
+    const id = (entity as { id?: string }).id
+
+    // exists() is scoped already, so this covers the id-scoped repository too
+    // — organizations had the same hole, one org renaming another.
+    if (id !== undefined) {
+      const owned = await this.exists({
+        where: { id } as unknown as FindOptionsWhere<T>,
+      })
+
+      if (!owned) {
+        throw new Error(
+          `Refusing to save ${id}: it belongs to another organisation, or has ` +
+            'been deleted. Load the row through this repository first.',
+        )
+      }
+    }
+
     return this.repository.save({
       ...entity,
       ...this.writeScope(),
