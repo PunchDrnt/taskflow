@@ -11,8 +11,7 @@ copy โฟลเดอร์นั้นไปเครื่อง สร้�
 rsync -a --exclude docs deploy/ user@server:/srv/taskflow/deploy/
 ```
 
-deploy จริงใช้ `git clone` ทั้ง repo อยู่แล้ว เอกสารเลยไปอยู่บนเครื่องด้วยไม่ว่าจะ
-วางไว้ตรงไหน — เรื่องนี้มีผลเฉพาะตอน copy เอง
+server ไม่มี git และไม่มี source ของ repo เลย มีแค่ไฟล์ที่คำสั่งข้างบน copy ขึ้นไป
 
 ตั้ง server ใหม่จากศูนย์ดู [setup.md](setup.md) · เรื่อง SSH key ดู
 [ssh-keys.md](ssh-keys.md)
@@ -36,7 +35,8 @@ deploy/
 ├─ init/            รันครั้งเดียวตอน volume ว่าง · หลังจากนั้นไม่มีผลอีกเลย
 │  ├─ postgres.sh   สร้าง role ที่แอปใช้ (ไม่ใช่ superuser)
 │  └─ garage.sh     วาง cluster layout, key, bucket
-└─ backup.sh        DB กับ object แยกกันคนละโฟลเดอร์
+├─ backup.sh        DB กับ object แยกกันคนละโฟลเดอร์
+└─ checksum.sh      พิสูจน์ว่าไฟล์บนเครื่องตรงกับ commit ที่ deploy
 ```
 
 **`config/` กับ `init/` แยกกันเพราะทำงานคนละแบบ** และความต่างนี้ทำให้เสียเวลาหาสาเหตุนาน:
@@ -59,12 +59,17 @@ dev ที่ root ของ repo ด้วย — สองฝั่งเล�
 
 ## Updating
 
-`.github/workflows/deploy.yml` ทำทั้งสองครึ่งตอน push เข้า `prod` — `git checkout`
-`deploy/` ที่ commit ที่ deploy แล้ว pull image ที่ CI build ไว้ แล้ว restart
+`.github/workflows/deploy.yml` จัดการ **image** ให้ตอน push เข้า `prod` — build,
+push ขึ้น GHCR, แล้ว ssh มา `pull` + `up -d`
 
-แปลว่า `DEPLOY_PATH` บน server เป็น **clone ของ repo** ไม่ใช่ `deploy/` เดี่ยว ๆ
-เพราะ `git fetch` ต้องมี remote ให้ fetch · checkout เป็น `--force` ดังนั้นไฟล์ที่
-track อยู่แล้วไปแก้บนเครื่องจะถูกทับตอน deploy รอบถัดไป · `.env` ไม่ได้ track เลยรอด
+แต่ **ไฟล์ในโฟลเดอร์นี้มันไม่ได้เอาขึ้นให้** เพราะ server ไม่มี git · เวลาแก้
+`compose.yml` หรืออะไรใน `config/` ต้อง `rsync` ขึ้นไปเองก่อน merge เข้า `prod`
+
+ลืมไม่ได้ เพราะทุก deploy จะเทียบ [`checksum.sh`](../checksum.sh) ของฝั่ง repo กับฝั่ง
+server ก่อนแตะอะไร ไม่ตรงเมื่อไหร่ deploy หยุดพร้อมบอกว่าต่างกัน — ดังไว้ก่อน
+ดีกว่าปล่อยให้ server รัน Caddyfile เก่าเงียบ ๆ
+
+`.env` ไม่อยู่ใน checksum เพราะสองฝั่งต่างกันโดยตั้งใจ · `docs/` ก็ไม่อยู่
 
 deploy เองด้วยมือ หรือย้อนกลับ:
 

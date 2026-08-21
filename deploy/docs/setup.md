@@ -3,8 +3,7 @@
 จาก Ubuntu เปล่า ๆ จนถึง deploy ที่วิ่งเองตอน `git push` · ประมาณชั่วโมงนึง
 ส่วนใหญ่คือรอ
 
-เรื่อง SSH key แยกไปอยู่ [ssh-keys.md](ssh-keys.md) เพราะมี key สามตัวและสองตัว
-ใช้คนละทิศทาง — อ่านอันนั้นก่อนเริ่ม step 1 จะไม่สับสน
+เรื่อง SSH key แยกไปอยู่ [ssh-keys.md](ssh-keys.md) — มีสองตัว ทั้งคู่ใช้เข้าหา server
 
 ---
 
@@ -177,16 +176,30 @@ dig +short taskflow.example.com      # ต้องขึ้น IP ของเ�
 > certificate จาก staging browser ไม่เชื่อถือ ซึ่งคือประเด็น — มันพิสูจน์ว่า flow
 > ถูกโดยไม่กิน quota
 
-## 5. Deploy key ให้ server อ่าน repo ได้
+## 5. วางไฟล์ · ตั้งค่า · login registry
 
-ทำตาม [ssh-keys.md §2](ssh-keys.md#2-deploy-key--server-reads-github) —
-สร้างบน server, เอา public ไปใส่ GitHub Deploy keys แบบ read-only
+server ต้องมีแค่ `deploy/` ไม่ต้องมี source ทั้ง repo และไม่ต้องมี git
 
-## 6. Clone · ตั้งค่า · login registry
+**จากเครื่องตัวเอง** ที่ repo อยู่:
 
 ```bash
-sudo mkdir -p /srv/taskflow && sudo chown deploy:deploy /srv/taskflow
-git clone -b prod git@github.com:PunchDrnt/taskflow.git /srv/taskflow
+ssh deploy@<server-ip> 'mkdir -p /srv/taskflow/deploy'
+rsync -a --exclude docs deploy/ deploy@<server-ip>:/srv/taskflow/deploy/
+```
+
+`--exclude docs` เพราะ server ไม่ได้ใช้เอกสาร · ถ้าเครื่องไม่มี `rsync` ใช้ tar แทนได้:
+
+```bash
+tar czf - --exclude=docs -C . deploy | ssh deploy@<server-ip> 'tar xzf - -C /srv/taskflow --strip-components=0'
+```
+
+> ⚠️ คำสั่งนี้ต้องรันซ้ำทุกครั้งที่แก้ไฟล์ใน `deploy/` · ลืมแล้ว deploy จะ **fail**
+> ที่ขั้นตอน checksum พร้อมบอกว่าไม่ตรง — ตั้งใจให้ดังไว้ก่อน เพราะถ้าปล่อยเงียบ
+> จะกลายเป็น server ที่รัน Caddyfile เก่าโดยไม่มีใครรู้
+
+**บน server** สร้าง `.env`:
+
+```bash
 cd /srv/taskflow/deploy
 cp .env.example .env
 ```
@@ -209,11 +222,11 @@ echo "<token>" | docker login ghcr.io -u <github-username> --password-stdin
 > `manifest unknown` / **not found** ไม่ใช่ permission error · ถ้าเจอว่า image
 > ไม่มีอยู่ ให้เช็คอันนี้ก่อนเช็ค tag
 
-> ⚠️ **deploy ครั้งแรกไม่มี image ให้ pull** เพราะยังไม่เคย push · เลือกเอาว่าจะ
-> push `prod` ให้ CI build ก่อน หรือ build บนเครื่องครั้งเดียวด้วย
-> `docker compose up -d --build` ซึ่งทำได้เพราะ repo อยู่บนเครื่องแล้ว
+> ⚠️ **deploy ครั้งแรกไม่มี image ให้ pull** เพราะยังไม่เคย push · ต้อง push เข้า
+> `prod` ให้ CI build ขึ้น GHCR ก่อนหนึ่งรอบ แล้วค่อย `up -d` · บน server build เอง
+> ไม่ได้แล้วเพราะไม่มี source อยู่บนเครื่อง
 
-## 7. Start
+## 6. Start
 
 ```bash
 cd /srv/taskflow/deploy
@@ -234,21 +247,21 @@ curl https://taskflow.example.com/api/health/ready
 
 `/health/ready` ที่ขึ้น `database` และ `storage` เป็น up คือหลักฐานจริง
 
-## 8. CI key ให้ Actions เข้า server ได้
+## 7. CI key ให้ Actions เข้า server ได้
 
-ทำตาม [ssh-keys.md §3](ssh-keys.md#3-ci-key--actions-reaches-the-server) —
+ทำตาม [ssh-keys.md §2](ssh-keys.md#2-ci-key--actions-reaches-the-server) —
 สร้างที่เครื่องตัวเอง, public ขึ้น server, private เอาไปใส่ secret ใน step ถัดไป
 
-## 9. GitHub settings
+## 8. GitHub settings
 
 **Settings → Secrets and variables → Actions → Secrets**
 
-| Secret            | ค่า                                                                                      |
-| ----------------- | ---------------------------------------------------------------------------------------- |
-| `SSH_HOST`        | IP หรือ hostname ของเครื่อง                                                              |
-| `SSH_USER`        | `deploy`                                                                                 |
-| `SSH_PRIVATE_KEY` | ทั้งไฟล์ `~/.ssh/taskflow_ci` จาก step 8 — ไม่ใช่ `.pub` และไม่ใช่ deploy key จาก step 5 |
-| `DEPLOY_PATH`     | `/srv/taskflow` — คือ **clone ของ repo** ไม่ใช่ `deploy/` ข้างใน                         |
+| Secret            | ค่า                                                      |
+| ----------------- | -------------------------------------------------------- |
+| `SSH_HOST`        | IP หรือ hostname ของเครื่อง                              |
+| `SSH_USER`        | `deploy`                                                 |
+| `SSH_PRIVATE_KEY` | ทั้งไฟล์ `~/.ssh/taskflow_ci` จาก step 7 — ไม่ใช่ `.pub` |
+| `DEPLOY_PATH`     | `/srv/taskflow/deploy` — โฟลเดอร์ที่ `compose.yml` อยู่  |
 
 **→ Variables**
 
@@ -269,7 +282,7 @@ git checkout -b prod main && git push -u origin prod
 ที่เหลือไม่ต้องแก้: workflow ขอ `packages: write` ไว้แล้ว และ `GITHUB_TOKEN`
 พอสำหรับ push ขึ้น GHCR
 
-## 10. Deploy
+## 9. Deploy
 
 ```bash
 git checkout prod && git merge main && git push
@@ -285,9 +298,9 @@ git checkout prod && git merge main && git push
 **`init/` รันครั้งเดียวตลอดกาล** · `init/postgres.sh` กับ `init/garage.sh` เห็นแค่
 volume ว่าง · แก้ทีหลังไม่มีผลจนกว่าจะลบ volume ทิ้ง และลบ volume คือลบข้อมูล
 
-**ไฟล์ที่ track อยู่ ถ้าแก้บนเครื่องจะถูกทับ** · deploy รัน `git checkout --force` ·
-`deploy/.env` ไม่ได้ track เลยรอด แต่ `config/Caddyfile` ที่แก้ด้วยมือไม่รอด —
-แก้ที่ repo
+**แก้ไฟล์บนเครื่องแล้ว deploy จะแดง** · ทุก deploy เทียบ checksum ของ `deploy/`
+กับ commit ที่กำลัง deploy ก่อนแตะอะไรทั้งนั้น · แก้ที่ repo แล้ว `rsync` ขึ้นไป
+ไม่ใช่แก้บนเครื่อง (`.env` ไม่อยู่ใน checksum เลยแก้บนเครื่องได้ตามปกติ)
 
 **ลบ `caddy-data` แล้วต้องขอ certificate ใหม่ทั้งหมด** ซึ่ง Let's Encrypt limit อยู่ ·
 มันเก็บ ACME account key ไว้ · **อย่าใช้ `docker compose down -v` ถ้าไม่จำเป็นจริง ๆ**

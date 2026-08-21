@@ -153,8 +153,9 @@
 - [x] `Dockerfile` ทั้งสอง app (multi-stage) · api 234 MB · web 198 MB (standalone)
 - [x] CI: `lint` + `check-types` + `test` + `build` + build image ทั้งสองตัว
 - [ ] **Deploy ขึ้น Bangmod ได้จริง แม้เป็นหน้าเปล่า** ← เหลือแค่รัน ต้องมี server จริง
-      pipeline พร้อม: `deploy.yml` → `git checkout` ไฟล์ใน `deploy/` + push image ขึ้น GHCR + ssh ไป `pull`/`up -d`
-      ต้องตั้งก่อน: secret `SSH_HOST`/`SSH_USER`/`SSH_PRIVATE_KEY`/`DEPLOY_PATH` (= clone ของ repo ไม่ใช่ `deploy/`),
+      pipeline พร้อม: `deploy.yml` → push image ขึ้น GHCR + ssh ไป `pull`/`up -d` · ไฟล์ใน `deploy/` copy เอง
+      (`rsync -a --exclude docs`) แล้วทุก deploy เทียบ `checksum.sh` ก่อน — ไม่ตรงคือ fail ไม่ใช่เตือน
+      ต้องตั้งก่อน: secret `SSH_HOST`/`SSH_USER`/`SSH_PRIVATE_KEY`/`DEPLOY_PATH` (= `/srv/taskflow/deploy`),
       var `NEXT_PUBLIC_SENTRY_DSN`, และ `docker login ghcr.io` บน server หนึ่งครั้ง
       (GHCR package private โดย default · pull ไม่ผ่านขึ้นว่า "not found" ไม่ใช่ 403)
       ทดสอบบนเครื่องครบแล้ว: boot จากศูนย์ → migrate → serve ผ่าน Caddy → redeploy ซ้ำ → rollback ด้วย IMAGE_TAG

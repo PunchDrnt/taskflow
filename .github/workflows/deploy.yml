@@ -96,31 +96,42 @@ jobs:
     if: needs.changes.outputs.api == 'true' || needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     steps:
-      - name: Restart the stack on Bangmod
+      - uses: actions/checkout@v5
+
+      # What the server's copy of deploy/ should hash to. The files there are
+      # read from disk, not baked into an image, so `docker compose pull`
+      # cannot bring a Caddyfile change with it.
+      - name: Checksum the deploy files
+        id: expected
+        run: echo "sum=$(cd deploy && ./checksum.sh)" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy
         uses: appleboy/ssh-action@v1.2.2
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script_stop: true
-          envs: GITHUB_SHA
+          envs: GITHUB_SHA,EXPECTED_SUM
           script: |
             set -eu
-            # DEPLOY_PATH is a clone of this repository, not the deploy
-            # directory inside it.
             cd ${{ secrets.DEPLOY_PATH }}
             export IMAGE_TAG="$GITHUB_SHA"
 
-            # Images are only half of a deploy: compose.yml and everything
-            # under deploy/config are read from disk, so without this a change
-            # to the Caddyfile ships a green workflow and an unchanged server.
-            # --force discards local edits to tracked files; deploy/.env is
-            # untracked and survives.
-            git fetch --depth 1 origin prod
-            git checkout --force FETCH_HEAD
+            # Before anything changes: refuse a deploy whose config files are
+            # not the ones being deployed. Left to itself this drifts in
+            # silence — a green run and a server still serving the old
+            # Caddyfile — so it is a failure rather than a warning.
+            ACTUAL="$(./checksum.sh)"
+            if [ "$ACTUAL" != "$EXPECTED_SUM" ]; then
+              echo "deploy/ on this server does not match the commit being deployed." >&2
+              echo "  expected $EXPECTED_SUM" >&2
+              echo "  found    $ACTUAL" >&2
+              echo "Copy the files up, then re-run:" >&2
+              echo "  rsync -a --exclude docs deploy/ <user>@<host>:$PWD/" >&2
+              exit 1
+            fi
 
-            cd deploy
-            # No flags: compose.yml and .env sit in this directory.
             docker compose pull
             # `up -d` recreates api-migrate too, so migrations run against the
             # new image before the API that needs them starts.
@@ -129,3 +140,5 @@ jobs:
             # Untagged layers only. The previous release keeps its SHA tag, so
             # rolling back is IMAGE_TAG=<old sha> and pulling.
             docker image prune -f
+        env:
+          EXPECTED_SUM: ${{ steps.expected.outputs.sum }}

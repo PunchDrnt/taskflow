@@ -1,0 +1,14 @@
+# A PR touching these needs a review from the owner before it can merge.
+#
+# GitHub only enforces this once "Require review from Code Owners" is on for
+# the branch — the file alone is advisory. Without that setting this is
+# documentation, not a control.
+
+# What runs on the server, and what the deploy does. A change here reaches
+# production without any test having exercised it.
+/deploy/                  @PunchDrnt
+/.github/workflows/       @PunchDrnt
+
+# The binding decisions, and the schema they describe.
+/.claude/docs/            @PunchDrnt
+/apps/api/core/src/database/migrations/  @PunchDrnt

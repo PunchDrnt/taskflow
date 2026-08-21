@@ -204,9 +204,8 @@ The permission layer joins them once it exists.
 [deploy/compose.yml](deploy/compose.yml) is a separate file rather than an override on the development one. Compose can add a service but never remove one, and [docker-compose.yml](docker-compose.yml) carries two that must not run on a server: `postgres-test`, which truncates tables, and `garage-ui`, which holds the admin token.
 
 ```bash
-cd deploy
-cp .env.example .env        # then fill it in
-docker compose up -d --build
+rsync -a --exclude docs deploy/ deploy@server:/srv/taskflow/deploy/
+ssh deploy@server 'cd /srv/taskflow/deploy && cp .env.example .env'   # then fill it in
 ```
 
 On the server it pulls instead of building. The three app services declare both
@@ -220,6 +219,8 @@ docker compose up -d
 ```
 
 [.github/workflows/deploy.yml](.github/workflows/deploy.yml) does that on a push to `prod` — merging `main` into it is what ships, so the gates on `main` have already run. Each image is tagged with both `latest` and the commit SHA, which is what makes a rollback possible: `latest` alone leaves nothing to go back to once the next push overwrites it. To roll back, set `IMAGE_TAG` to the old SHA and pull.
+
+It carries images only. The files under `deploy/` are read from disk, so a change to `compose.yml` or `config/Caddyfile` has to be copied up before the merge — and every deploy compares [deploy/checksum.sh](deploy/checksum.sh) against the commit being deployed and refuses rather than let that drift go unnoticed. The server holds no git and no source.
 
 It needs `SSH_HOST`, `SSH_USER`, `SSH_PRIVATE_KEY` and `DEPLOY_PATH` as repository secrets, `NEXT_PUBLIC_SENTRY_DSN` as a repository variable (it is a build argument, so it has to be present when the image is built rather than when it starts), and one `docker login ghcr.io` on the server itself with a token that has `read:packages` — GHCR packages are private by default, so a pull without it fails as "not found" rather than as a permission error.
 

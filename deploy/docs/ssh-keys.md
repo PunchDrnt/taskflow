@@ -1,16 +1,20 @@
 # SSH keys
 
-การ deploy ชุดนี้ใช้ key **สามตัว** ไม่ใช่ตัวเดียว และสองตัวในนั้นใช้คนละทิศทางกัน
-— เป็นจุดที่สลับกันบ่อยที่สุดเวลา auth ไม่ผ่าน
+การ deploy ชุดนี้ใช้ key **สองตัว** และทั้งคู่ใช้ทิศทางเดียวกันคือ _เข้าหา server_ ·
+server ไม่ต้องยื่นมือออกไปหาใครเลย
 
-| key            | ใครใช้เข้าใคร               | private เก็บที่ | public ไปที่                |
-| -------------- | --------------------------- | --------------- | --------------------------- |
-| **ของคุณเอง**  | คุณ → server                | laptop ของคุณ   | `authorized_keys` บน server |
-| **Deploy key** | **server → GitHub**         | server          | GitHub → Deploy keys        |
-| **CI key**     | **GitHub Actions → server** | GitHub secret   | `authorized_keys` บน server |
+| key           | ใครใช้เข้าใคร               | private เก็บที่ | public ไปที่                |
+| ------------- | --------------------------- | --------------- | --------------------------- |
+| **ของคุณเอง** | คุณ → server                | laptop ของคุณ   | `authorized_keys` บน server |
+| **CI key**    | **GitHub Actions → server** | GitHub secret   | `authorized_keys` บน server |
+
+วิธีจำว่าตัวไหนอยู่ฝั่งไหน: **ใครถือ private คนนั้นเป็นฝ่ายยิงออก**
 
 หลักที่ใช้ตลอดทั้งเอกสารนี้: **private key ไม่ต้องย้ายไปไหน** ไฟล์ที่ copy ข้ามเครื่อง
 คือ `.pub` เสมอ ถ้ากำลังจะ scp private key แสดงว่าทำผิดวิธีแล้ว
+
+> server ยัง login GHCR เพื่อ pull image อยู่ แต่อันนั้นใช้ personal access token
+> ไม่ใช่ SSH key — ดู [setup.md](setup.md) step 5
 
 ---
 
@@ -87,34 +91,7 @@ cat ~/.ssh/id_ed25519.pub | ssh deploy@<server-ip> 'cat >> ~/.ssh/authorized_key
 
 ---
 
-## 2. Deploy key — server reads GitHub
-
-ให้ server อ่าน repo ได้
-
-workflow สั่ง `git fetch` บน server ตอน deploy มันเลยต้องอ่าน repo ได้ ·
-สิทธิ์ที่ต้องการคือ **อ่านอย่างเดียว และเฉพาะ repo นี้** ซึ่งตรงกับ deploy key พอดี
-
-สร้าง **บน server**:
-
-```bash
-ssh-keygen -t ed25519 -C "bangmod-deploy" -f ~/.ssh/id_ed25519 -N ""
-cat ~/.ssh/id_ed25519.pub
-```
-
-เอา public ไปใส่ที่ GitHub → **Settings → Deploy keys → Add deploy key** ·
-**ไม่ต้องติ๊ก** _Allow write access_
-
-ทดสอบ:
-
-```bash
-ssh -T git@github.com     # ต้องขึ้นว่า "successfully authenticated"
-```
-
-> มันจะบอกด้วยว่า `does not provide shell access` — อันนั้นปกติ ไม่ใช่ error
-
----
-
-## 3. CI key — Actions reaches the server
+## 2. CI key — Actions reaches the server
 
 ให้ GitHub Actions ssh เข้าเครื่องได้
 
