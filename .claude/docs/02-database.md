@@ -283,7 +283,9 @@ sessions                                 -- 1 แถว = 1 การ login จ�
   rotated_at             timestamptz null  ใช้คำนวณ grace window 10 วินาที
   user_agent             text
   ip_address             inet
-  last_used_at           timestamptz
+  last_used_at           timestamptz   -- ❓ ยังไม่ตัดสินว่าเขียนตอนไหน · เขียนทุก
+                                       -- request = 1 write/request ไม่ใช่ 1 ต่อ 15
+                                       -- นาที · ทางเลือก lazy (เกิน N นาทีค่อยเขียน)
   expires_at             timestamptz   +15 วัน
   revoked_at             timestamptz null
   revoked_reason         text  null    'logout' | 'logout_all' | 'password_change'

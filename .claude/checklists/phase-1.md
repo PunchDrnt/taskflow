@@ -50,8 +50,27 @@
 - [ ] `@SkipOrgScope()` — endpoint ที่ล็อกอินแล้วแต่ยังไม่ผูก org (เช่น เลือก org)
 - [ ] เลิกใช้ `RequestContextMiddleware` เมื่อ guard มาแล้ว — อย่าปล่อยให้ทั้งสองตัวเซ็ต context พร้อมกัน
 - [ ] Login / Logout / Refresh rotation — refresh 1 อันใช้ได้ครั้งเดียว หมุนแล้ว**ไม่สร้างแถวใหม่** แค่เปลี่ยน token hash
+      · เก็บ chain ทุก generation ไม่คุ้ม — `previous_token_hash` + `rotated_at` ครอบ reuse detection กับ grace window ไว้แล้ว ที่ chain ซื้อเพิ่มคือจับ replay ของ token เก่ามากๆ ซึ่งไม่ได้เกิดบ่อยขึ้นตามจำนวนคน แต่จำนวนแถวโตตามคนเต็มๆ
+- [ ] 🔒 **การหมุนต้อง atomic — เงื่อนไขอยู่ใน `UPDATE` ไม่ใช่ `SELECT` ก่อนแล้วค่อยเขียน**
+
+      ```sql
+      UPDATE identity.sessions
+         SET previous_token_hash = current_token_hash,
+             current_token_hash  = $new, rotated_at = now()
+       WHERE current_token_hash = $presented AND revoked_at IS NULL
+      RETURNING id
+      ```
+
+      · `RETURNING` ว่าง = แพ้การแข่ง ต้องตอบ 401 ไม่ใช่หมุนต่อ
+      · อ่านก่อนแล้วค่อยเขียนจะทับกันเงียบ ๆ ตอนเปิดสองแท็บแล้ว access token หมดอายุพร้อมกัน
+      · **บทเรียนเดียวกับ `OutboxWorker.claim()`** — ตอนนั้น `SELECT ... FOR UPDATE` แล้วค่อย update ทำให้ worker สองตัวส่งอีเมล 23 ฉบับจาก 12 แถว เพราะ `dataSource.query()` รันทีละ statement ใน transaction ของตัวเอง lock เลยหลุดก่อนอ่าน
+
+- [ ] ❓ **`last_used_at` เขียนตอนไหน** — spec ยังไม่ได้บอก และเป็นช่องที่กัดก่อนเพื่อนตอนคนเยอะ
+      · เขียนทุก request = **1 write ต่อ request** ไม่ใช่ 1 ต่อ 15 นาที · write amplification สูงกว่าเรื่องหมุน token หลายอันดับ และเป็นตัวที่ทำให้ `sessions` กลายเป็นตารางร้อน
+      · ทางเลือก: เขียนแบบ lazy (อัปเดตเมื่อค่าเก่าเกิน N นาที) หรือปล่อยไว้ในชั้น cache ไม่ลง DB ทุกครั้ง
 - [ ] เช็ค session ทุก request (cache 30 วิ) — `revoked_at IS NULL` · `expires_at > now` · `user.status='active'`
       · นี่คือสิ่งที่ทำให้ deactivate/logout มีผลเกือบทันที ไม่ต้องรอ token หมดอายุ
+      · ชั้นนี้คือจุดที่จะกลายเป็นคอขวดก่อนใครถ้าคนเยอะขึ้นมาก — ไม่ใช่จำนวนแถว · [เงื่อนไขที่จะเอา Redis เข้ามา](../docs/01-architecture.md#redis--queue--ยังไม่มี-และเงื่อนไขที่จะมี) ระบุ "session revocation cache ที่เช็คทุก request" ไว้เป็นหนึ่งในสามข้ออยู่แล้ว
 - [ ] 🔒 **Cookie attributes อยู่ที่เดียว** — `httpOnly · Secure · SameSite=Lax` · refresh ตั้ง `path=/api/v1/auth`
       · กระจายไปหลายที่เมื่อไหร่ จะมีตัวใดตัวหนึ่งตกหล่นแบบไม่มีใครเห็น
 - [ ] Access token payload มีแค่ `sub` `org` `sid` `exp` — **ไม่ใส่ role** ไม่งั้นถอดสิทธิ์แล้วต้องรอ 15 นาที
