@@ -1,66 +1,61 @@
 # deploy/
 
-Everything the server runs, and nothing else from this repository. Copy this
-directory to the box, create `.env` beside `compose.yml`, and that is the whole
-installation — the application itself arrives as images from GHCR.
+ทุกอย่างที่ server รัน และไม่มีอะไรอื่นจาก repo นี้ · copy โฟลเดอร์นี้ไปเครื่อง
+สร้าง `.env` ไว้ข้าง `compose.yml` เท่านั้นจบ — ตัวแอปมาเป็น image จาก GHCR
 
-Setting a server up from nothing is [SETUP.md](SETUP.md): what to buy, which
-Ubuntu, Docker, the firewall, the two SSH keys that point in opposite
-directions, the GitHub settings, and the commands worth keeping.
+ตั้ง server ใหม่จากศูนย์ดู [SETUP.md](SETUP.md) · เรื่อง SSH key ดู
+[SSH-KEYS.md](SSH-KEYS.md)
 
 ```bash
 cd deploy
-cp .env.example .env        # then fill it in
+cp .env.example .env        # แล้วกรอกให้ครบ
 docker compose up -d
 ```
 
-No `-f` and no `--env-file`: `compose.yml` and a sibling `.env` are what
-`docker compose` picks up on its own.
+ไม่ต้องใส่ `-f` และไม่ต้องใส่ `--env-file` — `compose.yml` กับ `.env` ที่อยู่ข้างกัน
+คือสิ่งที่ `docker compose` หยิบเองอยู่แล้ว
 
 ```
 deploy/
-├─ compose.yml      the stack — only caddy publishes a port
-├─ .env.example     copy to .env here; .env is the one file never committed
-├─ config/          mounted read-only, re-read on the next `up -d`
-│  ├─ Caddyfile     one origin: /api/* to Nest with the prefix stripped
+├─ compose.yml      ตัว stack — มีแค่ caddy ที่ publish port
+├─ .env.example     copy เป็น .env ตรงนี้ · .env คือไฟล์เดียวที่ห้าม commit
+├─ config/          mount แบบ read-only · แก้แล้ว `up -d` ใหม่ก็ติด
+│  ├─ Caddyfile     origin เดียว: /api/* ไป Nest โดยตัด prefix ทิ้ง
 │  └─ garage.toml   object storage
-├─ init/            run once against an empty volume, ignored ever after
-│  ├─ postgres.sh   creates the non-superuser role the application uses
-│  └─ garage.sh     assigns the cluster layout, key and bucket
-└─ backup.sh        database and objects, to separate directories
+├─ init/            รันครั้งเดียวตอน volume ว่าง · หลังจากนั้นไม่มีผลอีกเลย
+│  ├─ postgres.sh   สร้าง role ที่แอปใช้ (ไม่ใช่ superuser)
+│  └─ garage.sh     วาง cluster layout, key, bucket
+└─ backup.sh        DB กับ object แยกกันคนละโฟลเดอร์
 ```
 
-`config/` and `init/` are split because they behave differently, and the
-difference is easy to lose an afternoon to: editing `config/Caddyfile` takes
-effect on the next `up -d`, while editing anything in `init/` does nothing at
-all until the volume it initialises is gone.
+**`config/` กับ `init/` แยกกันเพราะพฤติกรรมต่างกัน** และความต่างนี้เสียเวลาได้ทั้งบ่าย:
+แก้ `config/Caddyfile` แล้ว `up -d` ใหม่ก็มีผลทันที แต่แก้อะไรใน `init/`
+ไม่เกิดอะไรขึ้นเลยจนกว่า volume ที่มันไป initialise จะถูกลบ
 
-`config/garage.toml` and `init/garage.sh` are mounted by the development stack
-at the repository root as well, so the two cannot drift.
+`config/garage.toml` กับ `init/garage.sh` ถูก mount โดย stack ตอน dev ที่ root
+ของ repo ด้วย — สองฝั่งเลย drift จากกันไม่ได้
 
 ## Why these are committed
 
-None of them contains a secret — every one is `${VARIABLE}`, filled from `.env`
-at run time. Keeping them out of version control would hide only the shape of
-the deployment, which protects nothing and costs the ability to see what
-changed. `.env` itself is the real secret, and `.gitignore` covers it.
+ไม่มีไฟล์ไหนมีความลับอยู่ — ทุกค่าเป็น `${VARIABLE}` ที่เติมจาก `.env` ตอนรัน ·
+เก็บไฟล์พวกนี้ไว้นอก version control จะปิดบังได้แค่**รูปร่าง**ของ deployment
+ซึ่งไม่ได้ป้องกันอะไร แต่แลกกับการมองไม่เห็นว่าอะไรเปลี่ยนไปบ้าง · ตัวที่เป็นความลับ
+จริงคือ `.env` และ `.gitignore` ครอบมันอยู่
 
-The directory is not `.deploy` for a plainer reason: `cp -R src/*` and
-`tar czf - src/*` both skip a dot-directory silently, and this is the one
-directory whose whole purpose is being copied to a server.
+ที่ไม่ตั้งชื่อว่า `.deploy` ก็ด้วยเหตุผลง่าย ๆ: `cp -R src/*` กับ `tar czf - src/*`
+**ข้าม dot-directory เงียบ ๆ ทั้งคู่** และนี่คือโฟลเดอร์ที่มีไว้เพื่อ copy ไป server
+โดยเฉพาะ
 
 ## Updating
 
-`.github/workflows/deploy.yml` does both halves on a push to `prod`: it checks
-this directory out at the deployed commit, then pulls the images CI built and
-restarts.
+`.github/workflows/deploy.yml` ทำทั้งสองครึ่งตอน push เข้า `prod` — `git checkout`
+โฟลเดอร์นี้ที่ commit ที่ deploy แล้ว pull image ที่ CI build ไว้ แล้ว restart
 
-That means the server's `DEPLOY_PATH` is a **clone of the repository**, not
-this directory on its own — `git fetch` needs a remote to fetch from. The
-checkout is `--force`, so a tracked file edited on the box is discarded on the
-next deploy; `.env` is untracked and survives.
+แปลว่า `DEPLOY_PATH` บน server เป็น **clone ของ repo** ไม่ใช่โฟลเดอร์นี้เดี่ยว ๆ
+เพราะ `git fetch` ต้องมี remote ให้ fetch · checkout เป็น `--force` ดังนั้นไฟล์ที่
+track อยู่แล้วไปแก้บนเครื่องจะถูกทับตอน deploy รอบถัดไป · `.env` ไม่ได้ track เลยรอด
 
-To deploy by hand, or to roll back:
+deploy เองด้วยมือ หรือย้อนกลับ:
 
 ```bash
 cd deploy
@@ -68,5 +63,4 @@ IMAGE_TAG=<commit-sha> docker compose pull
 IMAGE_TAG=<commit-sha> docker compose up -d
 ```
 
-Nothing under `init/` re-runs, whichever way the deploy happens — those scripts
-only ever see an empty volume.
+ไม่ว่า deploy ทางไหน **ของใน `init/` ไม่รันซ้ำ** — มันเห็นแค่ volume ว่างเท่านั้น

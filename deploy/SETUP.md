@@ -1,110 +1,89 @@
 # Setting up the server
 
-From a freshly created Ubuntu box to a deploy that runs on `git push`. Roughly
-40 minutes, most of it waiting.
+จาก Ubuntu เปล่า ๆ จนถึง deploy ที่วิ่งเองตอน `git push` · ประมาณชั่วโมงนึง
+ส่วนใหญ่คือรอ
 
-Nothing here is Taskflow-specific until step 6 — the earlier steps are how any
-Docker host should be set up, and are worth reading rather than pasting.
+เรื่อง SSH key แยกไปอยู่ [SSH-KEYS.md](SSH-KEYS.md) เพราะมี key สามดอกและสองดอก
+ชี้กันคนละทิศ — อ่านอันนั้นก่อนถึง step 1 จะไม่งง
 
 ---
 
 ## What the box needs
 
-Sized for this deployment: about 20 people with a handful — say five — using it
-at the same time.
+ขนาดสำหรับงานจริง: คนในบริษัท ~20 คน ใช้พร้อมกันจริง ๆ ประมาณ 5
 
-|      | Minimum   | Comfortable |
-| ---- | --------- | ----------- |
-| vCPU | 2         | 2           |
-| RAM  | 2 GB      | 4 GB        |
-| Disk | 25 GB SSD | 40 GB SSD   |
+|      | ต่ำสุด    | สบาย      |
+| ---- | --------- | --------- |
+| vCPU | 2         | 2         |
+| RAM  | 2 GB      | 4 GB      |
+| Disk | 25 GB SSD | 40 GB SSD |
 
-**Where those come from.** Images are 900 MB on disk: postgres 298, api 275,
-web 201, garage 66, caddy 60. Idle memory was measured for two of the five —
-Postgres 36 MB, Garage 5 MB — and the two Node processes are the ones that
-matter and were not measured; a NestJS and a Next standalone server idle in the
-low hundreds of megabytes each. Call it ~500 MB for the stack, plus ~400 MB for
-Ubuntu itself.
+**ตัวเลขมาจากไหน** — image รวมกัน 900 MB (postgres 298, api 275, web 201,
+garage 66, caddy 60) · memory ตอน idle **วัดจริงได้สองตัว** คือ Postgres 36 MB
+กับ Garage 5 MB ส่วน Node อีกสองตัว (NestJS + Next standalone) **ไม่ได้วัด**
+และเป็นตัวที่กินเยอะที่สุดพอดี — ประมาณตัวละร้อยกว่า MB · รวมทั้ง stack ~500 MB
+บวก Ubuntu อีก ~400 MB
 
-2 GB therefore works and leaves little room. Take 4 GB if the choice is cheap:
-the headroom is not for steady traffic, it is for `pg_dump` running while
-someone uploads a file.
+2 GB รันได้ แต่เหลือที่ว่างไม่มาก · เอา 4 GB ถ้าส่วนต่างไม่แพง — ที่เผื่อไม่ใช่
+เผื่อ traffic ปกติ แต่เผื่อตอน `pg_dump` รันพร้อมกับมีคน upload ไฟล์
 
-**CPU is not the constraint** and one vCPU is genuinely tight, because a
-migration, a Docker pull and the two servers all want it during a deploy.
+**CPU ไม่ใช่คอขวด** แต่ 1 vCPU แคบจริง เพราะตอน deploy มี migration, docker pull
+และ server สองตัวแย่งกันอยู่
 
-**Disk grows in three places** — Postgres, Garage's object data, and backups if
-they are kept locally. Keep backups off the box; see [backup.sh](backup.sh).
+**Disk โตสามที่** — Postgres, object data ของ Garage, และ backup ถ้าเก็บไว้บนเครื่อง ·
+**เก็บ backup ไว้นอกเครื่อง** ดู [backup.sh](backup.sh)
 
-**Add swap** on a 2 GB box. It is not for running, it is so an unusual moment
-degrades instead of triggering the OOM killer.
+**เพิ่ม swap** ถ้าเอา 2 GB · ไม่ได้มีไว้ให้รันด้วย swap แต่มีไว้ให้จังหวะผิดปกติ
+ช้าลงแทนที่จะโดน OOM killer
 
 ## Which Ubuntu
 
-**24.04 LTS.** Supported to 2029, two years of production behind it, and
-Docker's own apt repository has supported it that long.
+**24.04 LTS** · support ถึงปี 2029 · ผ่านการใช้งานจริงมาสองปี · และ apt repo
+ของ Docker เองรองรับมานานแล้ว
 
-26.04 LTS is out and will be fine, but it was released in April 2026 and
-nothing here needs anything it added. Pick the boring one for a box that should
-be dull.
+26.04 LTS ออกแล้ว (เม.ย. 2026) ใช้ได้ไม่มีปัญหา แต่ไม่มีอะไรใน stack นี้ที่ต้องใช้
+ของใหม่ — เครื่องที่ควรน่าเบื่อก็เลือกของน่าเบื่อ
 
-Do not use a non-LTS release on a server. They are supported for nine months.
+**อย่าใช้ non-LTS บน server** · support แค่ 9 เดือน
 
 ---
 
-## 1. First login, and stop logging in like this
+## 1. First login แล้วเลิก login แบบนี้
 
-The provider gives a root password or an SSH key. Use it once.
+provider ให้ root password หรือ key มา · ใช้มันครั้งเดียว
 
-If you do not already have a key **on your own machine**, make one there —
-not on the server, because a private key should never travel:
-
-```bash
-# on your laptop
-ssh-keygen -t ed25519 -C "punch@laptop"      # accept the path; set a passphrase
-cat ~/.ssh/id_ed25519.pub                     # this half is safe to paste anywhere
-```
-
-Then, on the server:
+ถ้ายังไม่มี key ของตัวเอง สร้างก่อนตาม [SSH-KEYS.md §1](SSH-KEYS.md#1-your-own-key)
 
 ```bash
 ssh root@<server-ip>
 
-adduser deploy                     # a real password; you need it for sudo
+adduser deploy                     # ตั้ง password จริง ๆ ต้องใช้ตอน sudo
 usermod -aG sudo deploy
 
-# Give it your key rather than a password.
+# ให้มันใช้ key ไม่ใช่ password
 mkdir -p /home/deploy/.ssh
-cp /root/.ssh/authorized_keys /home/deploy/.ssh/   # if the provider installed it
-#   otherwise: nano /home/deploy/.ssh/authorized_keys  and paste the .pub line
+cp /root/.ssh/authorized_keys /home/deploy/.ssh/   # ถ้า provider ใส่ไว้ให้แล้ว
+#   ถ้าไม่มี: nano /home/deploy/.ssh/authorized_keys แล้ว paste บรรทัด .pub
 chown -R deploy:deploy /home/deploy/.ssh
 chmod 700 /home/deploy/.ssh
 chmod 600 /home/deploy/.ssh/authorized_keys
 ```
 
-> ⚠️ `authorized_keys` holds **public** halves, one per line, and each is a
-> single line. A key broken across lines by an editor silently does not work,
-> and the failure looks like a rejected password.
-
-> ⚠️ Permissions are enforced, not advisory. sshd ignores `authorized_keys`
-> if the file or its directory is group- or world-writable, and says nothing
-> useful about why.
-
-Open a **second terminal** and confirm `ssh deploy@<server-ip>` works before
-touching sshd. Locking yourself out here means starting from a rescue console.
+เปิด terminal **อีกหน้าต่าง** แล้วยืนยันว่า `ssh deploy@<server-ip>` เข้าได้
+ก่อนแตะ sshd · ล็อกตัวเองออกตรงนี้แปลว่าต้องไปเริ่มที่ rescue console
 
 ```bash
 sudo nano /etc/ssh/sshd_config
 #   PermitRootLogin no
 #   PasswordAuthentication no
 sudo systemctl restart ssh
+
+sudo sshd -T | grep -iE 'passwordauth|permitrootlogin'   # เช็คค่าที่มีผลจริง
 ```
 
-> ⚠️ On Ubuntu 24.04 sshd may read `/etc/ssh/sshd_config.d/*.conf` **after** the
-> main file, and a cloud image often drops `PasswordAuthentication yes` in
-> there. Editing only the main file then changes nothing. Check with
-> `sudo sshd -T | grep -i passwordauth` — that prints what is actually in
-> effect.
+> ⚠️ Ubuntu อ่าน `/etc/ssh/sshd_config.d/*.conf` **ทีหลัง** ไฟล์หลัก และ cloud
+> image ชอบหย่อน `PasswordAuthentication yes` ไว้ในนั้น · แก้ไฟล์หลักอย่างเดียว
+> แล้วไม่มีผล · `sshd -T` คือตัวที่บอกความจริง
 
 ## 2. Firewall
 
@@ -112,26 +91,25 @@ sudo systemctl restart ssh
 sudo ufw allow OpenSSH
 sudo ufw allow 80/tcp
 sudo ufw allow 443/tcp
-sudo ufw allow 443/udp        # HTTP/3; skip if you would rather not
+sudo ufw allow 443/udp        # HTTP/3 · ไม่เอาก็ได้
 sudo ufw enable
 ```
 
-Nothing else. Postgres and Garage are reachable only inside the Docker network
-— `compose.yml` publishes no port for them, and that is deliberate.
+แค่นี้ · Postgres กับ Garage เข้าถึงได้เฉพาะใน Docker network เท่านั้น —
+`compose.yml` ไม่ publish port ให้มันเลย ซึ่งตั้งใจ
 
-> ⚠️ A cloud firewall or security group sits **in front of** ufw and is a
-> separate list. Opening 80 here and forgetting it there gives a Caddy that
-> cannot get a certificate and an error that talks about ACME, not firewalls.
+> ⚠️ **cloud firewall / security group อยู่หน้า ufw และเป็นคนละลิสต์** · เปิด 80
+> ที่ ufw แล้วลืมอีกที่ จะได้ Caddy ที่ขอ certificate ไม่ได้ พร้อม error ที่พูดเรื่อง
+> ACME ไม่ได้พูดเรื่อง firewall
 
-> ⚠️ Docker publishes ports by writing iptables rules that **bypass ufw**. It
-> does not affect this stack, because only Caddy publishes anything and Caddy
-> should be public — but do not assume ufw is protecting a container port you
-> publish later.
+> ⚠️ **Docker publish port ด้วยการเขียน iptables ที่ข้าม ufw** · stack นี้ไม่กระทบ
+> เพราะมีแค่ Caddy ที่ publish และ Caddy ควรเปิดสาธารณะอยู่แล้ว — แต่อย่าเผลอคิดว่า
+> ufw กำลังกัน container port ที่ publish เพิ่มทีหลัง
 
 ## 3. Docker
 
-From Docker's repository, not Ubuntu's `docker.io` package, which lags and
-does not ship the Compose v2 plugin this stack needs.
+จาก repo ของ Docker เอง ไม่ใช่ package `docker.io` ของ Ubuntu ซึ่งเวอร์ชันช้ากว่า
+และไม่มี Compose v2 plugin ที่ stack นี้ต้องใช้
 
 ```bash
 sudo apt update && sudo apt install -y ca-certificates curl
@@ -151,20 +129,18 @@ sudo apt install -y docker-ce docker-ce-cli containerd.io \
 sudo usermod -aG docker deploy
 ```
 
-Log out and back in for the group to apply, then check both:
+logout แล้ว login ใหม่ให้ group มีผล แล้วเช็คทั้งสองอย่าง:
 
 ```bash
 docker run --rm hello-world
-docker compose version          # must be v2.x — "docker-compose" with a hyphen is v1
+docker compose version          # ต้องเป็น v2.x · "docker-compose" มีขีดคือ v1
 ```
 
-> ⚠️ `docker` group membership is **root equivalent** — anyone in it can mount
-> the host filesystem into a container. That is an accepted trade for a deploy
-> user; it is not something to hand out.
+> ⚠️ อยู่ใน group `docker` **เทียบเท่า root** เพราะ mount filesystem ของ host
+> เข้า container ได้ · สำหรับ deploy user ยอมรับได้ แต่ไม่ใช่สิ่งที่แจกกันเล่น ๆ
 
-Make Docker's logs stop eating the disk. Without this, a container that logs
-steadily fills the box over months and the failure looks like a database
-problem:
+ปิดไม่ให้ log ของ Docker กินดิสก์จนเต็ม · ถ้าไม่ตั้ง container ที่ log เรื่อย ๆ
+จะทำให้เครื่องเต็มในไม่กี่เดือน แล้วอาการที่เห็นจะเหมือนปัญหา database
 
 ```bash
 sudo tee /etc/docker/daemon.json > /dev/null <<'JSON'
@@ -176,51 +152,37 @@ JSON
 sudo systemctl restart docker
 ```
 
-Keep the clock right, and leave the box on UTC. The application asks for
-`Asia/Bangkok` where it matters, and a server on local time makes correlating
-logs harder than it needs to be.
+**ปล่อยเครื่องไว้ที่ UTC** · application ขอ `Asia/Bangkok` เองตรงที่ต้องใช้ และ
+server ที่ตั้งเวลาท้องถิ่นทำให้ไล่ log ข้ามระบบยากกว่าที่ควร
 
 ```bash
-timedatectl                          # expect UTC, and NTP active
+timedatectl                          # ควรเป็น UTC และ NTP active
 ```
 
-## 4. DNS, before anything else starts
+## 4. DNS ก่อนอย่างอื่น
 
-Point an `A` record at the server and wait for it to resolve. Caddy asks
-Let's Encrypt to visit `http://<domain>/.well-known/…` on port 80, so the name
-has to work first.
+ชี้ `A` record มาที่ IP ของเครื่อง แล้วรอให้มัน resolve · Caddy จะให้
+Let's Encrypt มาเรียก `http://<domain>/.well-known/…` ที่ port 80 ชื่อโดเมนเลย
+ต้องใช้งานได้ก่อน
 
 ```bash
-dig +short taskflow.example.com      # must print the server's IP
+dig +short taskflow.example.com      # ต้องขึ้น IP ของเครื่อง
 ```
 
-> ⚠️ **Let's Encrypt rate limits are real**: roughly 5 failed validations per
-> hour, and 50 certificates per week per registered domain. Debugging TLS by
-> repeatedly running `down` and `up` will lock you out for an hour. If you
-> expect to iterate, point Caddy at the staging CA first — add
-> `acme_ca https://acme-staging-v02.api.letsencrypt.org/directory` inside the
-> site block in [config/Caddyfile](config/Caddyfile), and remove it once a
-> certificate is issued. Staging certificates are untrusted by browsers, which
-> is the point: it proves the flow without spending the quota.
+> ⚠️ **rate limit ของ Let's Encrypt มีจริง** — validation ที่ fail ประมาณ 5 ครั้ง
+> ต่อชั่วโมง และ 50 certificate ต่อสัปดาห์ต่อโดเมน · debug TLS ด้วยการ `down`/`up`
+> รัว ๆ จะโดนล็อกยาวเป็นชั่วโมง · ถ้ารู้ตัวว่าจะต้องลองหลายรอบ ให้ชี้ไป staging CA
+> ก่อน โดยใส่ `acme_ca https://acme-staging-v02.api.letsencrypt.org/directory`
+> ใน site block ของ [config/Caddyfile](config/Caddyfile) แล้วค่อยเอาออกเมื่อผ่าน ·
+> certificate จาก staging browser ไม่เชื่อถือ ซึ่งคือประเด็น — มันพิสูจน์ว่า flow
+> ถูกโดยไม่กิน quota
 
-## 5. A read-only key so the server can fetch the repo
+## 5. Deploy key ให้ server อ่าน repo ได้
 
-The deploy workflow runs `git fetch` on the box, so it needs read access —
-read only, and to this repository only. That is what a deploy key is.
+ทำตาม [SSH-KEYS.md §2](SSH-KEYS.md#2-deploy-key--server-reads-github) —
+สร้างบน server, เอา public ไปใส่ GitHub Deploy keys แบบ read-only
 
-```bash
-ssh-keygen -t ed25519 -C "bangmod-deploy" -f ~/.ssh/id_ed25519 -N ""
-cat ~/.ssh/id_ed25519.pub
-```
-
-Add that public key at **Settings → Deploy keys → Add deploy key**. Leave
-_Allow write access_ unchecked.
-
-```bash
-ssh -T git@github.com     # expect "successfully authenticated", not shell access
-```
-
-## 6. Clone, configure, log in to the registry
+## 6. Clone · ตั้งค่า · login registry
 
 ```bash
 sudo mkdir -p /srv/taskflow && sudo chown deploy:deploy /srv/taskflow
@@ -229,30 +191,29 @@ cd /srv/taskflow/deploy
 cp .env.example .env
 ```
 
-Fill in `.env`. Generate every secret rather than inventing one — the file has
-the command beside each. Then:
+กรอก `.env` · **generate ทุก secret อย่าคิดเอง** — ในไฟล์มีคำสั่งกำกับไว้ทุกตัว
+แล้วปิดสิทธิ์:
 
 ```bash
 chmod 600 .env
 ```
 
-Log in to GHCR with a personal access token that has **`read:packages`** and
-nothing else (Settings → Developer settings → Tokens):
+login GHCR ด้วย personal access token ที่มีสิทธิ์ **`read:packages`** อย่างเดียว
+(Settings → Developer settings → Tokens):
 
 ```bash
 echo "<token>" | docker login ghcr.io -u <github-username> --password-stdin
 ```
 
-> ⚠️ GHCR packages are **private by default**, and a pull without access fails
-> as `manifest unknown` / **not found** rather than as a permission error. If a
-> pull says the image does not exist, check this before you check the tag.
+> ⚠️ **GHCR package เป็น private โดย default** และ pull โดยไม่มีสิทธิ์จะ fail เป็น
+> `manifest unknown` / **not found** ไม่ใช่ permission error · ถ้าเจอว่า image
+> ไม่มีอยู่ ให้เช็คอันนี้ก่อนเช็ค tag
 
-> ⚠️ The first deploy has nothing to pull, because no image has been pushed
-> yet. Either push to `prod` first and let CI build, or build once on the box
-> with `docker compose up -d --build` — that needs the repository present,
-> which it is.
+> ⚠️ **deploy ครั้งแรกไม่มี image ให้ pull** เพราะยังไม่เคย push · เลือกเอาว่าจะ
+> push `prod` ให้ CI build ก่อน หรือ build บนเครื่องครั้งเดียวด้วย
+> `docker compose up -d --build` ซึ่งทำได้เพราะ repo อยู่บนเครื่องแล้ว
 
-## 7. Start it
+## 7. Start
 
 ```bash
 cd /srv/taskflow/deploy
@@ -260,160 +221,53 @@ docker compose up -d
 docker compose ps
 ```
 
-Expect seven services: `postgres`, `garage`, `web`, `api` and `caddy` up,
-`garage-init` and `api-migrate` exited 0. The two that exit are meant to.
+ควรได้ 7 service: `postgres` `garage` `web` `api` `caddy` ขึ้นอยู่ ·
+`garage-init` กับ `api-migrate` exited 0 — สองตัวนี้ตั้งใจให้จบแล้วออก
 
-Then check it from **outside** the box, because a server that answers on
-localhost and not from the internet is a firewall problem wearing a disguise:
+แล้วเช็คจาก **นอกเครื่อง** เพราะ server ที่ตอบบน localhost แต่ไม่ตอบจากเน็ต
+คือปัญหา firewall ที่ปลอมตัวมา:
 
 ```bash
 curl -I https://taskflow.example.com
 curl https://taskflow.example.com/api/health/ready
 ```
 
-`/health/ready` naming `database` and `storage` as up is the real proof.
+`/health/ready` ที่ขึ้น `database` และ `storage` เป็น up คือหลักฐานจริง
 
-## 8. A key for GitHub Actions to log in with
+## 8. CI key ให้ Actions เข้า server ได้
 
-Separate from your own. A shared key cannot be revoked without locking
-yourself out, and this one has to live unencrypted in a secret — which is
-exactly why it should be able to do less than yours does.
-
-**No passphrase.** Nothing can type one during a workflow run. That is the
-trade being made here, and it is why the key is single-purpose.
-
-Generate it on your laptop:
-
-```bash
-ssh-keygen -t ed25519 -C "github-actions@taskflow" -f ~/.ssh/taskflow_ci -N ""
-```
-
-`-N ""` is the empty passphrase, `-f` keeps it out of the way of `id_ed25519`.
-You get two files:
-
-```
-~/.ssh/taskflow_ci        the private half → the GitHub secret. 600, never leaves
-~/.ssh/taskflow_ci.pub    the public half  → the server's authorized_keys
-```
-
-Put the public half on the server:
-
-```bash
-ssh-copy-id -i ~/.ssh/taskflow_ci.pub deploy@<server-ip>
-```
-
-or by hand, appending — `>>`, not `>`, which would replace your own key and
-lock you out:
-
-```bash
-cat ~/.ssh/taskflow_ci.pub | ssh deploy@<server-ip> \
-  'cat >> ~/.ssh/authorized_keys'
-```
-
-Prove it works before handing it to CI, because a workflow failing on
-authentication tells you far less than ssh does:
-
-```bash
-ssh -i ~/.ssh/taskflow_ci deploy@<server-ip> 'docker compose version'
-```
-
-Then copy the **private** half — the whole file, both `-----BEGIN-----` and
-`-----END-----` lines and the trailing newline:
-
-```bash
-pbcopy < ~/.ssh/taskflow_ci          # macOS
-xclip -sel clip < ~/.ssh/taskflow_ci # Linux
-```
-
-That is the value of `SSH_PRIVATE_KEY` in the next step.
-
-> ⚠️ It is the file **without** `.pub`. Pasting the public half gives an
-> authentication failure that reads exactly like a wrong key, because it is one.
-
-If a run ever fails to authenticate, check the two halves are actually a pair
-rather than guessing. This prints the public key that belongs to a private one:
-
-```bash
-ssh-keygen -yf ~/.ssh/taskflow_ci
-```
-
-Compare it to the line in the server's `authorized_keys`. If they differ, the
-secret and the server are holding different keys.
-
-To revoke this key later, delete its line from `~/.ssh/authorized_keys` on the
-server. Nothing else is affected.
-
-### Checking what you already have
-
-```bash
-# Every key file, and its permissions
-ls -la ~/.ssh/
-
-# Fingerprint, type and bit length of each public key
-for f in ~/.ssh/*.pub; do ssh-keygen -lf "$f"; done
-
-# A key with no .pub beside it — a .pem from a provider, usually. This
-# derives the public half, which is not secret
-ssh-keygen -yf ~/.ssh/some-key.pem
-
-# ...and its fingerprint and type
-ssh-keygen -lf ~/.ssh/some-key.pem
-
-# What the agent is holding. "no identities" is normal on macOS unless
-# something added them
-ssh-add -l
-
-# Which key ssh would actually offer to a host, after ~/.ssh/config is
-# applied. Answers "why is it using that one" without connecting
-ssh -G <host> | grep -iE '^(hostname|user|identityfile)'
-
-# Watch the negotiation, including every key offered and which was accepted
-ssh -v <host> 2>&1 | grep -iE 'offering|accepted|authenticated'
-
-# Anything a private key should not be
-find ~/.ssh -maxdepth 1 -type f ! -name '*.pub' ! -name 'known_hosts*' \
-     ! -name 'config' -perm +077
-```
-
-`ED25519` and `RSA 2048` both appear in the wild. RSA 2048 still works;
-ed25519 is shorter, faster and what `ssh-keygen` gives you by default now,
-which is why the keys in this document are all ed25519.
+ทำตาม [SSH-KEYS.md §3](SSH-KEYS.md#3-ci-key--actions-reaches-the-server) —
+สร้างที่เครื่องตัวเอง, public ขึ้น server, private เอาไปใส่ secret ใน step ถัดไป
 
 ## 9. GitHub settings
 
 **Settings → Secrets and variables → Actions → Secrets**
 
-| Secret            | Value                                                                                              |
-| ----------------- | -------------------------------------------------------------------------------------------------- |
-| `SSH_HOST`        | the server's IP or hostname                                                                        |
-| `SSH_USER`        | `deploy`                                                                                           |
-| `SSH_PRIVATE_KEY` | the whole of `~/.ssh/taskflow_ci` from step 8 — not the `.pub`, and not the deploy key from step 5 |
-| `DEPLOY_PATH`     | `/srv/taskflow` — the **clone**, not `deploy/` inside it                                           |
+| Secret            | ค่า                                                                                      |
+| ----------------- | ---------------------------------------------------------------------------------------- |
+| `SSH_HOST`        | IP หรือ hostname ของเครื่อง                                                              |
+| `SSH_USER`        | `deploy`                                                                                 |
+| `SSH_PRIVATE_KEY` | ทั้งไฟล์ `~/.ssh/taskflow_ci` จาก step 8 — ไม่ใช่ `.pub` และไม่ใช่ deploy key จาก step 5 |
+| `DEPLOY_PATH`     | `/srv/taskflow` — คือ **clone ของ repo** ไม่ใช่ `deploy/` ข้างใน                         |
 
 **→ Variables**
 
-| Variable                 | Value                           |
+| Variable                 | ค่า                             |
 | ------------------------ | ------------------------------- |
-| `NEXT_PUBLIC_SENTRY_DSN` | the browser DSN, or leave unset |
+| `NEXT_PUBLIC_SENTRY_DSN` | DSN ฝั่ง browser · ไม่ตั้งก็ได้ |
 
-A variable rather than a secret because it ships to every browser anyway — a
-public DSN is designed to be visible, and pretending otherwise makes it harder
-to debug.
+เป็น variable ไม่ใช่ secret เพราะยังไงมันก็ถูกส่งไปที่ browser ทุกคนอยู่แล้ว —
+public DSN ออกแบบมาให้เห็นได้ การทำเป็นความลับมีแต่ทำให้ debug ยากขึ้น
 
-**Branch.** `prod` is what deploys. Create it from `main` and protect it if you
-want a review gate:
+**Branch** · `prod` คือตัวที่ deploy · แตกจาก `main` แล้ว protect ไว้ถ้าอยากมี
+review gate:
 
 ```bash
 git checkout -b prod main && git push -u origin prod
 ```
 
-Nothing else needs changing: the workflow already asks for `packages: write`,
-and `GITHUB_TOKEN` is enough to push to GHCR.
-
-> ⚠️ **Two different keys are in play** and swapping them is the usual mistake.
-> Step 5's deploy key lets the _server_ read _GitHub_. `SSH_PRIVATE_KEY` lets
-> _GitHub Actions_ log in to the _server_. They are separate keypairs pointing
-> in opposite directions.
+ที่เหลือไม่ต้องแก้: workflow ขอ `packages: write` ไว้แล้ว และ `GITHUB_TOKEN`
+พอสำหรับ push ขึ้น GHCR
 
 ## 10. Deploy
 
@@ -421,88 +275,87 @@ and `GITHUB_TOKEN` is enough to push to GHCR.
 git checkout prod && git merge main && git push
 ```
 
-Watch it in the Actions tab. It checks `deploy/` out at that commit, builds and
-pushes the images that changed, then pulls and restarts.
+ดูใน Actions tab · มันจะ checkout `deploy/` ที่ commit นั้น, build แล้ว push
+เฉพาะ image ที่เปลี่ยน, จากนั้น pull แล้ว restart
 
 ---
 
 ## Things that will surprise you
 
-**`init/` runs once, ever.** `init/postgres.sh` and `init/garage.sh` only see
-an empty volume. Editing them after the first boot changes nothing until that
-volume is deleted, and deleting the volume deletes the data.
+**`init/` รันครั้งเดียวตลอดกาล** · `init/postgres.sh` กับ `init/garage.sh` เห็นแค่
+volume ว่าง · แก้ทีหลังไม่มีผลจนกว่าจะลบ volume ทิ้ง และลบ volume คือลบข้อมูล
 
-**A tracked file edited on the box is discarded.** Deploy runs
-`git checkout --force`. `deploy/.env` is untracked and survives; a hand-edited
-`config/Caddyfile` does not. Change it in the repository.
+**ไฟล์ที่ track อยู่ ถ้าแก้บนเครื่องจะถูกทับ** · deploy รัน `git checkout --force` ·
+`deploy/.env` ไม่ได้ track เลยรอด แต่ `config/Caddyfile` ที่แก้ด้วยมือไม่รอด —
+แก้ที่ repo
 
-**Losing `caddy-data` means re-issuing every certificate**, and Let's Encrypt
-rate-limits that. It holds the ACME account key. Never `docker compose down -v`
-on a whim — `-v` deletes volumes, which is the database too.
+**ลบ `caddy-data` แล้วต้องขอ certificate ใหม่ทั้งหมด** ซึ่ง Let's Encrypt limit อยู่ ·
+มันเก็บ ACME account key ไว้ · **อย่า `docker compose down -v` เล่น ๆ** — `-v`
+ลบ volume ซึ่งรวม database ด้วย
 
-**Postgres 18 stores data in a versioned subdirectory.** The mount is at
-`/var/lib/postgresql`, not `/var/lib/postgresql/data` as in 17 and earlier.
-`compose.yml` already has it right; a hand-written restore command might not.
+**Postgres 18 เก็บ data ใน subdirectory ที่มีเลขเวอร์ชัน** · mount ที่
+`/var/lib/postgresql` ไม่ใช่ `/var/lib/postgresql/data` แบบ 17 ลงไป ·
+`compose.yml` ถูกอยู่แล้ว แต่คำสั่ง restore ที่พิมพ์เองอาจไม่
 
-**Backups are not backups until restored.** `backup.sh` verifies the dump with
-`pg_restore --list`, which proves the file is readable, not that the data is
-right. Restore into a scratch database occasionally and look.
+**backup ยังไม่ใช่ backup จนกว่าจะ restore สำเร็จ** · `backup.sh` เช็คด้วย
+`pg_restore --list` ซึ่งพิสูจน์แค่ว่าไฟล์อ่านได้ ไม่ได้พิสูจน์ว่าข้อมูลถูก ·
+ลอง restore เข้า database เปล่าเป็นระยะแล้วเปิดดูจริง
 
-**Both stores must be backed up**, separately. A database dump cannot restore
-an uploaded file, and an object copy cannot restore a task.
+**ต้อง backup ทั้งสองที่ แยกกัน** · DB dump กู้ไฟล์แนบไม่ได้ และ object copy
+กู้ task ไม่ได้
 
 ---
 
 ## Commands worth keeping
 
-All of these run from `/srv/taskflow/deploy`.
+รันจาก `/srv/taskflow/deploy` ทั้งหมด
 
 ```bash
-# What is running, and what exited
+# อะไรรันอยู่ อะไร exit ไปแล้ว
 docker compose ps -a
 
-# Logs. -f follows, --tail limits the scrollback
+# log · -f คือตามต่อ · --tail จำกัดจำนวนบรรทัด
 docker compose logs -f api
 docker compose logs --tail 100 caddy
 
-# Restart one service without touching the rest
+# restart ตัวเดียวโดยไม่ยุ่งตัวอื่น
 docker compose restart api
 
-# Apply a config change (Caddyfile, compose.yml) after pulling it
+# เอา config ที่เปลี่ยน (Caddyfile, compose.yml) ไปใช้
 git pull && docker compose up -d
 
-# Roll back to a previous release
+# ย้อนกลับไป release ก่อนหน้า
 IMAGE_TAG=<commit-sha> docker compose pull
 IMAGE_TAG=<commit-sha> docker compose up -d
 
-# Migrations: what has been applied
+# migration ไหนถูก apply ไปแล้วบ้าง
 docker compose run --rm api-migrate \
   node ../../../node_modules/typeorm/cli.js migration:show \
   -d dist/database/data-source.js
 
-# A psql shell, as the non-superuser role the app uses. sh -c so the
-# variables expand inside the container, where compose put them — on the
-# host they are unset unless you have sourced .env
+# เข้า psql ด้วย role ที่แอปใช้ (ไม่ใช่ superuser)
+# ใช้ sh -c ให้ตัวแปร expand ข้างใน container ที่ compose ใส่ไว้ให้ —
+# บน host มันไม่มีค่าถ้ายังไม่ได้ source .env
 docker compose exec postgres sh -c 'psql -U "$APP_DB_USER" -d "$POSTGRES_DB"'
 
-# Back up both stores to somewhere off this box
+# backup ทั้งสองที่ ไปไว้นอกเครื่อง
 ./backup.sh /srv/backups
 
-# What is using the disk
+# อะไรกินดิสก์
 docker system df
 df -h
 
-# Reclaim space from old images. Safe: the running ones are kept
+# คืนพื้นที่จาก image เก่า · ปลอดภัย ตัวที่ใช้อยู่ไม่โดนลบ
 docker image prune -f
 
-# Object storage, from inside the network
+# object storage จากใน network
 docker compose exec garage /garage status
 docker compose exec garage /garage bucket list
 ```
 
-Two that deserve a second's thought before you press enter:
+สองอันที่ควรคิดสักวินาทีก่อนกด enter:
 
 ```bash
-docker compose down          # stops everything. Volumes survive
-docker compose down -v       # ...and deletes the database. Almost never
+docker compose down          # หยุดทุกอย่าง · volume ยังอยู่
+docker compose down -v       # ...แล้วลบ database ด้วย · แทบไม่มีเหตุให้ใช้
 ```
