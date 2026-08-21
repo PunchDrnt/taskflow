@@ -92,7 +92,7 @@ export default function FormsPage() {
         <span className="label-small text-text-secondary">Checkbox colors</span>
         <div className="flex flex-wrap items-center gap-4">
           {colors
-            .filter((c) => c !== 'neutral')
+            .filter((c) => c !== 'neutral' && c !== 'tertiary')
             .map((color) => (
               <label
                 key={color}
@@ -109,7 +109,7 @@ export default function FormsPage() {
         <span className="label-small text-text-secondary">Switch colors</span>
         <div className="flex flex-wrap items-center gap-4">
           {colors
-            .filter((c) => c !== 'neutral')
+            .filter((c) => c !== 'neutral' && c !== 'tertiary')
             .map((color) => (
               <label
                 key={color}

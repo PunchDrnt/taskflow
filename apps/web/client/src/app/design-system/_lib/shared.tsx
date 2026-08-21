@@ -8,6 +8,7 @@ export const buttonVariants = [
 export const colors = [
   'primary',
   'secondary',
+  'tertiary',
   'error',
   'warning',
   'info',
@@ -18,6 +19,7 @@ export const colors = [
 export const paletteFamilies = [
   'primary',
   'secondary',
+  'tertiary',
   'error',
   'warning',
   'info',
@@ -40,6 +42,12 @@ export const paletteClasses: Record<
     dark: 'bg-secondary-dark',
     light: 'bg-secondary-light',
     contrast: 'bg-secondary-contrast',
+  },
+  tertiary: {
+    main: 'bg-tertiary-main',
+    dark: 'bg-tertiary-dark',
+    light: 'bg-tertiary-light',
+    contrast: 'bg-tertiary-contrast',
   },
   error: {
     main: 'bg-error-main',

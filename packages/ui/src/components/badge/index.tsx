@@ -18,6 +18,7 @@ const badgeVariants = cva(
       color: {
         primary: '',
         secondary: '',
+        tertiary: '',
         error: '',
         warning: '',
         info: '',
@@ -90,6 +91,36 @@ const badgeVariants = cva(
         variant: 'link',
         color: 'secondary',
         className: 'text-secondary-light',
+      },
+
+      // tertiary
+      {
+        variant: 'default',
+        color: 'tertiary',
+        className:
+          'bg-tertiary-main text-tertiary-contrast [a]:hover:bg-tertiary-dark',
+      },
+      {
+        variant: 'secondary',
+        color: 'tertiary',
+        className:
+          'bg-tertiary-soft text-tertiary-light [a]:hover:bg-tertiary-hover',
+      },
+      {
+        variant: 'outline',
+        color: 'tertiary',
+        className:
+          'border-tertiary-outlined-border bg-tertiary-soft text-tertiary-light [a]:hover:bg-tertiary-hover',
+      },
+      {
+        variant: 'ghost',
+        color: 'tertiary',
+        className: 'text-tertiary-light hover:bg-tertiary-hover',
+      },
+      {
+        variant: 'link',
+        color: 'tertiary',
+        className: 'text-tertiary-light',
       },
 
       // error

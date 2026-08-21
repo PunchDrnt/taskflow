@@ -30,6 +30,7 @@ const buttonVariants = cva(
       color: {
         primary: '',
         secondary: '',
+        tertiary: '',
         error: '',
         warning: '',
         info: '',
@@ -100,6 +101,38 @@ const buttonVariants = cva(
         color: 'secondary',
         className:
           'text-secondary-light hover:text-secondary-dark disabled:text-text-disabled',
+      },
+
+      // tertiary
+      {
+        variant: 'default',
+        color: 'tertiary',
+        className:
+          'bg-tertiary-main text-tertiary-contrast hover:bg-tertiary-dark active:bg-tertiary-darker disabled:bg-action-disabled-background disabled:text-text-disabled',
+      },
+      {
+        variant: 'outline',
+        color: 'tertiary',
+        className:
+          'border-tertiary-outlined-border bg-tertiary-soft text-tertiary-light hover:bg-tertiary-hover active:bg-tertiary-selected disabled:border-divider disabled:bg-transparent disabled:text-text-disabled',
+      },
+      {
+        variant: 'secondary',
+        color: 'tertiary',
+        className:
+          'bg-tertiary-soft text-tertiary-light hover:bg-tertiary-hover active:bg-tertiary-selected disabled:bg-action-disabled-background disabled:text-text-disabled',
+      },
+      {
+        variant: 'ghost',
+        color: 'tertiary',
+        className:
+          'bg-transparent text-tertiary-light hover:bg-tertiary-soft active:bg-tertiary-selected disabled:text-text-disabled',
+      },
+      {
+        variant: 'link',
+        color: 'tertiary',
+        className:
+          'text-tertiary-light hover:text-tertiary-dark disabled:text-text-disabled',
       },
 
       // error
