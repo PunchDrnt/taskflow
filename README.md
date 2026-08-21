@@ -201,6 +201,20 @@ Unit tests sit next to the code as `src/**/*.spec.ts`. Integration tests live in
 
 The permission layer joins them once it exists.
 
+## Branching
+
+```
+feat/xxx  →  main  →  prod
+```
+
+One direction, so `prod` can never carry something `main` does not have. `main` is the trunk, reached through pull requests and kept green — CI runs on every pull request, and branch protection is what turns "kept green" from an intention into a property. Merging `main` into `prod` is the act of shipping, which is deliberately a separate decision from merging work into `main`: code becomes ready continuously, releases go out when someone chooses. Branch names take their prefix from the Conventional Commit type — `feat/`, `fix/`, `chore/` — and are short-lived, always cut from `main`.
+
+There is no `dev` branch, and that is a decision rather than an omission. An integration branch is worth its cost when something deploys out of it — a staging environment someone can click through before production sees it. There is no such machine here: one `deploy/` directory, one box. A `dev` branch would only be a place commits wait before a second merge, with nothing additional verified while they wait, which buys two merges and two conflict resolutions for no extra signal. Conflicts appear at pull-request time whatever the target branch is called. If a staging server ever exists, this is worth revisiting the same day.
+
+Tags and `prod` are kept separate on purpose. `prod` moves every release; a tag marks a phase and moves rarely. Tying deploys to tags forces one of two bad outcomes — a tag for every deploy, or deploys held back to keep the tag list clean.
+
+Hotfixes take the ordinary route, `fix/xxx` → `main` → `prod`. Cherry-picking directly onto `prod` is the escape hatch for when `main` is blocked, not a second normal path, and what it skips has to be merged back into `main` afterwards.
+
 ## Deploying
 
 [deploy/](deploy/) is everything the server runs and nothing else from this repository — copy that one directory to the box, create `.env` inside it, and the installation is complete; the apps themselves arrive as images. Its guides sit in [deploy/docs/](deploy/docs/), which the server does not read: [what is in the directory](deploy/docs/README.md), [taking a bare Ubuntu box to a working deploy](deploy/docs/setup.md), and [the three SSH keys involved](deploy/docs/ssh-keys.md).

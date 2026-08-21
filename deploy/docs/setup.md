@@ -272,8 +272,7 @@ curl https://taskflow.example.com/api/health/ready
 เป็น variable ไม่ใช่ secret เพราะยังไงมันก็ถูกส่งไปที่ browser ทุกคนอยู่แล้ว —
 public DSN ออกแบบมาให้เห็นได้ การทำเป็นความลับมีแต่ทำให้ debug ยากขึ้น
 
-**Branch** · `prod` คือตัวที่ deploy · แตกจาก `main` แล้ว protect ไว้ถ้าอยากมี
-review gate:
+**Branch** · `prod` คือตัวที่ deploy · แตกจาก `main` ([ผังเต็ม](../../.claude/docs/01-architecture.md#branching)):
 
 ```bash
 git checkout -b prod main && git push -u origin prod
@@ -281,6 +280,10 @@ git checkout -b prod main && git push -u origin prod
 
 ที่เหลือไม่ต้องแก้: workflow ขอ `packages: write` ไว้แล้ว และ `GITHUB_TOKEN`
 พอสำหรับ push ขึ้น GHCR
+
+> **ตั้ง branch protection บน `main` ด้วย** (บังคับ PR + CI เขียว) · ไม่ใช่เรื่อง
+> ความเรียบร้อย — `deploy.yml` ไม่รัน test เลย มันเชื่อว่า gate รันบน `main`
+> ไปแล้ว ถ้า push ตรงเข้า `main` ได้ ของที่ไม่เคยผ่านอะไรก็ขึ้น production ได้
 
 ## 9. Deploy
 

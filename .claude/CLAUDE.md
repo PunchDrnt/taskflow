@@ -99,6 +99,14 @@ Integration suites, all in `apps/api/core/test/`: `org-isolation.spec.ts` is the
 
 `test/schema-drift.spec.ts` guards the gap `synchronize: false` leaves open: nothing reconciles entities against the database, so it applies every migration and asserts TypeORM's schema builder has no statement left to run. Note that `migration:create` emits `import { MigrationInterface, QueryRunner }` as a value import — both are types only and TypeORM's ESM entry does not export them, so it passes `nest build` and throws under Vitest. `apps/api/core/eslint.config.mjs` turns on `consistent-type-imports` for `src/database/migrations/*.ts` only, so lint-staged fixes it on commit — the same rule applied repo-wide would rewrite NestJS constructor injection, whose DI reads the `design:paramtypes` metadata that `import type` erases.
 
+## Branching
+
+`feat/xxx` → `main` → `prod`, one direction only, so `prod` can never hold something `main` does not. `main` is the trunk and is reached through pull requests; merging `main` into `prod` is what ships, which is why `deploy.yml` runs no tests of its own. Branch names take the Conventional Commit type as their prefix (`feat/`, `fix/`, `chore/`) and are short-lived, always cut from `main`.
+
+There is deliberately **no `dev` branch**. An integration branch earns its keep when something deploys from it — a staging box someone can actually click through — and there is no such machine here, so `dev` would only be somewhere commits wait before a second merge, with nothing extra verified at that point: two merges and two conflict resolutions for no additional signal. Conflicts surface at pull-request time regardless of what the target branch is called. Revisit if a staging server ever exists.
+
+Tags are not a deploy trigger: `prod` moves on every release while a tag marks a phase, and `deploy.yml` fires on pushes to `prod` only. Hotfixes take the ordinary path; cherry-picking straight onto `prod` is for when `main` is stuck, and needs following back into `main`.
+
 ## Commit conventions
 
 This repo uses [Conventional Commits](https://www.conventionalcommits.org/). Format every commit as `type(scope): subject`:
