@@ -1,8 +1,7 @@
 # Setting up the server
 
 จาก Ubuntu เปล่า ๆ จนถึง deploy ที่วิ่งเองตอน `git push` · ประมาณชั่วโมงนึง
-ส่วนใหญ่คือรอ · ไฟล์ที่ server ใช้จริงอยู่ที่ [`deploy/`](../../deploy/) ส่วนเอกสาร
-ชุดนี้อยู่นอกโฟลเดอร์นั้น
+ส่วนใหญ่คือรอ
 
 เรื่อง SSH key แยกไปอยู่ [ssh-keys.md](ssh-keys.md) เพราะมี key สามตัวและสองตัว
 ใช้คนละทิศทาง — อ่านอันนั้นก่อนเริ่ม step 1 จะไม่สับสน
@@ -32,7 +31,7 @@ garage 66, caddy 60) · memory ตอน idle **วัดจริงได้�
 และ server สองตัวแย่งกันอยู่
 
 **Disk โตสามที่** — Postgres, object data ของ Garage, และ backup ถ้าเก็บไว้บนเครื่อง ·
-**เก็บ backup ไว้นอกเครื่อง** ดู [backup.sh](../../deploy/backup.sh)
+**เก็บ backup ไว้นอกเครื่อง** ดู [backup.sh](../backup.sh)
 
 **เพิ่ม swap** ถ้าเอา 2 GB · ไม่ได้มีไว้ให้รันด้วย swap แต่มีไว้ให้ช่วงที่ใช้ memory
 พุ่งผิดปกติแค่ช้าลง แทนที่จะโดน OOM killer ฆ่า process ทิ้ง
@@ -174,7 +173,7 @@ dig +short taskflow.example.com      # ต้องขึ้น IP ของเ�
 > ต่อชั่วโมง และ 50 certificate ต่อสัปดาห์ต่อโดเมน · debug TLS ด้วยการ `down`/`up`
 > รัว ๆ จะโดนล็อกยาวเป็นชั่วโมง · ถ้ารู้ตัวว่าจะต้องลองหลายรอบ ให้ชี้ไป staging CA
 > ก่อน โดยใส่ `acme_ca https://acme-staging-v02.api.letsencrypt.org/directory`
-> ใน site block ของ [config/Caddyfile](../../deploy/config/Caddyfile) แล้วค่อยเอาออกเมื่อผ่าน ·
+> ใน site block ของ [config/Caddyfile](../config/Caddyfile) แล้วค่อยเอาออกเมื่อผ่าน ·
 > certificate จาก staging browser ไม่เชื่อถือ ซึ่งคือประเด็น — มันพิสูจน์ว่า flow
 > ถูกโดยไม่กิน quota
 

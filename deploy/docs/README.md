@@ -1,11 +1,18 @@
 # deploy/
 
-[`deploy/`](../../deploy/) คือทุกอย่างที่ server รัน และไม่มีอะไรอื่นจาก repo นี้ ·
+[`deploy/`](../) คือทุกอย่างที่ server รัน และไม่มีอะไรอื่นจาก repo นี้ ·
 copy โฟลเดอร์นั้นไปเครื่อง สร้าง `.env` ไว้ข้าง `compose.yml` เท่านั้นจบ —
 ตัวแอปมาเป็น image จาก GHCR
 
-เอกสารพวกนี้อยู่นอก `deploy/` ตั้งใจ เพื่อให้ copy `deploy/` ไป server แล้วได้แต่
-ไฟล์ที่ server ใช้รันจริง ไม่มีเอกสารติดไปด้วย
+เอกสารชุดนี้อยู่ใน `deploy/docs/` ซึ่ง server ไม่ได้ใช้ · ตอน copy ด้วยมือให้ตัดออก
+ได้ — `rsync` กับ `tar` มี flag ให้ ส่วน `cp` กับ `scp` ไม่มี:
+
+```bash
+rsync -a --exclude docs deploy/ user@server:/srv/taskflow/deploy/
+```
+
+deploy จริงใช้ `git clone` ทั้ง repo อยู่แล้ว เอกสารเลยไปอยู่บนเครื่องด้วยไม่ว่าจะ
+วางไว้ตรงไหน — เรื่องนี้มีผลเฉพาะตอน copy เอง
 
 ตั้ง server ใหม่จากศูนย์ดู [setup.md](setup.md) · เรื่อง SSH key ดู
 [ssh-keys.md](ssh-keys.md)
