@@ -71,7 +71,7 @@ The API exposes [Terminus](https://docs.nestjs.com/recipes/terminus)-backed heal
 | `GET /health/live`  | Liveness: is the process running? Deliberately checks no dependencies, so a transient outage can't get the container restarted |
 | `GET /health/ready` | Readiness: can this instance serve traffic? Add database/cache indicators here as you add them                                 |
 
-Indicators live in [apps/api/core/src/health/health.controller.ts](apps/api/core/src/health/health.controller.ts) — currently heap and RSS memory thresholds plus a database ping on `/health` and `/health/ready`.
+Indicators live in [apps/api/core/src/health/health.controller.ts](apps/api/core/src/health/health.controller.ts). `/health` checks heap, RSS, a database ping and object storage; `/health/ready` checks the same minus RSS, since an instance close to its resident limit is still able to answer.
 
 ### Database
 
@@ -96,7 +96,9 @@ Because `synchronize` is off, nothing reconciles the entities against the databa
 
 Every table but three carries an `org_id`, and one query returning another organisation's rows is the failure this layer exists to prevent. It is worth reading [apps/api/core/src/shared/](apps/api/core/src/shared/) before writing a service.
 
-The current organisation and user travel in `AsyncLocalStorage` rather than as a parameter — a parameter that can be omitted eventually is. It is established by **middleware, not a guard**: a guard returns a boolean, so the storage scope it opens closes again before the route handler runs.
+The current organisation and user travel in `AsyncLocalStorage` rather than as a parameter — a parameter that can be omitted eventually is. Middleware establishes it today; Phase 1's `AuthGuard` takes that over, because only a guard sees route metadata like `@Public()`.
+
+A guard cannot use `runWithRequestContext`, and that is the part worth knowing: `canActivate` returns a boolean, so a scope opened with `run()` closes before the handler runs. `AsyncLocalStorage.enterWith` does not have that problem — measured, including that the context survives `await`s and stays per-request under concurrent load. `run()` remains the right call for jobs, seeds and tests, which own their own scope.
 
 Services inject `OrgScopedRepository`, never TypeORM's `Repository`, and an ESLint rule under `src/modules/**` enforces it. Every read merges the org into the where clause, every write stamps it, and with no context at all the repository throws at the call site rather than running unscoped.
 
@@ -139,7 +141,7 @@ Scheduled work is declared per process, so two containers fire the same cron on 
 
 ### Permissions and the activity log
 
-`can(user, action, resource)` lives in [apps/api/core/src/permission/](apps/api/core/src/permission/), built on CASL. It is a skeleton by design: it carries the role hierarchy the specification already fixes and nothing feature-specific. `can(actor, action, subject, resource)` takes the resource as a required parameter rather than an optional one, and that is deliberate. CASL reads a missing subject as "could this person do that to _something_", so a project admin gets `true` for `can('delete', 'Project')` while being allowed to delete only their own — a check that looks like it passed. Making the parameter mandatory means that form does not compile. Pass `{}` where no row is named, such as creating the first project: it fails every conditional rule, which is the safe direction. `isEverAllowedTo()` is the same question asked on purpose, for deciding whether a button should exist.
+`can(actor, action, subject, resource)` lives in [apps/api/core/src/permission/](apps/api/core/src/permission/), built on CASL. It is a skeleton by design: it carries the role hierarchy the specification already fixes and nothing feature-specific. `can(actor, action, subject, resource)` takes the resource as a required parameter rather than an optional one, and that is deliberate. CASL reads a missing subject as "could this person do that to _something_", so a project admin gets `true` for `can('delete', 'Project')` while being allowed to delete only their own — a check that looks like it passed. Making the parameter mandatory means that form does not compile. Pass `{}` where no row is named, such as creating the first project: it fails every conditional rule, which is the safe direction. `isEverAllowedTo()` is the same question asked on purpose, for deciding whether a button should exist.
 
 The activity log is written in the same transaction as the change it describes, which is a binding decision rather than a preference: history cannot be reconstructed, and a listener that runs after the commit loses the entry with no error anywhere. [AuditService](apps/api/core/src/modules/audit/audit.service.ts) enforces it by shape — `record(manager, entry)` takes the caller's `EntityManager` and throws unless a transaction is open, which an event listener can never satisfy. `@nestjs/event-emitter` is installed for notifications only.
 
@@ -149,7 +151,9 @@ The activity log is written in the same transaction as the change it describes, 
 
 Three things the API talks to that are not the database, each behind one class so the rest of the code never holds a vendor SDK.
 
-[EmailService](apps/api/core/src/modules/notify/email.service.ts) queues into `notify.outbox` and sends nothing — `enqueue(manager, notification)` takes the caller's transaction, the same shape as the audit log, so a notification for a change that rolled back is never queued. [OutboxWorker](apps/api/core/src/modules/notify/outbox.worker.ts) delivers afterwards, retrying three times at one, five and twenty-five minutes before marking the row `failed` and leaving it as the record that someone was never told. Delivery is at-least-once on purpose: a process that dies mid-send leaves the row pending and it goes again, which is a better failure than marking it sent first and losing it.
+[EmailService](apps/api/core/src/modules/notify/email.service.ts) queues into `notify.outbox` and sends nothing — `enqueue(manager, notification)` takes the caller's transaction, the same shape as the audit log, so a notification for a change that rolled back is never queued. [OutboxWorker](apps/api/core/src/modules/notify/outbox.worker.ts) delivers afterwards, retrying three times at one, five and twenty-five minutes before marking the row `failed`. Nothing retries a `failed` row, so that transition also raises a Sentry alert — a log line nobody reads is not a way to find out that someone was never told. Delivery is at-least-once on purpose: a process that dies mid-send leaves the row pending and it goes again, which is a better failure than marking it sent first and losing it.
+
+A row is claimed with a single `UPDATE ... RETURNING` over a `FOR UPDATE SKIP LOCKED` subquery, not a `SELECT ... FOR UPDATE` followed by an update. `dataSource.query()` runs each statement in its own implicit transaction, so a bare select's row locks are already gone by the time the caller reads the rows — measured, and two workers then sent 23 emails for 12 rows. `attempts` is incremented at claim time rather than on failure, which also arms the backoff for a process that dies mid-send, so it counts attempts made rather than failures suffered.
 
 `RESEND_API_KEY` is the one optional variable in [env.ts](apps/api/core/src/config/env.ts). Without it email goes to the log, so a developer with no Resend account can still run the API — and `NODE_ENV=production` without it fails at boot, so that affordance cannot become a silent production outage.
 

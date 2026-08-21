@@ -4,12 +4,17 @@ import type { NextFunction, Request, Response } from 'express'
 import { runWithRequestContext } from './request-context'
 
 /**
- * Establishes the request context.
+ * Establishes the request context, until Phase 1's `AuthGuard` takes it over —
+ * auth belongs in a guard, since only a guard sees route metadata like
+ * `@Public()`.
  *
- * Middleware rather than a guard, and not by preference: a guard returns a
- * boolean, so the AsyncLocalStorage scope it opens closes before the handler
- * runs — verified, `getRequestContext()` comes back undefined in the
- * controller. Middleware calls `next()` from inside the scope.
+ * What a guard cannot do is call `runWithRequestContext`: `canActivate`
+ * returns a boolean, so the scope closes before the handler runs and
+ * `getRequestContext()` comes back undefined in the controller. Middleware can,
+ * because it calls `next()` from inside the scope. A guard has to use
+ * `AsyncLocalStorage.enterWith` instead, which was measured to survive `await`s
+ * and to stay per-request under concurrent load — so this is a note about
+ * `run()`, not a verdict on guards.
  *
  * Phase 1 replaces the read below with the access token's `org` and `sub`.
  */
