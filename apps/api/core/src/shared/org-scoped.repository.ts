@@ -16,6 +16,21 @@ import { requireRequestContext } from './request-context'
 import { OrgQueryBuilders } from './scoped-query-builder'
 
 /**
+ * `FindManyOptions` without `skip`, which is offset paging.
+ *
+ * Lists are ordered by `sort_order`, a LexoRank string built so a row can be
+ * inserted between any two others without renumbering. An insert mid-list
+ * shifts everything after it by one, so page 2 fetched by offset silently
+ * repeats a row it already showed or skips one entirely — the API convention
+ * is cursor paging for exactly this reason (docs/01-architecture.md#api).
+ *
+ * `take` stays: a limit is not the problem. Somewhere genuinely unordered by
+ * `sort_order` can still offset-page through `queryBuilder.withOrg()`, which
+ * is the same deliberate step out of the narrow surface that `base()` is.
+ */
+type ScopedFindManyOptions<T> = Omit<FindManyOptions<T>, 'skip'>
+
+/**
  * A repository that cannot return another organisation's rows. Reads merge the
  * org into the where clause, writes stamp it, both from the request context
  * rather than an argument a caller could get wrong.
@@ -79,7 +94,7 @@ export class OrgScopedRepository<T extends ObjectLiteral> {
     return Array.isArray(where) ? scoped : scoped[0]!
   }
 
-  find(options: FindManyOptions<T> = {}): Promise<T[]> {
+  find(options: ScopedFindManyOptions<T> = {}): Promise<T[]> {
     const where = this.withScope(options.where)
     if (!where) return Promise.resolve([])
 
@@ -99,22 +114,29 @@ export class OrgScopedRepository<T extends ObjectLiteral> {
     })
   }
 
-  /** `[rows, total]` — the total counted after scoping, for a paged list. */
-  async findAndCount(options: FindManyOptions<T> = {}): Promise<[T[], number]> {
+  /**
+   * `[rows, total]` — the total counted after scoping.
+   *
+   * Not a paging primitive despite the shape: see `ScopedFindManyOptions`.
+   * The total is for showing a count, and `take` for capping a response.
+   */
+  async findAndCount(
+    options: ScopedFindManyOptions<T> = {},
+  ): Promise<[T[], number]> {
     const where = this.withScope(options.where)
     if (!where) return [[], 0]
 
     return this.repository.findAndCount({ ...options, where })
   }
 
-  count(options: FindManyOptions<T> = {}): Promise<number> {
+  count(options: ScopedFindManyOptions<T> = {}): Promise<number> {
     const where = this.withScope(options.where)
     if (!where) return Promise.resolve(0)
 
     return this.repository.count({ ...options, where })
   }
 
-  exists(options: FindManyOptions<T> = {}): Promise<boolean> {
+  exists(options: ScopedFindManyOptions<T> = {}): Promise<boolean> {
     const where = this.withScope(options.where)
     if (!where) return Promise.resolve(false)
 

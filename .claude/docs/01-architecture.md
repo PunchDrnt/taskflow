@@ -464,6 +464,7 @@ users.queryBuilder.base('user')                         // identity ไม่ม
 - ตั้ง ESLint rule ห้าม inject `Repository<T>` ธรรมดา (เปิดที่ `src/modules/**`)
 - Endpoint ที่ต้องข้าม scope จริงๆ ต้องมี `@SkipOrgScope()` ประกาศชัด
 - **ต้องมี test ว่า query จาก org A มองไม่เห็นข้อมูล org B** — ข้อนี้ไม่มีข้อยกเว้น
+- `find` / `findAndCount` / `count` / `exists` **ไม่รับ `skip`** — ตัดออกจาก type แล้ว (`ScopedFindManyOptions`) เพราะ offset paging ทับกับ [cursor pagination](#api) ที่ตกลงไว้ · `findAndCount` คืน `[rows, total]` ซึ่งชวนให้เผลอใส่ `skip` มากที่สุด แต่ `sort_order` เป็น LexoRank ที่แทรกกลางได้ พอมีคนแทรก page ถัดไปจะซ้ำแถวเดิมหรือข้ามแถวไปเลย · `take` (limit) ยังใช้ได้ · ที่ไหนที่ไม่ได้เรียงด้วย `sort_order` และต้องการ offset จริงๆ ให้ลงไปที่ `queryBuilder.withOrg()` — ตั้งใจข้ามเหมือน `base()`
 
 **ชั้นที่ 3: Postgres Row-Level Security** _(Phase 2)_
 

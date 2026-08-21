@@ -202,6 +202,21 @@ describe.skipIf(!hasTestDatabase)('cross-org isolation', () => {
     expect(rows.every((project) => project.orgId === orgA.id)).toBe(true)
   })
 
+  it('does not offer offset paging on the find family', async () => {
+    // `[rows, total]` invites `skip`, and offset paging over a LexoRank
+    // `sort_order` repeats or drops a row as soon as anyone inserts mid-list.
+    // The API convention is cursor paging; this keeps the wrong reach for it
+    // from compiling. Deliberate offset still works via queryBuilder.
+    // @ts-expect-error `skip` is omitted from ScopedFindManyOptions
+    await asOrg(orgA, () => projects.findAndCount({ skip: 1, take: 1 }))
+    // @ts-expect-error same for find()
+    await asOrg(orgA, () => projects.find({ skip: 1 }))
+
+    // `take` on its own is a limit, not paging, and stays.
+    const capped = await asOrg(orgA, () => projects.find({ take: 1 }))
+    expect(capped).toHaveLength(1)
+  })
+
   it('scopes organizations on id, since that table has no org_id', async () => {
     const fromA = await asOrg(orgA, () => organizations.find())
 
