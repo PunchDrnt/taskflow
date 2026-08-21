@@ -2001,6 +2001,7 @@ __metadata:
     globals: "npm:^17.7.0"
     prettier: "npm:^3.9.6"
     prettier-plugin-tailwindcss: "npm:^0.8.1"
+    tw-animate-css: "npm:^1.4.0"
     typescript: "npm:^6.0.3"
     typescript-eslint: "npm:^8.65.0"
   peerDependencies:
@@ -8272,6 +8273,13 @@ __metadata:
   bin:
     turbo: bin/turbo
   checksum: 10c0/841434755612bb50081958001d01aa207831c460c76910310bea1f8d5781246e3694b9b699b1ba1ce5d88e51844fe609a0a715853fcbd768f9828da586b3a0fd
+  languageName: node
+  linkType: hard
+
+"tw-animate-css@npm:^1.4.0":
+  version: 1.4.0
+  resolution: "tw-animate-css@npm:1.4.0"
+  checksum: 10c0/6cfbc19ccc73883ec80ef1f9147f43e736cb01ee99c8172968b37eb81b720523d30e38b1a96aef92db3c586d864204db5510b51744ddacbbf0ad8e3c7fb56ec7
   languageName: node
   linkType: hard
 

@@ -1,5 +1,12 @@
 @source '../../ui/src';
 
+/* Dialog, Tooltip, Select and Combobox all key their open/close styles off
+   animate-in/animate-out (fade-in-0, zoom-in-95, ...) — Tailwind v4 ships no
+   such utilities, so every one of those states rendered a hard cut with
+   `animation-name: none` (measured via getComputedStyle). This is what
+   backs them. */
+@import 'tw-animate-css';
+
 /* --- Scrollbar ---
    These used to name --color-neutral-* and --color-white, which this theme
    never defines: `--color-*: initial` clears Tailwind's palette and nothing
