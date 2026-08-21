@@ -1,6 +1,10 @@
 // First, and above reflect-metadata: Sentry instruments modules as they load,
-// so anything imported before it is invisible to it.
+// so anything imported before it is invisible to it. Its own group in
+// packages/config/prettier keeps it there: it is listed in
+// importOrderSafeSideEffects, so Prettier sorts it to the top rather than
+// treating it as a barrier and leaving whatever lands above it in place.
 import './instrument'
+
 import 'reflect-metadata'
 
 import { ConfigService } from '@nestjs/config'
