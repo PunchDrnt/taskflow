@@ -618,52 +618,56 @@ html::-webkit-scrollbar-thumb:hover {
     @apply text-title-xs font-kanit;
   }
 
+  /* Kanit (now Chakra Petch) covers display/headline/title only — it has no
+     Thai glyphs, so every class below keyed to the body/label sizes uses
+     font-sans (Sarabun) instead, per the design system's own type-scale card
+     ("Kanit display/headline/title, Geist body"). */
   .body-1 {
-    @apply text-body-lg font-kanit;
+    @apply text-body-lg font-sans;
   }
   .body-2 {
-    @apply text-body-md font-kanit;
+    @apply text-body-md font-sans;
   }
   .body-3 {
-    @apply text-body-sm font-kanit;
+    @apply text-body-sm font-sans;
   }
 
   .overlined {
-    @apply text-body-sm font-kanit uppercase;
+    @apply text-body-sm font-sans uppercase;
   }
   .caption {
-    @apply text-body-sm font-kanit;
+    @apply text-body-sm font-sans;
   }
 
   .label-medium {
-    @apply text-label-md font-kanit;
+    @apply text-label-md font-sans;
   }
   .label-small {
-    @apply text-label-sm font-kanit;
+    @apply text-label-sm font-sans;
   }
 
   .button-large {
-    @apply text-label-lg font-kanit;
+    @apply text-label-lg font-sans;
   }
   .button-medium {
-    @apply text-label-md font-kanit;
+    @apply text-label-md font-sans;
   }
   .button-small {
-    @apply text-label-sm font-kanit;
+    @apply text-label-sm font-sans;
   }
 
   .value {
-    @apply text-body-lg font-kanit;
+    @apply text-body-lg font-sans;
   }
   .helper {
-    @apply text-body-sm font-kanit;
+    @apply text-body-sm font-sans;
   }
   .table-header {
     @apply text-title-xs font-kanit;
   }
   .list-subheader {
     line-height: 48px;
-    @apply text-body-md font-kanit;
+    @apply text-body-md font-sans;
   }
 }
 
