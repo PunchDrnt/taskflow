@@ -68,12 +68,41 @@ describe.skipIf(!configured)('storage', () => {
 
 describe('storage keys', () => {
   it('leads with the organisation', () => {
-    const built = storage.keyFor('org-1', 'task', 'task-1', 'ใบเสร็จ 2026.pdf')
+    const built = storage.keyFor('org-1', 'task', 'task-1', 'report.pdf')
 
     // Org first, so a misdirected key reads as a wrong prefix rather than an
     // anonymous uuid, and one org's objects can be listed together.
     expect(built.startsWith('org-1/task/task-1/')).toBe(true)
     // The uuid keeps two uploads of the same filename apart.
     expect(built).toMatch(/[0-9a-f-]{36}-/)
+  })
+
+  it('keeps a Thai filename readable, marks and all', () => {
+    // The whole reason the name is kept is that a person can read it. \w
+    // turned "ใบเสร็จ 2026.pdf" into "_2026.pdf", and \p{L}\p{N} without
+    // \p{M} leaves "ใบเสร_จ" — Thai vowels and tones are combining marks.
+    const built = storage.keyFor('org-1', 'task', 'task-1', 'ใบเสร็จ 2026.pdf')
+
+    expect(built.endsWith('ใบเสร็จ_2026.pdf')).toBe(true)
+  })
+
+  it('cannot be walked out of its prefix', () => {
+    const built = storage.keyFor('org-1', 'task', 'task-1', '../../etc/passwd')
+
+    // Separators go; the dots may stay, since they climb nothing on their own.
+    expect(built.startsWith('org-1/task/task-1/')).toBe(true)
+    expect(built.split('/')).toHaveLength(4)
+  })
+
+  it('trims a very long name from the front, keeping the extension', () => {
+    const built = storage.keyFor(
+      'org-1',
+      'task',
+      'task-1',
+      `${'ก'.repeat(400)}.pdf`,
+    )
+
+    expect(built.endsWith('.pdf')).toBe(true)
+    expect([...built.split('-').at(-1)!]).toHaveLength(120)
   })
 })

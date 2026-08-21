@@ -106,7 +106,17 @@ export class StorageService implements OnModuleInit {
     entityId: string,
     fileName: string,
   ): string {
-    const safeName = fileName.replace(/[^\w.-]+/g, '_').slice(-120)
+    // \w is [A-Za-z0-9_], so it replaced every Thai character in the name and
+    // "ใบเสร็จ 2026.pdf" arrived as "_2026.pdf". \p{M} is not optional here:
+    // Thai vowels and tone marks are combining marks, not letters, so
+    // \p{L}\p{N} alone still hollows the word out to "ใบเสร_จ". Path
+    // separators are still replaced, so ../ cannot climb out of the prefix.
+    const safeName = [...fileName.replace(/[^\p{L}\p{N}\p{M}._-]+/gu, '_')]
+      // Sliced by code point, not code unit: cutting the tail of a Thai name
+      // mid-character would leave a tone mark with nothing to sit on.
+      .slice(-120)
+      .join('')
+
     return `${orgId}/${entityType}/${entityId}/${crypto.randomUUID()}-${safeName}`
   }
 
