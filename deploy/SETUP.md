@@ -56,6 +56,17 @@ Do not use a non-LTS release on a server. They are supported for nine months.
 
 The provider gives a root password or an SSH key. Use it once.
 
+If you do not already have a key **on your own machine**, make one there —
+not on the server, because a private key should never travel:
+
+```bash
+# on your laptop
+ssh-keygen -t ed25519 -C "punch@laptop"      # accept the path; set a passphrase
+cat ~/.ssh/id_ed25519.pub                     # this half is safe to paste anywhere
+```
+
+Then, on the server:
+
 ```bash
 ssh root@<server-ip>
 
@@ -64,11 +75,20 @@ usermod -aG sudo deploy
 
 # Give it your key rather than a password.
 mkdir -p /home/deploy/.ssh
-cp /root/.ssh/authorized_keys /home/deploy/.ssh/    # or paste your public key
+cp /root/.ssh/authorized_keys /home/deploy/.ssh/   # if the provider installed it
+#   otherwise: nano /home/deploy/.ssh/authorized_keys  and paste the .pub line
 chown -R deploy:deploy /home/deploy/.ssh
 chmod 700 /home/deploy/.ssh
 chmod 600 /home/deploy/.ssh/authorized_keys
 ```
+
+> ⚠️ `authorized_keys` holds **public** halves, one per line, and each is a
+> single line. A key broken across lines by an editor silently does not work,
+> and the failure looks like a rejected password.
+
+> ⚠️ Permissions are enforced, not advisory. sshd ignores `authorized_keys`
+> if the file or its directory is group- or world-writable, and says nothing
+> useful about why.
 
 Open a **second terminal** and confirm `ssh deploy@<server-ip>` works before
 touching sshd. Locking yourself out here means starting from a rescue console.
@@ -253,16 +273,86 @@ curl https://taskflow.example.com/api/health/ready
 
 `/health/ready` naming `database` and `storage` as up is the real proof.
 
-## 8. GitHub settings
+## 8. A key for GitHub Actions to log in with
+
+Separate from your own. A shared key cannot be revoked without locking
+yourself out, and this one has to live unencrypted in a secret — which is
+exactly why it should be able to do less than yours does.
+
+**No passphrase.** Nothing can type one during a workflow run. That is the
+trade being made here, and it is why the key is single-purpose.
+
+Generate it on your laptop:
+
+```bash
+ssh-keygen -t ed25519 -C "github-actions@taskflow" -f ~/.ssh/taskflow_ci -N ""
+```
+
+`-N ""` is the empty passphrase, `-f` keeps it out of the way of `id_ed25519`.
+You get two files:
+
+```
+~/.ssh/taskflow_ci        the private half → the GitHub secret. 600, never leaves
+~/.ssh/taskflow_ci.pub    the public half  → the server's authorized_keys
+```
+
+Put the public half on the server:
+
+```bash
+ssh-copy-id -i ~/.ssh/taskflow_ci.pub deploy@<server-ip>
+```
+
+or by hand, appending — `>>`, not `>`, which would replace your own key and
+lock you out:
+
+```bash
+cat ~/.ssh/taskflow_ci.pub | ssh deploy@<server-ip> \
+  'cat >> ~/.ssh/authorized_keys'
+```
+
+Prove it works before handing it to CI, because a workflow failing on
+authentication tells you far less than ssh does:
+
+```bash
+ssh -i ~/.ssh/taskflow_ci deploy@<server-ip> 'docker compose version'
+```
+
+Then copy the **private** half — the whole file, both `-----BEGIN-----` and
+`-----END-----` lines and the trailing newline:
+
+```bash
+pbcopy < ~/.ssh/taskflow_ci          # macOS
+xclip -sel clip < ~/.ssh/taskflow_ci # Linux
+```
+
+That is the value of `SSH_PRIVATE_KEY` in the next step.
+
+> ⚠️ It is the file **without** `.pub`. Pasting the public half gives an
+> authentication failure that reads exactly like a wrong key, because it is one.
+
+If a run ever fails to authenticate, check the two halves are actually a pair
+rather than guessing. This prints the public key that belongs to a private one:
+
+```bash
+ssh-keygen -yf ~/.ssh/taskflow_ci
+```
+
+Compare it to the line in the server's `authorized_keys`. If they differ, the
+secret and the server are holding different keys.
+
+To revoke this key later, delete its line from `~/.ssh/authorized_keys` on the
+server. Nothing else is affected.
+
+## 9. GitHub settings
 
 **Settings → Secrets and variables → Actions → Secrets**
 
-| Secret            | Value                                                                                                                                      |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `SSH_HOST`        | the server's IP or hostname                                                                                                                |
-| `SSH_USER`        | `deploy`                                                                                                                                   |
-| `SSH_PRIVATE_KEY` | a private key whose **public** half is in `/home/deploy/.ssh/authorized_keys` — not the deploy key from step 5, which points the other way |
-| `DEPLOY_PATH`     | `/srv/taskflow` — the **clone**, not `deploy/` inside it                                                                                   |
+| Secret            | Value                                                                                              |
+| ----------------- | -------------------------------------------------------------------------------------------------- |
+| `SSH_HOST`        | the server's IP or hostname                                                                        |
+| `SSH_USER`        | `deploy`                                                                                           |
+| `SSH_PRIVATE_KEY` | the whole of `~/.ssh/taskflow_ci` from step 8 — not the `.pub`, and not the deploy key from step 5 |
+| `DEPLOY_PATH`     | `/srv/taskflow` — the **clone**, not `deploy/` inside it                                           |
 
 **→ Variables**
 
@@ -289,7 +379,7 @@ and `GITHUB_TOKEN` is enough to push to GHCR.
 > _GitHub Actions_ log in to the _server_. They are separate keypairs pointing
 > in opposite directions.
 
-## 9. Deploy
+## 10. Deploy
 
 ```bash
 git checkout prod && git merge main && git push
