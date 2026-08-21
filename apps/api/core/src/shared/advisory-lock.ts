@@ -41,6 +41,10 @@ export async function withAdvisoryLock<T>(
 /**
  * One key per job. The namespace is database-wide, so these avoid 1 and 2 to
  * stay clear of anything else that ever takes a lock.
+ *
+ * Held here rather than in `maintenance/` because the outbox worker takes one
+ * too, and a module reaching into the job directory to borrow a lock is the
+ * kind of import that turns a boundary into a suggestion.
  */
 export const LOCK_KEYS = {
   retention: 8_147_001,

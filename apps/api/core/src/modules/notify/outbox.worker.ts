@@ -5,7 +5,7 @@ import { InjectDataSource } from '@nestjs/typeorm'
 import { DataSource } from 'typeorm'
 
 import type { Env } from '../../config/env'
-import { LOCK_KEYS, withAdvisoryLock } from '../../maintenance/advisory-lock'
+import { LOCK_KEYS, withAdvisoryLock } from '../../shared/advisory-lock'
 import { alertsFor } from '../../shared/alert'
 import { SYSTEM_USER_ID } from '../../shared/system-user'
 import { EmailTransport } from './email.transport'

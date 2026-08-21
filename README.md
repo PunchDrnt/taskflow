@@ -157,7 +157,7 @@ Three things the API talks to that are not the database, each behind one class s
 
 Garage ships no web console of its own; `garage-ui` in `docker-compose.yml` is a community one that works against Garage v2, on port 4909. It holds the admin token, so it binds to localhost only and belongs behind an authenticating proxy anywhere else. For just looking at files, `aws --endpoint-url http://localhost:4900 s3 ls s3://taskflow --recursive` needs nothing running.
 
-[FeatureService](apps/api/core/src/feature/feature.service.ts) answers `can(org, feature)` with `true`, always. It exists so the call sites are written now instead of being retrofitted into every controller at once when plans arrive.
+[FeatureService](apps/api/core/src/feature/feature.service.ts) answers `isEnabled(org, feature)` with `true`, always — `can` belongs to PermissionService, which asks a different question. It exists so the call sites are written now instead of being retrofitted into every controller at once when plans arrive.
 
 ## Scripts
 

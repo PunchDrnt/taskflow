@@ -96,8 +96,11 @@ export class CascadeSoftDelete {
    * Returns the rows soft-deleted per table, the root included. An id that
    * belongs to another org, or a row already deleted, touches nothing and
    * returns `{}`.
+   *
+   * Named for what it does rather than for the class it sits on: at the call
+   * site `cascade.delete(...)` reads like the hard delete this is not.
    */
-  async delete(table: string, id: string): Promise<Record<string, number>> {
+  async softDelete(table: string, id: string): Promise<Record<string, number>> {
     const { orgId, userId } = requireRequestContext()
 
     return this.dataSource.transaction(async (manager) => {

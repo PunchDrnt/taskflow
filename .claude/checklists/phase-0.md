@@ -139,7 +139,7 @@
 - [x] `StorageService` ห่อ **Garage** (S3) — bucket **private** เข้าผ่าน presigned URL เท่านั้น · [ทำไมไม่ใช่ MinIO](../docs/01-architecture.md#object-storage)
   - storage ล่มแล้ว API ยัง boot ได้ · `/health/ready` เป็น 503 พร้อมบอกว่า storage down ส่วน `/health/live` ยัง 200 (ทดสอบจริงแล้ว)
   - `RESEND_API_KEY` เป็น optional — ไม่ตั้ง = เขียนลง log · แต่ `NODE_ENV=production` แล้วไม่ตั้ง = **boot ไม่ผ่าน** ไม่งั้น notification ของจริงจะหายลง stdout
-- [x] `FeatureService.can(org, feature)` — return `true` เสมอ ([`src/feature/`](../../apps/api/core/src/feature/))
+- [x] `FeatureService.isEnabled(org, feature)` — return `true` เสมอ ([`src/feature/`](../../apps/api/core/src/feature/))
 - [x] เพิ่ม `garage` + `garage-init` เข้า `docker-compose.yml` (volume แยกจาก DB — ไฟล์กู้จาก DB backup ไม่ได้ ต้อง restore แยกกันได้)
   - Garage image ไม่มี shell เลย (เหตุผลที่มันแค่ 66MB) · init เลยเป็น container แยกที่คุยผ่าน Admin API ด้วย curl
   - init รันซ้ำได้ ทดสอบแล้ว — layout ข้ามถ้ามีแล้ว ส่วน key/bucket ตอบ 409 แล้วปล่อยผ่าน

@@ -54,7 +54,7 @@
 - โปรไฟล์: ชื่อจริง, **ชื่อเล่น**, อีเมล, รูป
 - แก้ไขโปรไฟล์ / เปลี่ยนรหัสผ่าน
 
-**ไม่มี public register ใน Phase 1** — endpoint `/register` มีอยู่ แต่ดักด้วย `FeatureService.can(org, 'public_registration')` ซึ่ง return `false` ตั้งแต่บรรทัดแรก
+**ไม่มี public register ใน Phase 1** — endpoint `/register` มีอยู่ แต่ดักด้วย `FeatureService.isEnabled(org, 'public_registration')` ซึ่ง return `false` ตั้งแต่บรรทัดแรก
 
 > ถ้าเปิดสมัครเสรี ใครที่รู้ URL ก็เข้าถึงข้อมูลบริษัทได้ทันที เพราะ Phase 1 มี org เดียว
 >

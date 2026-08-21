@@ -26,9 +26,9 @@ const databaseUrlSchema = z
 /**
  * Every environment variable the API reads, validated once at boot. Add new
  * ones here: a bad value must stop the process, not surface as `undefined`
- * mid-request. Still to come in Phase 0: `JWT_*`.
+ * mid-request. Phase 1 adds `JWT_*` and the Google OAuth credentials.
  */
-export const envSchema = z
+const envSchema = z
   .object({
     NODE_ENV: z
       .enum(['development', 'test', 'production'])

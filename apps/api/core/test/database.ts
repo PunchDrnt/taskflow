@@ -7,7 +7,7 @@ import { buildDataSourceOptions } from '../src/database/data-source.options'
  * The throwaway `postgres-test` service. Not in `src/config/env.ts`: that
  * schema is what the API reads at boot, and the API must never connect here.
  */
-export const testDatabaseUrl = process.env.DATABASE_URL_TEST ?? ''
+const testDatabaseUrl = process.env.DATABASE_URL_TEST ?? ''
 
 export const hasTestDatabase = testDatabaseUrl.length > 0
 

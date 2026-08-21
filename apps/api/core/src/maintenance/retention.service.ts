@@ -2,9 +2,9 @@ import { Injectable, Logger } from '@nestjs/common'
 import { InjectDataSource } from '@nestjs/typeorm'
 import { DataSource } from 'typeorm'
 
+import { LOCK_KEYS, withAdvisoryLock } from '../shared/advisory-lock'
 import { alertsFor } from '../shared/alert'
 import { SYSTEM_USER_ID } from '../shared/system-user'
-import { LOCK_KEYS, withAdvisoryLock } from './advisory-lock'
 import {
   PURGE_BATCH_SIZE,
   resolvePurgeOrder,

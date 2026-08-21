@@ -28,7 +28,3 @@ export function renderTemplate(
     text: JSON.stringify(payload, null, 2),
   }
 }
-
-export function isTemplateKnown(template: string): boolean {
-  return template in TEMPLATES
-}

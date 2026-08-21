@@ -73,7 +73,7 @@
 | 7   | 🔴  | Deploy ขึ้น Bangmod ได้จริง                                                           | pipeline ที่ทำทีหลังมักกลายเป็นคอขวด                                                                                      |
 | 8   | 🔴  | `EmailService` + outbox                                                           | ห่อ Resend · Phase 1 ต้องใช้ทันที                                                                                        |
 | 9   | 🟡  | `StorageService`                                                                  | ห่อ Garage (S3) — Phase 1 ใช้แค่รูปโปรไฟล์ ไฟล์แนบจริงมา Phase 3                                                                 |
-| 10  | 🟡  | `FeatureService.can()`                                                            | Phase 1 ใช้ดัก `public_registration`                                                                                  |
+| 10  | 🟡  | `FeatureService.isEnabled()`                                                            | Phase 1 ใช้ดัก `public_registration`                                                                                  |
 | 11  | 🟡  | CI/CD                                                                             | build นอกเครื่อง production                                                                                           |
 | 12  | 🟡  | Sentry                                                                            | รู้บั๊กก่อนคนบ่น                                                                                                          |
 | 13  | 🟢  | Seed script                                                                       | ข้อมูลตัวอย่างสำหรับ dev/demo                                                                                            |
@@ -252,7 +252,7 @@
 - `org_id` scoping ผ่าน Guard/Interceptor ระดับ global (RLS ตามมาใน Phase 2)
 - `parent_task_id` + `depth`
 - `sprints` table + `tasks.sprint_id` (nullable — ไม่บังคับใช้)
-- `FeatureService.can(org, feature)` — return `true` เสมอ (เผื่อ SaaS ดู [`05-saas-notes.md`](./05-saas-notes.md))
+- `FeatureService.isEnabled(org, feature)` — return `true` เสมอ (เผื่อ SaaS ดู [`05-saas-notes.md`](./05-saas-notes.md))
 - `tasks.estimate` + `projects.estimate_unit` (UI เปิด Phase 4)
 - `parent_comment_id` เผื่อ comment thread
 - comments / attachments แบบ polymorphic (`entity_type`, `entity_id`)

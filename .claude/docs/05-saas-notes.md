@@ -37,7 +37,7 @@
 | ต้องทำ                                                        | ถ้าไม่ทำ                                            |
 | ------------------------------------------------------------ | ------------------------------------------------- |
 | `org_id` ทุกตาราง + บังคับกรองผ่าน Guard/Interceptor             | ต้องแตะทุกตาราง ทุก query ทุก permission check พร้อมกัน |
-| `FeatureService.can(org, feature)` (return `true` เสมอ)      | ต้องไล่แก้ทุก controller                              |
+| `FeatureService.isEnabled(org, feature)` (return `true` เสมอ)      | ต้องไล่แก้ทุก controller                              |
 | ตาราง `plans` / `subscriptions` / `ai_wallet` (ว่างไว้ ไม่มีโค้ด) | เพิ่มตารางไม่เจ็บ แต่มีไว้แล้วชัดเจนกว่า                    |
 | Role เก็บเป็น string ไม่ใช่ enum ใน DB                           | เพิ่ม `billing` ต้อง migrate                         |
 
@@ -81,7 +81,7 @@
 
 Phase 1-6 ใช้โมเดล owner หลายคนแบบ GitHub ซึ่งแก้ปัญหา "owner หายไป" ไปแล้ว แต่พอมี billing จะมีประเด็นเพิ่ม:
 
-- **เปิด public register** — `FeatureService.can(org, 'public_registration')` ที่ดักไว้ตั้งแต่ Phase 1 ค่อยเปลี่ยนเป็น `true`
+- **เปิด public register** — `FeatureService.isEnabled(org, 'public_registration')` ที่ดักไว้ตั้งแต่ Phase 1 ค่อยเปลี่ยนเป็น `true`
 - **Role `billing` แยกจาก `owner`** — คนดูแลการเงินมักไม่ใช่คนสร้าง org และมีได้หลายคน
 - **บังคับให้มี billing contact ที่ active อย่างน้อย 1 คน** — ถ้าคนสุดท้ายถูก deactivate ให้เตือน org owner ตั้งคนใหม่
 - **แจ้งเตือนก่อนบัตรหมดอายุ 30 / 7 / 1 วัน** ส่งหา billing contact ทุกคน + owner ทุกคน
@@ -240,7 +240,7 @@ ai_usage (org_id, user_id, period_day, period_week,
 
 ### Prerequisites for Phase 7
 
-**`FeatureService.can(org, feature)`** — Phase 1-6 return `true` เสมอ Phase 7 ค่อยเช็คจาก plan จริง
+**`FeatureService.isEnabled(org, feature)`** — Phase 1-6 return `true` เสมอ Phase 7 ค่อยเช็คจาก plan จริง
 
 ถ้าไม่ทำ พอถึงเวลาต้องไล่แก้ทุก controller — หลักเดียวกับ permission layer
 

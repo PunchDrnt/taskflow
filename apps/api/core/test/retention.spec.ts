@@ -1,13 +1,13 @@
 import type { DataSource } from 'typeorm'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
-import { LOCK_KEYS, withAdvisoryLock } from '../src/maintenance/advisory-lock'
 import { AuditPartitionService } from '../src/maintenance/audit-partition.service'
 import {
   NEVER_PURGED,
   resolvePurgeOrder,
 } from '../src/maintenance/retention.policy'
 import { RetentionService } from '../src/maintenance/retention.service'
+import { LOCK_KEYS, withAdvisoryLock } from '../src/shared/advisory-lock'
 import { SYSTEM_USER_ID } from '../src/shared/system-user'
 import { createMigratedTestDataSource, hasTestDatabase } from './database'
 
