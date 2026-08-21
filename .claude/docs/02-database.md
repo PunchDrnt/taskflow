@@ -302,7 +302,7 @@ password_reset_tokens
   used_at             timestamptz null   ใช้ได้ครั้งเดียว
   CREATE INDEX ON identity.password_reset_tokens (token_hash) WHERE used_at IS NULL;
 
-oauth_accounts        ⚠ ยังไม่สร้าง — migrate ตอน Phase 1 พร้อมโค้ด Google login
+oauth_accounts        ⚠ ยังไม่สร้าง — migrate ใน Phase 1 แต่ Google login ยังไม่เปิดใช้
                       -- 1 แถว = 1 provider ที่ user คนนั้นผูกไว้
   user_id             uuid  FK → identity.users · ON DELETE CASCADE
   provider            text        'google' (เผื่อ 'line' ทีหลัง)
@@ -318,7 +318,9 @@ oauth_accounts        ⚠ ยังไม่สร้าง — migrate ตอ�
     WHERE deleted_at IS NULL;
 ```
 
-**ตารางนี้ยังไม่มีในฐานข้อมูล** — ต่างจาก `identity.roles` / `permissions` / `role_permissions` / `user_roles` ที่ migrate ไว้ตั้งแต่ Phase 0 ทั้งที่ไม่มีใครอ่านจนถึง Phase 7 · เหตุผลที่ไม่ทำแบบเดียวกัน: สี่ตารางนั้นถูก seed ด้วย migration ตั้งแต่แรก (`SYSTEM_PERMISSIONS`) ส่วนตารางนี้ว่างเปล่าจนกว่าจะมีคนกดล็อกอินด้วย Google จริง · schema ข้างบนคือข้อตกลงที่ตัดสินแล้ว ไม่ใช่ร่าง — Phase 1 เขียน migration ตามนี้ได้เลยโดยไม่ต้องออกแบบใหม่
+**ตารางนี้ยังไม่มีในฐานข้อมูล — Phase 1 migrate แต่ยังไม่เปิดใช้** เป็นแพทเทิร์นเดียวกับ `identity.roles` / `permissions` / `role_permissions` / `user_roles` ที่ลงตั้งแต่ Phase 0 แล้วไม่มีใครอ่านจนถึง Phase 7 · schema ข้างบนตัดสินแล้ว ไม่ใช่ร่าง เขียน migration ตามนี้ได้เลย
+
+> ⚠️ **"ปิดไว้" ต้องปิดด้วยกลไกที่ปิดได้จริง** — `FeatureService.isEnabled()` ตอนนี้ `return true` เสมอ การดักด้วยมันเฉย ๆ จึงเท่ากับเปิด · ดู [`checklists/phase-1.md`](../checklists/phase-1.md) §0
 
 **ไม่มีคอลัมน์เก็บ access / refresh token ของ provider** — Taskflow ใช้แค่ identity ตอน login ไม่ได้เรียก API ของ Google ต่อ · เก็บไว้คือถือ credential ของคนอื่นที่ไม่ได้ใช้
 
