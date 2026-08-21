@@ -78,7 +78,7 @@
     - `base()` = `createQueryBuilder` เปล่า · ถูกต้องสำหรับตารางที่ไม่มี org_id · เป็นการข้าม org ถ้าใช้บนตารางที่มี
 - [x] ESLint rule ห้าม inject `Repository<T>` ธรรมดา (เฉพาะ `src/modules/**`)
 - [x] `@SkipOrgScope()` decorator สำหรับ endpoint ที่ต้องข้ามจริงๆ
-- [x] 🔒 **Integration test: query จาก org A ต้องมองไม่เห็นข้อมูล org B** — [`test/org-isolation.spec.ts`](../../apps/api/core/test/org-isolation.spec.ts) 10 เคส
+- [x] 🔒 **Integration test: query จาก org A ต้องมองไม่เห็นข้อมูล org B** — [`test/org-isolation.spec.ts`](../../apps/api/core/test/org-isolation.spec.ts)
   - [x] โครง integration test — [`test/database.ts`](../../apps/api/core/test/database.ts) reset DB แล้วรัน migration ให้เองทุกครั้ง
 - [x] Entity ครบทั้ง 28 ตาราง (ยกเว้น `chat.*` ที่เป็น Phase 2) — drift test คุมทั้ง schema แล้ว
   - เจอ 10 จุดตอนใส่ครบ **ไม่มีข้อไหนเป็นชื่อหรือ type ผิดเลย** ทั้งหมดเป็นเรื่อง `DEFAULT` ที่ entity ไม่ได้ประกาศให้ตรง
@@ -96,7 +96,7 @@
   - ข้อนี้คือสิ่งที่กัน retention ไม่ให้ติด — project ที่ soft delete แล้วแต่ task ยังอยู่ ลบไม่ออกเพราะ `tasks.project_id` เป็น RESTRICT · มี test พิสูจน์ครบวง cascade → purge
   - แผนที่ `AGGREGATE_CHILDREN` เขียนมือ **ไม่ได้อ่านจาก `pg_constraint`** เหมือน retention — DB ตอบไม่ได้ว่าอะไรเป็นของอะไร (RESTRICT ไม่ได้แปลว่าไม่ใช่ลูก, NOT NULL ไม่ได้แปลว่าใช่)
   - Test บังคับว่าทุกตารางที่ soft delete ได้ ต้องอยู่ใน `AGGREGATE_CHILDREN` หรือ `ROOTS` — ตารางใหม่ที่ลืมใส่ fail ทันที
-- [x] Test — [`test/cascade-soft-delete.spec.ts`](../../apps/api/core/test/cascade-soft-delete.spec.ts) 9 เคส
+- [x] Test — [`test/cascade-soft-delete.spec.ts`](../../apps/api/core/test/cascade-soft-delete.spec.ts)
 
 **Retention job** — ครบทั้ง 5 นโยบายใน [`01-architecture.md`](../docs/01-architecture.md#retention--each-kind-of-data-has-its-own-lifetime) แล้ว อยู่ที่ [`src/maintenance/`](../../apps/api/core/src/maintenance/)
 
@@ -105,7 +105,7 @@
 - [x] `identity.users` อยู่ใน `NEVER_PURGED` — anonymize อย่างเดียว ไม่ hard delete
 - [x] `pg_try_advisory_lock` กันสอง instance ยิงพร้อมกัน · `JOBS_ENABLED=false` ปิดได้ทั้งโปรเซส
 - [x] `SYSTEM_USER_ID` ย้ายมาที่ [`src/shared/system-user.ts`](../../apps/api/core/src/shared/system-user.ts) — job ไม่มี request context ต้องบอกเองว่าเขียนในนามใคร · [`test/schema-invariants.spec.ts`](../../apps/api/core/test/schema-invariants.spec.ts) เช็คว่าตรงกับ uuid ที่ migration seed ไว้
-- [x] Test — [`test/retention.spec.ts`](../../apps/api/core/test/retention.spec.ts) 21 เคส รวมเคสที่ลบไม่ผ่านแล้วต้องข้ามไม่ล้มทั้ง sweep
+- [x] Test — [`test/retention.spec.ts`](../../apps/api/core/test/retention.spec.ts) — รวมเคสที่ลบไม่ผ่านแล้วต้องข้ามไม่ล้มทั้ง sweep
 - [x] ย้าย alert (`audit.logs_default`, retention step ที่ fail) จาก log ไป Sentry — `src/maintenance/alert.ts`
       · log บรรทัดเดิมยังอยู่ (ไว้อ่านตอนเปิดดูอยู่แล้ว) Sentry คือตัวที่มาตามให้ไปดู · ไม่มี DSN = เงียบ
 
@@ -121,7 +121,7 @@
   - **`resource` เป็น parameter บังคับ** — CASL ตอบ `can('delete','Project')` ที่ไม่ส่ง resource ว่า "ทำกับ*บางอัน*ได้ไหม" ซึ่ง project admin ได้ `true` ทั้งที่ลบได้แค่ project ตัวเอง · หน้าตาเหมือน check ที่ผ่าน · บังคับให้ส่งแปลว่าเขียนแบบอันตรายแล้ว **compile ไม่ผ่าน** ไม่ใช่แค่มีคอมเมนต์เตือน
   - ส่ง `{}` ได้เมื่อไม่มี row ให้อ้าง (เช่น `create Project`) — CASL fail ทุก rule ที่มีเงื่อนไข ซึ่งเป็นทางที่ปลอดภัย
   - `isEverAllowedTo()` คือคำถาม "ทำกับบางอันได้ไหม" ที่ตั้งใจถาม — ใช้ตัดสินว่าจะโชว์ปุ่มไหม ไม่ใช่ตัดสินสิทธิ์
-- [x] Test: แต่ละ role ทำอะไรได้/ไม่ได้ — [`permission.service.spec.ts`](../../apps/api/core/src/permission/permission.service.spec.ts) 9 เคส (unit ไม่ต้องมี DB)
+- [x] Test: แต่ละ role ทำอะไรได้/ไม่ได้ — [`permission.service.spec.ts`](../../apps/api/core/src/permission/permission.service.spec.ts) (unit ไม่ต้องมี DB)
 - [x] `provideOrgRepository()` / `@InjectOrgRepository()` — วิธีที่ module ต่อกับตารางของตัวเอง โดยไม่ต้องแตะ `@InjectRepository` ที่ ESLint ห้ามไว้ · `audit/` เป็นตัวอย่างแรก
 - [ ] Test: invariant ที่ app บังคับ (DB ไม่ได้) — **เลื่อนไป Phase 1 ตามที่ระบุไว้แต่แรก** เพราะยังไม่มี service ให้บังคับ:
   - [ ] org ต้องมี role='owner' ≥1 แถวเสมอ
@@ -135,7 +135,7 @@
   - Worker retry 3 ครั้ง backoff 1 / 5 / 25 นาที → `status='failed'` แล้วหยุด · **ยังไม่มี Sentry** log level `error` ไปก่อน (§7)
   - `FOR UPDATE SKIP LOCKED` + advisory lock — at-least-once โดยตั้งใจ · process ตายกลางคันแล้วส่งซ้ำ ดีกว่า mark sent ก่อนส่งแล้วหาย
   - Template ที่ยังไม่มีคน implement **ไม่ throw** — ส่งแบบดิบไปก่อน ไม่งั้นจะวนอยู่ใน retry loop จนถูก mark failed
-  - Test — [`test/outbox.spec.ts`](../../apps/api/core/test/outbox.spec.ts) 9 เคส
+  - Test — [`test/outbox.spec.ts`](../../apps/api/core/test/outbox.spec.ts)
 - [x] `StorageService` ห่อ **Garage** (S3) — bucket **private** เข้าผ่าน presigned URL เท่านั้น · [ทำไมไม่ใช่ MinIO](../docs/01-architecture.md#object-storage)
   - MinIO ล่มแล้ว API ยัง boot ได้ · `/health/ready` เป็น 503 พร้อมบอกว่า storage down ส่วน `/health/live` ยัง 200 (ทดสอบจริงแล้ว)
   - `RESEND_API_KEY` เป็น optional — ไม่ตั้ง = เขียนลง log · แต่ `NODE_ENV=production` แล้วไม่ตั้ง = **boot ไม่ผ่าน** ไม่งั้น notification ของจริงจะหายลง stdout
@@ -143,7 +143,7 @@
 - [x] เพิ่ม `garage` + `garage-init` เข้า `docker-compose.yml` (volume แยกจาก DB — ไฟล์กู้จาก DB backup ไม่ได้ ต้อง restore แยกกันได้)
   - Garage image ไม่มี shell เลย (เหตุผลที่มันแค่ 66MB) · init เลยเป็น container แยกที่คุยผ่าน Admin API ด้วย curl
   - init รันซ้ำได้ ทดสอบแล้ว — layout ข้ามถ้ามีแล้ว ส่วน key/bucket ตอบ 409 แล้วปล่อยผ่าน
-  - `garage-ui` อยู่ใน profile `tools` ไม่ขึ้นเอง — Garage ไม่มี UI ในตัว ([ตัวไหนใช้ได้บ้าง](../docs/01-architecture.md#object-storage)) · ถือ admin token จึง bind `127.0.0.1` เท่านั้น
+  - `garage-ui` ขึ้นพร้อม `docker compose up -d` ที่ port 4909 — Garage ไม่มี UI ในตัว ([ตัวไหนใช้ได้บ้าง](../docs/01-architecture.md#object-storage)) · ถือ admin token จึง bind `127.0.0.1` เท่านั้น และไม่มีใน `deploy/compose.yml`
 
 ## 7. Deploy — อย่าเลื่อน
 
@@ -194,6 +194,10 @@
 | AWS SDK v3 checksum | ใส่ CRC32 ให้ทุก upload อัตโนมัติ → presigned PUT พังด้วย `InvalidDigest` เพราะ browser ไม่ได้ส่ง header นั้น → `requestChecksumCalculation: 'WHEN_REQUIRED'` |
 | Garage image | ไม่มี shell ไม่มี netstat อะไรเลย มีแต่ binary · script ทุกอย่างต้องทำผ่าน Admin API จาก container อื่น |
 | Partitioned table | PK ต้องมี partition key อยู่ด้วย → `audit.logs` เป็น composite PK |
+| `NEXT_PUBLIC_*` | Next ฝังตอน **build** ไม่ได้อ่านตอน container start · ตั้งใน `environment:` ของ compose = ไม่ถึง browser แบบเงียบ ๆ ต้องส่งเป็น `build.args` |
+| `compose up --wait` | คืน exit 1 ถ้ามี service ในชุดนั้น **stop** แม้จะ exit 0 · one-shot อย่าง `garage-init` ต้องไม่อยู่ในชุดที่ `--wait` |
+| `build` ผ่าน แต่ `check-types` แดง | `tsconfig.build.json` exclude `test/` ออก · โค้ดใน test พังแบบที่ `nest build` ไม่มีวันเห็น — ต้องรันทั้งสองคำสั่ง |
+| GHCR | package เป็น private โดย default · pull โดยไม่มีสิทธิ์ตอบ **"not found"** ไม่ใช่ 403 → เช็ค `docker login` ก่อนเช็ค tag |
 | `migration:create` | ไฟล์ที่ออกมา `import { MigrationInterface, QueryRunner }` **พังใน ESM** (เป็น type ล้วน ไม่มีใน `typeorm/index.mjs`) · ผ่าน `nest build` แต่ Vitest ตาย · eslint `consistent-type-imports` เปิดเฉพาะโฟลเดอร์ `migrations/` แก้ให้ตอน commit — เปิดทั้ง repo จะไปลบ metadata ที่ NestJS DI ใช้ |
 | แก้ migration ที่รันไปแล้ว | DB ที่บันทึกว่ารันแล้วจะไม่รันซ้ำ → test DB ค้างอยู่กับ schema เก่าเงียบ ๆ · `test/database.ts` เลย reset ก่อนทุกครั้ง |
 | `ON DELETE SET NULL` + composite FK | ต้องระบุคอลัมน์ `SET NULL (sprint_id)` ไม่งั้น null `org_id` ไปด้วยซึ่งเป็น NOT NULL |

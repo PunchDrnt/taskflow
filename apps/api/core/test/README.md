@@ -10,8 +10,9 @@ docker compose up -d
 yarn test
 ```
 
-`storage.spec.ts` needs object storage and skips without `S3_ENDPOINT`; everything
-else needs only `postgres-test`. `garage-init` is a one-shot container that lays
+`storage.spec.ts` needs object storage and skips without `S3_ENDPOINT`;
+`sentry.spec.ts` needs neither, since it collects events in process rather than
+sending them; everything else needs only `postgres-test`. `garage-init` is a one-shot container that lays
 out the cluster on first boot and exits — nothing to start by hand.
 
 `postgres-test` is the ephemeral service in `docker-compose.yml` — it stores
@@ -65,3 +66,4 @@ each other's data and fail in ways that depend on timing.
 | `audit.spec.ts`               | 🔒 The activity log commits and rolls back with what it describes    |
 | `outbox.spec.ts`              | Notification queue and delivery: retries, backoff, giving up         |
 | `storage.spec.ts`             | The bucket is private: presigned URLs work, plain ones get 403       |
+| `sentry.spec.ts`              | Unhandled errors are reported; an `HttpException` is not             |
