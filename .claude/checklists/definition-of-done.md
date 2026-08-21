@@ -39,6 +39,7 @@
 
 - [ ] งานที่แตะ org scoping → มี test ว่า org A มองไม่เห็นข้อมูล org B
 - [ ] งานที่แตะ permission → มี test ว่าแต่ละ role ทำอะไรได้/ไม่ได้
+- [ ] งานที่แตะ invariant ที่ **DB บังคับเองไม่ได้** → มี test · เงื่อนไขข้ามตารางหรือแบบ "อย่างน้อย 1 แถว" เขียนเป็น `CHECK` / `UNIQUE` ไม่ได้ ถ้าไม่มี test ก็ไม่มีอะไรคุมเลย — เช่น org ต้องมี `owner` ≥1 · project ต้องมี `is_done_type` ≥1 · `completed_at` ต้องสอดคล้องกับ `is_done_type` ของ status ที่ task ใช้อยู่
 - [ ] Test รันซ้ำได้ ไม่พึ่งลำดับ ไม่พึ่ง state ที่ test อื่นทิ้งไว้
 
 ## 5. API (ถ้าเพิ่ม/แก้ endpoint)
