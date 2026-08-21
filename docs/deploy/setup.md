@@ -1,10 +1,11 @@
 # Setting up the server
 
 จาก Ubuntu เปล่า ๆ จนถึง deploy ที่วิ่งเองตอน `git push` · ประมาณชั่วโมงนึง
-ส่วนใหญ่คือรอ
+ส่วนใหญ่คือรอ · ไฟล์ที่ server ใช้จริงอยู่ที่ [`deploy/`](../../deploy/) ส่วนเอกสาร
+ชุดนี้อยู่นอกโฟลเดอร์นั้น
 
-เรื่อง SSH key แยกไปอยู่ [SSH-KEYS.md](SSH-KEYS.md) เพราะมี key สามดอกและสองดอก
-ชี้กันคนละทิศ — อ่านอันนั้นก่อนถึง step 1 จะไม่งง
+เรื่อง SSH key แยกไปอยู่ [ssh-keys.md](ssh-keys.md) เพราะมี key สามตัวและสองตัว
+ใช้คนละทิศทาง — อ่านอันนั้นก่อนเริ่ม step 1 จะไม่สับสน
 
 ---
 
@@ -31,10 +32,10 @@ garage 66, caddy 60) · memory ตอน idle **วัดจริงได้�
 และ server สองตัวแย่งกันอยู่
 
 **Disk โตสามที่** — Postgres, object data ของ Garage, และ backup ถ้าเก็บไว้บนเครื่อง ·
-**เก็บ backup ไว้นอกเครื่อง** ดู [backup.sh](backup.sh)
+**เก็บ backup ไว้นอกเครื่อง** ดู [backup.sh](../../deploy/backup.sh)
 
-**เพิ่ม swap** ถ้าเอา 2 GB · ไม่ได้มีไว้ให้รันด้วย swap แต่มีไว้ให้จังหวะผิดปกติ
-ช้าลงแทนที่จะโดน OOM killer
+**เพิ่ม swap** ถ้าเอา 2 GB · ไม่ได้มีไว้ให้รันด้วย swap แต่มีไว้ให้ช่วงที่ใช้ memory
+พุ่งผิดปกติแค่ช้าลง แทนที่จะโดน OOM killer ฆ่า process ทิ้ง
 
 ## Which Ubuntu
 
@@ -42,7 +43,7 @@ garage 66, caddy 60) · memory ตอน idle **วัดจริงได้�
 ของ Docker เองรองรับมานานแล้ว
 
 26.04 LTS ออกแล้ว (เม.ย. 2026) ใช้ได้ไม่มีปัญหา แต่ไม่มีอะไรใน stack นี้ที่ต้องใช้
-ของใหม่ — เครื่องที่ควรน่าเบื่อก็เลือกของน่าเบื่อ
+ของใหม่ — server ควรเลือกของที่นิ่งแล้ว ไม่ใช่ของที่เพิ่งออก
 
 **อย่าใช้ non-LTS บน server** · support แค่ 9 เดือน
 
@@ -52,7 +53,7 @@ garage 66, caddy 60) · memory ตอน idle **วัดจริงได้�
 
 provider ให้ root password หรือ key มา · ใช้มันครั้งเดียว
 
-ถ้ายังไม่มี key ของตัวเอง สร้างก่อนตาม [SSH-KEYS.md §1](SSH-KEYS.md#1-your-own-key)
+ถ้ายังไม่มี key ของตัวเอง สร้างก่อนตาม [ssh-keys.md §1](ssh-keys.md#1-your-own-key)
 
 ```bash
 ssh root@<server-ip>
@@ -137,7 +138,7 @@ docker compose version          # ต้องเป็น v2.x · "docker-compo
 ```
 
 > ⚠️ อยู่ใน group `docker` **เทียบเท่า root** เพราะ mount filesystem ของ host
-> เข้า container ได้ · สำหรับ deploy user ยอมรับได้ แต่ไม่ใช่สิ่งที่แจกกันเล่น ๆ
+> เข้า container ได้ · สำหรับ deploy user ถือว่ายอมรับได้ แต่ไม่ควรให้ใครก็ได้
 
 ปิดไม่ให้ log ของ Docker กินดิสก์จนเต็ม · ถ้าไม่ตั้ง container ที่ log เรื่อย ๆ
 จะทำให้เครื่องเต็มในไม่กี่เดือน แล้วอาการที่เห็นจะเหมือนปัญหา database
@@ -173,13 +174,13 @@ dig +short taskflow.example.com      # ต้องขึ้น IP ของเ�
 > ต่อชั่วโมง และ 50 certificate ต่อสัปดาห์ต่อโดเมน · debug TLS ด้วยการ `down`/`up`
 > รัว ๆ จะโดนล็อกยาวเป็นชั่วโมง · ถ้ารู้ตัวว่าจะต้องลองหลายรอบ ให้ชี้ไป staging CA
 > ก่อน โดยใส่ `acme_ca https://acme-staging-v02.api.letsencrypt.org/directory`
-> ใน site block ของ [config/Caddyfile](config/Caddyfile) แล้วค่อยเอาออกเมื่อผ่าน ·
+> ใน site block ของ [config/Caddyfile](../../deploy/config/Caddyfile) แล้วค่อยเอาออกเมื่อผ่าน ·
 > certificate จาก staging browser ไม่เชื่อถือ ซึ่งคือประเด็น — มันพิสูจน์ว่า flow
 > ถูกโดยไม่กิน quota
 
 ## 5. Deploy key ให้ server อ่าน repo ได้
 
-ทำตาม [SSH-KEYS.md §2](SSH-KEYS.md#2-deploy-key--server-reads-github) —
+ทำตาม [ssh-keys.md §2](ssh-keys.md#2-deploy-key--server-reads-github) —
 สร้างบน server, เอา public ไปใส่ GitHub Deploy keys แบบ read-only
 
 ## 6. Clone · ตั้งค่า · login registry
@@ -225,7 +226,7 @@ docker compose ps
 `garage-init` กับ `api-migrate` exited 0 — สองตัวนี้ตั้งใจให้จบแล้วออก
 
 แล้วเช็คจาก **นอกเครื่อง** เพราะ server ที่ตอบบน localhost แต่ไม่ตอบจากเน็ต
-คือปัญหา firewall ที่ปลอมตัวมา:
+มักเป็นปัญหา firewall ไม่ใช่ปัญหาแอป:
 
 ```bash
 curl -I https://taskflow.example.com
@@ -236,7 +237,7 @@ curl https://taskflow.example.com/api/health/ready
 
 ## 8. CI key ให้ Actions เข้า server ได้
 
-ทำตาม [SSH-KEYS.md §3](SSH-KEYS.md#3-ci-key--actions-reaches-the-server) —
+ทำตาม [ssh-keys.md §3](ssh-keys.md#3-ci-key--actions-reaches-the-server) —
 สร้างที่เครื่องตัวเอง, public ขึ้น server, private เอาไปใส่ secret ใน step ถัดไป
 
 ## 9. GitHub settings
@@ -290,8 +291,8 @@ volume ว่าง · แก้ทีหลังไม่มีผลจนก
 แก้ที่ repo
 
 **ลบ `caddy-data` แล้วต้องขอ certificate ใหม่ทั้งหมด** ซึ่ง Let's Encrypt limit อยู่ ·
-มันเก็บ ACME account key ไว้ · **อย่า `docker compose down -v` เล่น ๆ** — `-v`
-ลบ volume ซึ่งรวม database ด้วย
+มันเก็บ ACME account key ไว้ · **อย่าใช้ `docker compose down -v` ถ้าไม่จำเป็นจริง ๆ**
+— `-v` ลบ volume ซึ่งรวม database ด้วย
 
 **Postgres 18 เก็บ data ใน subdirectory ที่มีเลขเวอร์ชัน** · mount ที่
 `/var/lib/postgresql` ไม่ใช่ `/var/lib/postgresql/data` แบบ 17 ลงไป ·
@@ -357,5 +358,5 @@ docker compose exec garage /garage bucket list
 
 ```bash
 docker compose down          # หยุดทุกอย่าง · volume ยังอยู่
-docker compose down -v       # ...แล้วลบ database ด้วย · แทบไม่มีเหตุให้ใช้
+docker compose down -v       # ...แล้วลบ database ด้วย · แทบไม่ได้ใช้
 ```
