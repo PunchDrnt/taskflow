@@ -8,6 +8,7 @@ import { NestFactory } from '@nestjs/core'
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger'
 import { Logger } from 'nestjs-pino'
 
+import { version as pkgVersion } from '../package.json'
 import { AppModule } from './app.module'
 import type { Env } from './config/env'
 
@@ -18,7 +19,12 @@ async function bootstrap() {
   const config = new DocumentBuilder()
     .setTitle('Core API')
     .setDescription('API documentation for apps/api/core')
-    .setVersion('0.0.0')
+    // From apps/api/core/package.json, so a release bumps one file rather
+    // than a literal here that nothing would notice going stale — this is the
+    // only version anyone actually sees. dist/main.js resolves ../package.json
+    // to the workspace manifest in dev and in the image alike, since the
+    // Dockerfile copies it beside dist and keeps the monorepo layout.
+    .setVersion(pkgVersion)
     .build()
   const document = SwaggerModule.createDocument(app, config)
   SwaggerModule.setup('docs', app, document)
