@@ -1,4 +1,6 @@
+import { readFileSync } from 'node:fs'
 import type { AddressInfo } from 'node:net'
+import { resolve } from 'node:path'
 import { Controller, Get, Module, NotFoundException } from '@nestjs/common'
 import { APP_FILTER, NestFactory } from '@nestjs/core'
 import type { NestExpressApplication } from '@nestjs/platform-express'
@@ -81,5 +83,25 @@ describe('SentryGlobalFilter', () => {
     await Sentry.flush(2000)
     // A 404 is an answer, not a fault. Reporting them buries the real ones.
     expect(captured.slice(before)).toEqual([])
+  })
+})
+
+describe('instrument.ts is imported first', () => {
+  it('is the first import in main.ts', () => {
+    // Sentry patches modules as they load, so anything imported above this
+    // line is never instrumented. Nothing enforced that: Prettier's import
+    // sorter does not reorder side-effect imports in either direction, so it
+    // will neither break a correct file nor repair a broken one — measured,
+    // by putting an import above it and running Prettier, which left it
+    // there. An IDE auto-import lands at line 1 by default, and the damage is
+    // silent: no error, no failing request, just an exception that never
+    // reaches Sentry and is noticed whenever someone next goes looking.
+    const source = readFileSync(resolve(__dirname, '../src/main.ts'), 'utf8')
+
+    const firstImport = source
+      .split('\n')
+      .find((line) => line.startsWith('import '))
+
+    expect(firstImport).toBe("import './instrument'")
   })
 })
