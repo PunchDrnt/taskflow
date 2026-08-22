@@ -11,9 +11,9 @@ import { runWithRequestContext } from './request-context'
  * What a guard cannot do is call `runWithRequestContext`: `canActivate`
  * returns a boolean, so the scope closes before the handler runs and
  * `getRequestContext()` comes back undefined in the controller. Middleware can,
- * because it calls `next()` from inside the scope. A guard has to use
- * `AsyncLocalStorage.enterWith` instead, which was measured to survive `await`s
- * and to stay per-request under concurrent load — so this is a note about
+ * because it calls `next()` from inside the scope. A guard uses
+ * `enterRequestContext` instead, which is measured to survive `await`s and to
+ * stay per-request under 20 concurrent requests — so this is a note about
  * `run()`, not a verdict on guards.
  *
  * Phase 1 replaces the read below with the access token's `org` and `sub`.
