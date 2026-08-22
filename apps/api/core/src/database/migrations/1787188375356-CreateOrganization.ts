@@ -55,17 +55,12 @@ export class CreateOrganization1787188375356 implements MigrationInterface {
         created_at  timestamptz NOT NULL DEFAULT now(),
         created_by  uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
         updated_at  timestamptz NOT NULL DEFAULT now(),
-        updated_by  uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
-        deleted_at  timestamptz,
-        deleted_by  uuid        REFERENCES identity.users(id) ON DELETE RESTRICT,
-
-        CONSTRAINT members_deleted_pair_check
-          CHECK ((deleted_at IS NULL) = (deleted_by IS NULL))
+        updated_by  uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT
       )
     `)
     await queryRunner.query(`
       CREATE UNIQUE INDEX members_org_user_unique
-        ON organization.members (org_id, user_id) WHERE deleted_at IS NULL
+        ON organization.members (org_id, user_id)
     `)
     // "Which orgs does this user belong to" — the reverse of the index above,
     // which cannot serve it because org_id leads.
@@ -116,11 +111,6 @@ export class CreateOrganization1787188375356 implements MigrationInterface {
         created_by  uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
         updated_at  timestamptz NOT NULL DEFAULT now(),
         updated_by  uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
-        deleted_at  timestamptz,
-        deleted_by  uuid        REFERENCES identity.users(id) ON DELETE RESTRICT,
-
-        CONSTRAINT team_members_deleted_pair_check
-          CHECK ((deleted_at IS NULL) = (deleted_by IS NULL)),
 
         -- Composite, so this row's org_id is provably the team's. Covers
         -- org_id → organizations transitively; hence no separate FK.
@@ -131,7 +121,7 @@ export class CreateOrganization1787188375356 implements MigrationInterface {
     `)
     await queryRunner.query(`
       CREATE UNIQUE INDEX team_members_team_user_unique
-        ON organization.team_members (team_id, user_id) WHERE deleted_at IS NULL
+        ON organization.team_members (team_id, user_id)
     `)
     // Group assignment resolves a team to its people.
     await queryRunner.query(`

@@ -199,6 +199,8 @@ Unit tests sit next to the code as `src/**/*.spec.ts`. Integration tests live in
 
 `yarn workspace @api/core db:seed` fills a development database with one organisation, four people, a team, a project with a full set of statuses and an active sprint, and tasks two levels deep. It deletes what it made before making it again, so it can be re-run, and refuses outright when `NODE_ENV=production`.
 
+`yarn workspace @api/core db:reset` drops every schema the migrations create and reapplies them from empty, for when a migration file is edited after the database already recorded it as run — normal before anything is deployed. Without it `migration:run` sees every migration already in `public.migrations` and quietly does nothing, so the dev database keeps the old shape. Same production guard as `db:seed`.
+
 The permission layer joins them once it exists.
 
 ## Branching

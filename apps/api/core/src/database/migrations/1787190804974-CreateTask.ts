@@ -128,11 +128,6 @@ export class CreateTask1787190804974 implements MigrationInterface {
         created_by     uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
         updated_at     timestamptz NOT NULL DEFAULT now(),
         updated_by     uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
-        deleted_at     timestamptz,
-        deleted_by     uuid        REFERENCES identity.users(id) ON DELETE RESTRICT,
-
-        CONSTRAINT assignees_deleted_pair_check
-          CHECK ((deleted_at IS NULL) = (deleted_by IS NULL)),
 
         CONSTRAINT assignees_task_fkey
           FOREIGN KEY (task_id, org_id)
@@ -142,7 +137,6 @@ export class CreateTask1787190804974 implements MigrationInterface {
     await queryRunner.query(`
       CREATE UNIQUE INDEX assignees_task_assignee_unique
         ON task.assignees (task_id, assignee_type, assignee_id)
-        WHERE deleted_at IS NULL
     `)
     // "What is assigned to me", and the reverse lookup the missing FK cannot
     // give us.

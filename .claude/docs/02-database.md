@@ -147,7 +147,7 @@ CREATE INDEX ON discussion.comments (org_id, entity_type, entity_id, created_at)
 
 ทุกตารางในระบบ · ฟิลด์ที่มี _(Phase N)_ คือสร้างตั้งแต่ Phase 0 แต่เริ่มใช้ตอน Phase นั้น
 
-### Base Entity — On Every Table, With Three Named Exceptions
+### Base Entity — On Every Table, With Four Named Exceptions
 
 > 🔒 **ต้องทำ** — primary key เป็น UUID · วันเวลาเป็น `timestamptz` ทั้งหมด
 
@@ -167,15 +167,25 @@ CHECK ((deleted_at IS NULL) = (deleted_by IS NULL))   -- ตั้งพร้�
 
 **`deleted_at` กับ `deleted_by` ต้องตั้งพร้อมกัน** — แถวที่ถูกลบแล้วไม่รู้ว่าใครลบคือประวัติที่กู้ไม่ได้ · TypeORM ตั้ง `deleted_at` ให้เองผ่าน `@DeleteDateColumn` แต่ `deleted_by` ต้องตั้งเองผ่าน subscriber · CHECK นี้กันกรณีที่ subscriber ไม่ทำงาน
 
-**ข้อยกเว้น 3 กลุ่ม**
+**ข้อยกเว้น 4 กลุ่ม**
 
 | ตาราง                                                 | ไม่มี                      | เพราะ                                                                 |
 | ----------------------------------------------------- | ------------------------- | -------------------------------------------------------------------- |
 | `audit.logs`                                          | base entity ทั้งชุด          | composite PK · `occurred_at`/`actor_id` ทำหน้าที่แทน `created_at`/`created_by` |
 | `organization.organizations`                          | `org_id`                  | เท่ากับ `id` เสมอ                                                        |
 | `identity.sessions` · `identity.password_reset_tokens` · `notify.outbox` | `deleted_at`/`deleted_by` | มี `revoked_at` / `used_at` / `status` อยู่แล้ว และนโยบายคือ hard delete       |
+| **ตารางความสัมพันธ์** — `organization.members` · `organization.team_members` · `project.members` · `task.assignees` · `identity.role_permissions` · `identity.user_roles` · และ `billing.ai_usage` | `deleted_at`/`deleted_by` | ดูด้านล่าง |
 
-กลุ่มสุดท้ายคือบั๊กแบบเดียวกับที่ `identity.users` เคยมี — **ตัวบอกการลบสองตัวในตารางเดียวย่อมขัดกันได้**
+กลุ่มที่สามคือบั๊กแบบเดียวกับที่ `identity.users` เคยมี — **ตัวบอกการลบสองตัวในตารางเดียวย่อมขัดกันได้**
+
+**กลุ่มที่สี่ — ตารางความสัมพันธ์เป็น hard delete** เดิมเป็น soft delete เพราะเป็น default ของ `BaseEntity` ไม่ใช่เพราะถูกถามทีละตาราง · เหตุผลที่เปลี่ยน เรียงจากหนักสุด
+
+1. **ลืม filter บนตารางพวกนี้ = ช่องโหว่สิทธิ์ ไม่ใช่บั๊กการแสดงผล** · แถว `project.members` ที่ `deleted_at` มีค่าแต่ query ลืมกรอง = คนที่ถูกถอดออกยังเข้าถึง project ได้ · hard delete แล้วแถวไม่อยู่ ไม่มีอะไรให้ลืม
+2. **เหตุผลที่คนเก็บ soft delete ไว้ ที่นี่มีของที่ดีกว่าอยู่แล้ว** — `audit.logs` partition รายเดือน ไม่เคยลบ (🔒) บันทึกว่าใครถอดใครออกเมื่อไหร่ครบกว่า `deleted_by` ตัวเดียว
+3. **ถอดคนออกไม่ใช่การทำลายข้อมูล** มันคือการเปลี่ยนความสัมพันธ์ เพิ่มกลับต้นทุนศูนย์ ไม่มีอะไรให้กู้ · soft delete ทำให้ถอด-ใส่ซ้ำสะสมแถวตาย และ upsert ต้องคิดเผื่อทุกครั้ง
+4. `billing.ai_usage` เป็นบันทึกการใช้เงิน — append-only ให้ retention ลบจริง soft delete ไม่ตรงความหมาย
+
+**cascade ไม่ลงไปหาตารางกลุ่มนี้** โดยตั้งใจ — soft delete project แล้ว member ยังอยู่ครบ **restore แล้วได้คนเดิมกลับมา** · ตอน hard delete จริงตอน retention `ON DELETE CASCADE` ของ FK เก็บกวาดให้เอง
 
 > ⚠️ **ทุก field ที่เป็นวันเวลาใช้ `timestamptz` (timestamp with time zone) เท่านั้น**
 >
@@ -283,7 +293,9 @@ sessions                                 -- 1 แถว = 1 การ login จ�
   rotated_at             timestamptz null  ใช้คำนวณ grace window 10 วินาที
   user_agent             text
   ip_address             inet
-  last_used_at           timestamptz
+  last_used_at           timestamptz   -- ❓ ยังไม่ตัดสินว่าเขียนตอนไหน · เขียนทุก
+                                       -- request = 1 write/request ไม่ใช่ 1 ต่อ 15
+                                       -- นาที · ทางเลือก lazy (เกิน N นาทีค่อยเขียน)
   expires_at             timestamptz   +15 วัน
   revoked_at             timestamptz null
   revoked_reason         text  null    'logout' | 'logout_all' | 'password_change'
@@ -302,7 +314,7 @@ password_reset_tokens
   used_at             timestamptz null   ใช้ได้ครั้งเดียว
   CREATE INDEX ON identity.password_reset_tokens (token_hash) WHERE used_at IS NULL;
 
-oauth_accounts        ⚠ ยังไม่สร้าง — migrate ตอน Phase 1 พร้อมโค้ด Google login
+oauth_accounts        ⚠ ยังไม่สร้าง — migrate ใน Phase 1 แต่ Google login ยังไม่เปิดใช้
                       -- 1 แถว = 1 provider ที่ user คนนั้นผูกไว้
   user_id             uuid  FK → identity.users · ON DELETE CASCADE
   provider            text        'google' (เผื่อ 'line' ทีหลัง)
@@ -318,7 +330,9 @@ oauth_accounts        ⚠ ยังไม่สร้าง — migrate ตอ�
     WHERE deleted_at IS NULL;
 ```
 
-**ตารางนี้ยังไม่มีในฐานข้อมูล** — ต่างจาก `identity.roles` / `permissions` / `role_permissions` / `user_roles` ที่ migrate ไว้ตั้งแต่ Phase 0 ทั้งที่ไม่มีใครอ่านจนถึง Phase 7 · เหตุผลที่ไม่ทำแบบเดียวกัน: สี่ตารางนั้นถูก seed ด้วย migration ตั้งแต่แรก (`SYSTEM_PERMISSIONS`) ส่วนตารางนี้ว่างเปล่าจนกว่าจะมีคนกดล็อกอินด้วย Google จริง · schema ข้างบนคือข้อตกลงที่ตัดสินแล้ว ไม่ใช่ร่าง — Phase 1 เขียน migration ตามนี้ได้เลยโดยไม่ต้องออกแบบใหม่
+**ตารางนี้ยังไม่มีในฐานข้อมูล — Phase 1 migrate แต่ยังไม่เปิดใช้** เป็นแพทเทิร์นเดียวกับ `identity.roles` / `permissions` / `role_permissions` / `user_roles` ที่ลงตั้งแต่ Phase 0 แล้วไม่มีใครอ่านจนถึง Phase 7 · schema ข้างบนตัดสินแล้ว ไม่ใช่ร่าง เขียน migration ตามนี้ได้เลย
+
+> ⚠️ **"ปิดไว้" ต้องปิดด้วยกลไกที่ปิดได้จริง** — `FeatureService.isEnabled()` ตอนนี้ `return true` เสมอ การดักด้วยมันเฉย ๆ จึงเท่ากับเปิด · ดู [`checklists/phase-1.md`](../checklists/phase-1.md) §0
 
 **ไม่มีคอลัมน์เก็บ access / refresh token ของ provider** — Taskflow ใช้แค่ identity ตอน login ไม่ได้เรียก API ของ Google ต่อ · เก็บไว้คือถือ credential ของคนอื่นที่ไม่ได้ใช้
 

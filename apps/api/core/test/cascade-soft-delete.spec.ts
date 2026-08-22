@@ -237,11 +237,9 @@ describe.skipIf(!hasTestDatabase)('cascade soft delete', () => {
 
       expect(deleted).toEqual({
         'project.projects': 1,
-        'project.members': 1,
         'project.statuses': 1,
         // The parent task and its sub-task, found on two passes.
         'task.tasks': 2,
-        'task.assignees': 1,
         'view.views': 1,
         'view.columns': 1,
       })
@@ -249,6 +247,27 @@ describe.skipIf(!hasTestDatabase)('cascade soft delete', () => {
       expect(await live('task.tasks')).toBe(0)
       expect(await live('view.columns')).toBe(0)
       expect(await live('project.statuses')).toBe(0)
+    })
+
+    it('leaves membership rows alone, so a restore comes back whole', async () => {
+      // project.members and task.assignees are hard-delete now: removing
+      // someone is a relationship change, and the activity log is what records
+      // that it happened. Cascading into them would mean a restored project
+      // came back with nobody in it, and a soft-deleted membership row is an
+      // access-control bug waiting for one query that forgets the filter.
+      await asOrg(orgA, () => cascade.softDelete('project.projects', projectId))
+
+      const [members] = (await dataSource.query(
+        `SELECT count(*)::int AS count FROM project.members WHERE project_id = $1`,
+        [projectId],
+      )) as { count: number }[]
+      const [assignees] = (await dataSource.query(
+        `SELECT count(*)::int AS count FROM task.assignees WHERE task_id = $1`,
+        [taskId],
+      )) as { count: number }[]
+
+      expect(members!.count).toBe(1)
+      expect(assignees!.count).toBe(1)
     })
 
     it('takes the comments and files attached to a task with it', async () => {

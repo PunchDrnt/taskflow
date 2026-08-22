@@ -139,17 +139,12 @@ export class CreateIdentityRest1787188325061 implements MigrationInterface {
         created_at     timestamptz NOT NULL DEFAULT now(),
         created_by     uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
         updated_at     timestamptz NOT NULL DEFAULT now(),
-        updated_by     uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
-        deleted_at     timestamptz,
-        deleted_by     uuid        REFERENCES identity.users(id) ON DELETE RESTRICT,
-
-        CONSTRAINT role_permissions_deleted_pair_check
-          CHECK ((deleted_at IS NULL) = (deleted_by IS NULL))
+        updated_by     uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT
       )
     `)
     await queryRunner.query(`
       CREATE UNIQUE INDEX role_permissions_unique
-        ON identity.role_permissions (role_id, permission_id) WHERE deleted_at IS NULL
+        ON identity.role_permissions (role_id, permission_id)
     `)
 
     await queryRunner.query(`
@@ -168,17 +163,12 @@ export class CreateIdentityRest1787188325061 implements MigrationInterface {
         created_at  timestamptz NOT NULL DEFAULT now(),
         created_by  uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
         updated_at  timestamptz NOT NULL DEFAULT now(),
-        updated_by  uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
-        deleted_at  timestamptz,
-        deleted_by  uuid        REFERENCES identity.users(id) ON DELETE RESTRICT,
-
-        CONSTRAINT user_roles_deleted_pair_check
-          CHECK ((deleted_at IS NULL) = (deleted_by IS NULL))
+        updated_by  uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT
       )
     `)
     await queryRunner.query(`
       CREATE UNIQUE INDEX user_roles_unique
-        ON identity.user_roles (user_id, role_id) WHERE deleted_at IS NULL
+        ON identity.user_roles (user_id, role_id)
     `)
   }
 

@@ -40,7 +40,7 @@
 - [x] `002` schema ทั้ง 11 ตัว
 - [x] 🔒 `003` `identity.users` + seed system user — `is_system` · `password_hash` NULL · trigger กันลบ
 - [x] 🔒 `004` `audit.logs` — `PARTITION BY RANGE (occurred_at)` + **`PRIMARY KEY (id, occurred_at)`** · partition ล่วงหน้า 12 เดือน + `logs_default`
-- [x] ตารางที่เหลือตาม [`02-database.md`](../docs/02-database.md#5-full-schema) ยกเว้น `chat.*` (Phase 2) และ `identity.oauth_accounts` (Phase 1 — migrate พร้อมโค้ด Google login)
+- [x] ตารางที่เหลือตาม [`02-database.md`](../docs/02-database.md#5-full-schema) ยกเว้น `chat.*` (Phase 2) และ `identity.oauth_accounts` (Phase 1 — migrate ไว้ แต่ Google login ยังไม่เปิดใช้)
 - [x] Test กัน entity หลุดจาก migration — [`test/schema-drift.spec.ts`](../../apps/api/core/test/schema-drift.spec.ts)
 - [x] Job สร้าง partition เดือนถัดไป — cron `audit-partitions` 03:05 เติมให้ครบ 12 เดือนล่วงหน้าทุกวัน ([`src/maintenance/`](../../apps/api/core/src/maintenance/))
 - [x] Alert เมื่อ `audit.logs_default` มีแถว — `alerts.condition()` เข้า Sentry แล้ว (§7 ทำไปแล้ว) · log บรรทัดเดิมยังอยู่
@@ -66,7 +66,7 @@
 ## 3. Base entity + org scoping
 
 - [x] `shared/base.entity.ts` — 🔒 UUID pk, `org_id`, `created_at/by`, `updated_at/by`, `deleted_at/by`
-  - [x] 4 คลาสตามรูปทรงที่ schema ใช้จริง ([ตารางเทียบ](../docs/02-database.md#base-entity--on-every-table-with-three-named-exceptions)) — `BaseEntity` (ปกติ) · `SoftDeletableEntity` (ไม่มี org_id) · `OrgScopedEntity` (ไม่มี soft delete) · `TimestampedEntity` · `audit.logs` ประกาศเอง
+  - [x] 4 คลาสตามรูปทรงที่ schema ใช้จริง ([ตารางเทียบ](../docs/02-database.md#base-entity--on-every-table-with-four-named-exceptions)) — `BaseEntity` (ปกติ) · `SoftDeletableEntity` (ไม่มี org_id) · `OrgScopedEntity` (ไม่มี soft delete) · `TimestampedEntity` · `audit.logs` ประกาศเอง
 - [x] TypeORM subscriber เติม `createdBy` / `updatedBy` / `deletedBy` จาก request context
   - [x] ไม่เดาค่าเมื่อไม่มี context — migration/job ต้องบอกเองว่าทำในนามใคร (system user มีไว้เพื่อการนี้)
 - [x] `shared/request-context.ts` — `AsyncLocalStorage<{ orgId, userId }>`

@@ -11,6 +11,7 @@
     "migration:revert": "nest build && node --env-file-if-exists=../../../.env ../../../node_modules/typeorm/cli.js migration:revert -d dist/database/data-source.js",
     "migration:show": "nest build && node --env-file-if-exists=../../../.env ../../../node_modules/typeorm/cli.js migration:show -d dist/database/data-source.js",
     "db:seed": "nest build && node --env-file-if-exists=../../../.env dist/database/seed.js",
+    "db:reset": "nest build && node --env-file-if-exists=../../../.env dist/database/reset.js",
     "lint": "eslint . --max-warnings 0",
     "check-types": "tsc --noEmit",
     "test": "vitest run",

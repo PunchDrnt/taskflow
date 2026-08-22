@@ -118,11 +118,7 @@ export class CreateBilling1787190914695 implements MigrationInterface {
         created_by   uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
         updated_at   timestamptz NOT NULL DEFAULT now(),
         updated_by   uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
-        deleted_at   timestamptz,
-        deleted_by   uuid        REFERENCES identity.users(id) ON DELETE RESTRICT,
 
-        CONSTRAINT ai_usage_deleted_pair_check
-          CHECK ((deleted_at IS NULL) = (deleted_by IS NULL)),
         CONSTRAINT ai_usage_tokens_check
           CHECK (tokens_in >= 0 AND tokens_out >= 0)
       )

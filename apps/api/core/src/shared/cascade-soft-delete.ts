@@ -28,18 +28,12 @@ interface ChildLink {
  */
 export const AGGREGATE_CHILDREN: Record<string, ChildLink[]> = {
   'organization.organizations': [
-    { table: 'organization.members', column: 'org_id' },
     { table: 'organization.teams', column: 'org_id' },
     { table: 'project.projects', column: 'org_id' },
     { table: 'billing.subscriptions', column: 'org_id' },
     { table: 'billing.ai_wallet', column: 'org_id' },
-    { table: 'billing.ai_usage', column: 'org_id' },
-  ],
-  'organization.teams': [
-    { table: 'organization.team_members', column: 'team_id' },
   ],
   'project.projects': [
-    { table: 'project.members', column: 'project_id' },
     { table: 'project.statuses', column: 'project_id' },
     { table: 'project.sprints', column: 'project_id' },
     { table: 'task.tasks', column: 'project_id' },
@@ -47,7 +41,6 @@ export const AGGREGATE_CHILDREN: Record<string, ChildLink[]> = {
     { table: 'view.views', column: 'project_id' },
   ],
   'task.tasks': [
-    { table: 'task.assignees', column: 'task_id' },
     // A sub-task is a task, so this recurses into itself until none are left.
     { table: 'task.tasks', column: 'parent_task_id' },
     { table: 'discussion.comments', column: 'entity_id', entityType: 'task' },
@@ -76,8 +69,6 @@ export const ROOTS = [
   'identity.users',
   'identity.roles',
   'identity.permissions',
-  'identity.role_permissions',
-  'identity.user_roles',
 ]
 
 /**

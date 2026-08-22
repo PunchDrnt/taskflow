@@ -1,9 +1,9 @@
 import { Column, Entity } from 'typeorm'
 
-import { SoftDeletableEntity } from '../../shared/base.entity'
+import { TimestampedEntity } from '../../shared/base.entity'
 
 @Entity({ schema: 'identity', name: 'user_roles' })
-export class SystemUserRole extends SoftDeletableEntity {
+export class SystemUserRole extends TimestampedEntity {
   @Column('uuid')
   userId!: string
 

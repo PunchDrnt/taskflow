@@ -26,7 +26,7 @@
 - Docker compose ครบ (api, web, postgres, postgres-test, garage, caddy) — ตอนนี้มี postgres + postgres-test + garage
 - **สร้าง schema ครบทุก module ตั้งแต่รอบนี้** — รวม `sprints` + `tasks.sprint_id` + `tasks.estimate` ด้วย (เติมทีหลังต้อง migrate `tasks` ซึ่งเป็นตารางใหญ่สุด)
   - ข้อยกเว้นเดียว: `chat.identities` / `chat.channels` สร้างตอน Phase 2 — เป็นตารางอิสระ ไม่มีใครชี้มาหา
-- Base entity — UUID, `org_id`, `created_at/by`, `updated_at/by`, `deleted_at/by` · วันเวลาใช้ `timestamptz` ทั้งหมด ([schema เต็ม](./02-database.md#base-entity--on-every-table-with-three-named-exceptions))
+- Base entity — UUID, `org_id`, `created_at/by`, `updated_at/by`, `deleted_at/by` · วันเวลาใช้ `timestamptz` ทั้งหมด ([schema เต็ม](./02-database.md#base-entity--on-every-table-with-four-named-exceptions))
 - `users.status` เป็น string ('active' | 'deactivated' | 'pending_deletion' | 'deleted') + unique index อีเมลแบบ partial
 - Global `org_id` scoping — **repository base class + isolation test** ([วิธี implement](./01-architecture.md#org_id-scoping)) · **RLS เลื่อนไป Phase 2** เพราะ `CREATE POLICY` เพิ่มทีหลังได้โดยไม่ต้อง migrate
 - Migration เขียนมือทั้งหมด · `synchronize: false` ถาวร — `synchronize` สร้าง partition, partial index, `COLLATE "C"` และ extension ให้ไม่ได้
