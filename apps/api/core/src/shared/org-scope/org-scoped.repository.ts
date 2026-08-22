@@ -12,21 +12,13 @@ import {
   type Repository,
 } from 'typeorm'
 
+import { QueryBuilders } from './query-builders'
 import { requireRequestContext } from './request-context'
-import { OrgQueryBuilders } from './scoped-query-builder'
 
 /**
- * `FindManyOptions` without `skip`, which is offset paging.
- *
- * Lists are ordered by `sort_order`, a LexoRank string built so a row can be
- * inserted between any two others without renumbering. An insert mid-list
- * shifts everything after it by one, so page 2 fetched by offset silently
- * repeats a row it already showed or skips one entirely — the API convention
- * is cursor paging for exactly this reason (docs/01-architecture.md#api).
- *
- * `take` stays: a limit is not the problem. Somewhere genuinely unordered by
- * `sort_order` can still offset-page through `queryBuilder.withOrg()`, which
- * is the same deliberate step out of the narrow surface that `base()` is.
+ * `FindManyOptions` without `skip`. Lists are ordered by LexoRank `sort_order`,
+ * which anyone can insert into the middle of, so an offset page repeats or
+ * drops a row; the API convention is cursor paging. `take` is fine.
  */
 type ScopedFindManyOptions<T> = Omit<FindManyOptions<T>, 'skip'>
 
@@ -35,8 +27,8 @@ type ScopedFindManyOptions<T> = Omit<FindManyOptions<T>, 'skip'>
  * org into the where clause, writes stamp it, both from the request context
  * rather than an argument a caller could get wrong.
  *
- * The narrow API is the point: add a missing method here, with scoping
- * applied, rather than reaching for the underlying repository.
+ * The narrow API is the point: add a missing method here, with scoping applied,
+ * rather than reaching for the underlying repository.
  *
  * See docs/01-architecture.md#org_id-scoping
  */
@@ -46,35 +38,29 @@ export class OrgScopedRepository<T extends ObjectLiteral> {
     /** `id` for `organization.organizations`, whose org_id would be its own pk. */
     private readonly scopeColumn: 'orgId' | 'id' = 'orgId',
   ) {
-    this.queryBuilder = new OrgQueryBuilders(repository, scopeColumn)
+    this.queryBuilder = new QueryBuilders(repository, scopeColumn)
   }
 
-  /**
-   * For anything the methods below cannot express.
-   *
-   * ```ts
-   * projects.queryBuilder.withOrg('project').andWhere(...)  // scoped
-   * users.queryBuilder.base('user')                         // identity has no org
-   * ```
-   */
-  readonly queryBuilder: OrgQueryBuilders<T>
+  /** For anything the methods below cannot express. */
+  readonly queryBuilder: QueryBuilders<T>
 
   /** The organisation this repository is currently bound to. */
   get orgId(): string {
     return requireRequestContext().orgId
   }
 
+  // --- scope -------------------------------------------------------------
+
   private scope(): FindOptionsWhere<T> {
     return { [this.scopeColumn]: this.orgId } as FindOptionsWhere<T>
   }
 
   /**
-   * Merges the org condition into a caller's where clause. An array is OR in
-   * TypeORM, so it goes into every branch — once beside the array would widen
-   * the query, not narrow it.
-   *
-   * A branch naming another org is dropped, not overwritten: overwriting
-   * answers a different question than the one asked, silently.
+   * The caller's where clause narrowed to this org, or `null` when every branch
+   * asked for a different one — nothing can match, so the caller skips the
+   * query. An array is OR in TypeORM, hence per branch; a branch naming another
+   * org is dropped rather than overwritten, because overwriting would silently
+   * answer a different question than the one asked.
    */
   private withScope(
     where: FindOptionsWhere<T> | FindOptionsWhere<T>[] | undefined,
@@ -88,11 +74,32 @@ export class OrgScopedRepository<T extends ObjectLiteral> {
       })
       .map((branch) => ({ ...branch, ...this.scope() }))
 
-    // Every branch asked for another org: nothing can match, skip the query.
     if (scoped.length === 0) return null
 
     return Array.isArray(where) ? scoped : scoped[0]!
   }
+
+  private byId(id: string): FindOptionsWhere<T> {
+    return { id } as unknown as FindOptionsWhere<T>
+  }
+
+  /** ...and not soft-deleted, which `update()` does not filter on its own. */
+  private byLiveId(id: string): FindOptionsWhere<T> {
+    return { id, deletedAt: IsNull() } as unknown as FindOptionsWhere<T>
+  }
+
+  /**
+   * Empty for an id-scoped repository: `organizations.id` is generated, and
+   * forcing it to the current org would collide every new organisation with
+   * the one creating it.
+   */
+  private writeScope(): Partial<T> {
+    return this.scopeColumn === 'orgId'
+      ? ({ orgId: this.orgId } as unknown as Partial<T>)
+      : ({} as Partial<T>)
+  }
+
+  // --- reads -------------------------------------------------------------
 
   find(options: ScopedFindManyOptions<T> = {}): Promise<T[]> {
     const where = this.withScope(options.where)
@@ -109,16 +116,12 @@ export class OrgScopedRepository<T extends ObjectLiteral> {
   }
 
   findById(id: string): Promise<T | null> {
-    return this.findOne({
-      where: { id } as unknown as FindOptionsWhere<T>,
-    })
+    return this.findOne({ where: this.byId(id) })
   }
 
   /**
-   * `[rows, total]` — the total counted after scoping.
-   *
-   * Not a paging primitive despite the shape: see `ScopedFindManyOptions`.
-   * The total is for showing a count, and `take` for capping a response.
+   * `[rows, total]`, the total counted after scoping — for showing a count, not
+   * for paging. See `ScopedFindManyOptions`.
    */
   async findAndCount(
     options: ScopedFindManyOptions<T> = {},
@@ -143,16 +146,13 @@ export class OrgScopedRepository<T extends ObjectLiteral> {
     return this.repository.exists({ ...options, where })
   }
 
-  /**
-   * Empty for an id-scoped repository: `organizations.id` is generated, and
-   * forcing it to the current org would collide every new organisation with
-   * the one creating it.
-   */
-  private writeScope(): Partial<T> {
-    return this.scopeColumn === 'orgId'
-      ? ({ orgId: this.orgId } as unknown as Partial<T>)
-      : ({} as Partial<T>)
-  }
+  // --- writes ------------------------------------------------------------
+  //
+  // `updateById` and `softDeleteById` both go through TypeORM's `update()`,
+  // which loads no entity and applies no soft-delete filter. So both pass
+  // `byLiveId` — without it they would edit a deleted row and restart its
+  // ninety-day retention clock — and both write the audit columns by hand,
+  // since AuditColumnsSubscriber never runs on a query that loaded nothing.
 
   /** `org_id` already set, so a caller cannot create a row for someone else. */
   create(data: DeepPartial<T>): T {
@@ -163,18 +163,14 @@ export class OrgScopedRepository<T extends ObjectLiteral> {
   }
 
   /**
-   * Refuses an `id` this organisation does not own.
+   * Refuses an `id` this organisation does not own. `writeScope()` stamps the
+   * org rather than checking it, which is right for a new row and wrong for one
+   * that exists: with an `id` present TypeORM issues `UPDATE ... WHERE id = $1`,
+   * so saving another org's id moved their row into this one, overwriting it on
+   * the way. Measured.
    *
-   * `writeScope()` stamps the org rather than checking it, which is right for
-   * a new row and wrong for one that already exists: with an `id` present
-   * TypeORM issues `UPDATE ... WHERE id = $1`, so the org stops being a
-   * condition and becomes a value being written — saving another org's id
-   * moved their row into this one, overwriting it on the way. Measured.
-   *
-   * Throws rather than reporting nothing saved, unlike `softDeleteById`: a
-   * delete matching nothing is a real answer to a fair question, but holding
-   * an id from another org means the caller got it somewhere it should not
-   * have, and quietly doing nothing hides that.
+   * Throws rather than returning quietly, unlike `softDeleteById`: an id from
+   * another org means the caller got it somewhere it should not have.
    */
   async save(entity: DeepPartial<T>): Promise<T> {
     const id = (entity as { id?: string }).id
@@ -182,9 +178,7 @@ export class OrgScopedRepository<T extends ObjectLiteral> {
     // exists() is scoped already, so this covers the id-scoped repository too
     // — organizations had the same hole, one org renaming another.
     if (id !== undefined) {
-      const owned = await this.exists({
-        where: { id } as unknown as FindOptionsWhere<T>,
-      })
+      const owned = await this.exists({ where: this.byId(id) })
 
       if (!owned) {
         throw new Error(
@@ -200,27 +194,13 @@ export class OrgScopedRepository<T extends ObjectLiteral> {
     } as DeepPartial<T>) as Promise<T>
   }
 
-  /**
-   * Changes the columns given, without loading the row first.
-   *
-   * Both extra conditions are load-bearing, and both are invisible from the
-   * call site. `update()` does not apply the soft-delete filter that reads
-   * get, so `deletedAt: IsNull()` is what stops this editing a row that was
-   * deleted — and restarting its ninety-day retention clock. And no entity is
-   * loaded, so AuditColumnsSubscriber never runs and `updatedBy` is written
-   * here, the same reason softDeleteById writes `deletedBy` itself.
-   *
-   * Returns rows affected: 0 for another org's id, or a row already deleted.
-   */
+  /** Rows affected: 0 for another org's id, or a row already deleted. */
   async updateById(
     id: string,
     patch: QueryDeepPartialEntity<T>,
   ): Promise<number> {
     const { userId } = requireRequestContext()
-    const where = this.withScope({
-      id,
-      deletedAt: IsNull(),
-    } as unknown as FindOptionsWhere<T>)
+    const where = this.withScope(this.byLiveId(id))
     if (!where) return 0
 
     const result = await this.repository.update(where, {
@@ -232,25 +212,15 @@ export class OrgScopedRepository<T extends ObjectLiteral> {
   }
 
   /**
-   * Returns rows affected — 0 for another org's id or a row already deleted,
-   * so the caller sees "not found" rather than proof the row exists elsewhere.
-   *
-   * `deletedBy` is written explicitly because TypeORM's `softDelete()` builds
-   * a query without loading the entity, so no subscriber runs and the CHECK on
-   * every soft-deletable table rejects the half-set pair. Found by testing.
-   *
-   * `update()` does not apply the soft-delete filter that reads get, so
-   * `deletedAt: IsNull()` is added here — without it a second call rewrites
-   * who deleted the row and restarts its ninety-day retention clock.
-   *
-   * Deletes only this row. Anything belonging to it needs CascadeSoftDelete.
+   * Rows affected, so another org's id reads as "not found" rather than as
+   * proof the row exists elsewhere. Deletes only this row — anything belonging
+   * to it needs CascadeSoftDelete. The CHECK on every soft-deletable table
+   * rejects `deletedAt` without `deletedBy`, which is how the missing
+   * subscriber above was found.
    */
   async softDeleteById(id: string): Promise<number> {
     const { userId } = requireRequestContext()
-    const where = this.withScope({
-      id,
-      deletedAt: IsNull(),
-    } as unknown as FindOptionsWhere<T>)
+    const where = this.withScope(this.byLiveId(id))
     if (!where) return 0
 
     const result = await this.repository.update(where, {
