@@ -47,7 +47,7 @@
       · `canActivate` คืน boolean แล้วจบ scope — `run` ทำให้ controller เห็น context เป็น `null`
       · วัดไว้แล้วใน Phase 0 ว่า `enterWith` รอดข้าม `await` และ 20 request ซ้อนกันไม่รั่วข้าม org
       · **ห้ามเปลี่ยนโครงตรงนี้โดยไม่รันเทสซ้ำ** — ถ้ารั่วคือ cross-org leak ทันที ไม่ใช่บั๊กธรรมดา
-- [ ] Guard อ่าน `@Public()` ผ่าน `Reflector` — decorator มีอยู่แล้วใน `shared/route-metadata.ts` **ยังไม่มีใครอ่าน**
+- [ ] Guard อ่าน `@Public()` ผ่าน `Reflector` — decorator มีอยู่แล้วใน `shared/http/route-metadata.ts` **ยังไม่มีใครอ่าน**
 - [ ] `@SkipOrgScope()` — endpoint ที่ล็อกอินแล้วแต่ยังไม่ผูก org (เช่น เลือก org)
 - [ ] เลิกใช้ `RequestContextMiddleware` เมื่อ guard มาแล้ว — อย่าปล่อยให้ทั้งสองตัวเซ็ต context พร้อมกัน
 - [ ] Login / Logout / Refresh rotation — refresh 1 อันใช้ได้ครั้งเดียว หมุนแล้ว**ไม่สร้างแถวใหม่** แค่เปลี่ยน token hash

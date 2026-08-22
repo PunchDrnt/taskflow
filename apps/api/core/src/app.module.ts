@@ -10,6 +10,7 @@ import { EventEmitterModule } from '@nestjs/event-emitter'
 import { SentryGlobalFilter, SentryModule } from '@sentry/nestjs/setup'
 import { LoggerModule } from 'nestjs-pino'
 
+import { ApiExceptionFilter } from '#shared/http/api-exception.filter'
 import { RequestContextMiddleware } from '#shared/org-scope/request-context.middleware'
 import { SharedModule } from '#shared/shared.module'
 
@@ -72,10 +73,13 @@ const rootEnvFile = join(__dirname, '..', '..', '..', '..', '.env')
   controllers: [AppController],
   providers: [
     AppService,
-    // Reports what nothing else handled. Registered rather than applied in
-    // main.ts so it sits below Nest's own filters and does not swallow the
-    // HttpExceptions that are ordinary answers.
+    // These two are ordered, not merely listed. APP_FILTER is applied in
+    // reverse — last registered is tried first — so ApiExceptionFilter sees
+    // every HttpException, and Sentry's @Catch() filter gets what is left:
+    // the unexpected errors it exists to report. Swap them and Nest's own 404
+    // loses its `code`, which is what api-exception.filter.spec.ts checks.
     { provide: APP_FILTER, useClass: SentryGlobalFilter },
+    { provide: APP_FILTER, useClass: ApiExceptionFilter },
   ],
 })
 export class AppModule implements NestModule {
