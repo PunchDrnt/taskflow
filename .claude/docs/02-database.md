@@ -336,7 +336,7 @@ oauth_accounts        ⚠ ยังไม่สร้าง — migrate ใน P
 
 **ตารางนี้ยังไม่มีในฐานข้อมูล — Phase 1 migrate แต่ยังไม่เปิดใช้** เป็นแพทเทิร์นเดียวกับ `identity.roles` / `permissions` / `role_permissions` / `user_roles` ที่ลงตั้งแต่ Phase 0 แล้วไม่มีใครอ่านจนถึง Phase 7 · schema ข้างบนตัดสินแล้ว ไม่ใช่ร่าง เขียน migration ตามนี้ได้เลย
 
-> ⚠️ **"ปิดไว้" ต้องปิดด้วยกลไกที่ปิดได้จริง** — `FeatureService.isEnabled()` ตอนนี้ `return true` เสมอ การดักด้วยมันเฉย ๆ จึงเท่ากับเปิด · ดู [`checklists/phase-1.md`](../checklists/phase-1.md) §0
+> ⚠️ **"ปิดไว้" ต้องปิดด้วยกลไกที่ปิดได้จริง** — `FeatureService.isEnabled()` เป็น allow-list ที่ว่างเปล่าแล้ว (Phase 1) ดักด้วยมันจึงเท่ากับปิดจริง · แต่ Google login ยังไม่มีโค้ดอ่านตารางนี้เลย ซึ่งเป็นกลไกที่ปิดแน่นกว่า
 
 **ไม่มีคอลัมน์เก็บ access / refresh token ของ provider** — Taskflow ใช้แค่ identity ตอน login ไม่ได้เรียก API ของ Google ต่อ · เก็บไว้คือถือ credential ของคนอื่นที่ไม่ได้ใช้
 

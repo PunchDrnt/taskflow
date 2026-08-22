@@ -24,11 +24,12 @@
   - [ ] org ต้องมี `role='owner'` ≥1 แถวเสมอ (ห้ามลบ/ลดสิทธิ์คนสุดท้าย)
   - [ ] project ต้องมี `is_done_type` ≥1 อัน
   - [ ] `completed_at`/`completed_by` มีค่า **ก็ต่อเมื่อ** status ของ task นั้น `is_done_type` — คุมสองทาง ดู §6
-- [ ] 🔒 **`FeatureService.isEnabled()` return `true` เสมอ — "ดักด้วย feature flag" ตอนนี้แปลว่า "เปิดอยู่"**
+- [x] 🔒 **`FeatureService.isEnabled()` return `true` เสมอ — "ดักด้วย feature flag" ตอนนี้แปลว่า "เปิดอยู่"**
       · [`04-features.md:57`](../docs/04-features.md) เขียนว่า `/register` ดักด้วย `isEnabled(org, 'public_registration')` "ซึ่ง return `false` ตั้งแต่บรรทัดแรก" — **โค้ดจริง `return true`**
       · ใครสร้าง `/register` ตามสเปกโดยไม่เปิดไฟล์ดู จะได้ public registration ที่เปิดอยู่ ใน phase ที่มี org เดียว = ใครรู้ URL ก็เข้าถึงข้อมูลบริษัท
-      · **ต้องเลือกก่อนเขียน endpoint แรกที่พึ่งมัน** — ให้ stub return `false` สำหรับ feature ที่ยังไม่เปิด หรือเปลี่ยนเป็น allow-list · แล้วแก้ doc ให้ตรง
-      · มี test ว่า feature ที่ยังไม่เปิด return `false` จริง ไม่ใช่เชื่อคอมเมนต์
+      · **ตัดสินแล้ว: allow-list ว่าง ปิดหมดเป็น default** — `ENABLED_FEATURES` เป็น `Set` เปล่า ชื่อที่ไม่ได้อยู่ในนั้นคือปิด · การเพิ่มชื่อเข้า `FEATURES` จึงเป็นการ**ดัก** feature ไม่ใช่การเปิด
+      · `04-features.md` ไม่ต้องแก้ — โค้ดขยับมาตรงกับ doc · ที่แก้คือ [`02-database.md`](../docs/02-database.md#schema-identity) กับ [`03-roadmap.md`](../docs/03-roadmap.md) ที่ยังเขียนว่า `return true`
+      · test ครอบว่าไม่มี feature ไหนเปิดอยู่จริง และชื่อที่ยังไม่มีใครเปิด return `false` — ไม่ใช่เชื่อคอมเมนต์
 - [ ] **`identity.oauth_accounts` — migrate ไว้ แต่ feature ปิด ยังไม่ใช้** (ตัดสินแล้ว)
       · ตารางลงตาม schema ใน [`02-database.md`](../docs/02-database.md#schema-identity) · เป็นแพทเทิร์นเดียวกับ `identity.roles`/`permissions` ที่ migrate ตั้งแต่ Phase 0 แล้วไม่มีใครอ่านจนถึง Phase 7
       · **Google login ยังไม่เปิดใช้** — ปิดด้วยกลไกที่ปิดได้จริง ดูข้อบน ไม่ใช่ `FeatureService` ตามสภาพปัจจุบัน
