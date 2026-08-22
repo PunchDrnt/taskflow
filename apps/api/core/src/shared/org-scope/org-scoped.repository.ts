@@ -12,8 +12,8 @@ import {
   type Repository,
 } from 'typeorm'
 
+import { QueryBuilders } from './query-builders'
 import { requireRequestContext } from './request-context'
-import { QueryBuilders } from './scoped-query-builder'
 
 /**
  * `FindManyOptions` without `skip`. Lists are ordered by LexoRank `sort_order`,

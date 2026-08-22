@@ -6,7 +6,7 @@ import { requireRequestContext } from './request-context'
 type OrgScoped = { orgId: string }
 
 /** `where` replaces every condition set so far; `orWhere` widens past them. */
-export type ScopedQueryBuilder<T extends ObjectLiteral> = Omit<
+type ScopedQueryBuilder<T extends ObjectLiteral> = Omit<
   SelectQueryBuilder<T>,
   'where' | 'orWhere'
 >
