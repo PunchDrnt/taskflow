@@ -12,11 +12,20 @@ export type ScopedQueryBuilder<T extends ObjectLiteral> = Omit<
 >
 
 /**
- * Makes `where`/`orWhere` throw at every hop of a chain. The type-level
- * omission only holds for the first call — `andWhere` returns `this`, which
- * TypeScript resolves back to the full builder.
+ * Absent — not merely failing — on an entity with no `orgId`. Before the
+ * conditional type, `users.queryBuilder.withOrg()` compiled and then threw
+ * `Property "orgId" was not found in "User"` at runtime.
  */
-function guard<T extends ObjectLiteral>(
+type WithOrg<T extends ObjectLiteral> = T extends OrgScoped
+  ? (alias: string) => ScopedQueryBuilder<T>
+  : never
+
+/**
+ * Makes `where`/`orWhere` throw for the whole chain rather than only the first
+ * call: `andWhere` is declared to return `this`, so TypeScript widens back to
+ * the full builder at the first hop and the omission above stops holding.
+ */
+function sealScope<T extends ObjectLiteral>(
   builder: SelectQueryBuilder<T>,
   alias: string,
 ): ScopedQueryBuilder<T> {
@@ -40,7 +49,7 @@ function guard<T extends ObjectLiteral>(
           target,
           args,
         )
-        // Chaining returns `this`; hand back the proxy so the guard survives.
+        // Chaining returns `this` — hand back the proxy so the seal survives.
         return result === target ? proxy : result
       }
     },
@@ -50,43 +59,37 @@ function guard<T extends ObjectLiteral>(
 }
 
 /**
- * Reached as `repository.queryBuilder.withOrg(...)`. Neither shape is the
- * default: `queryBuilder` alone is this object, not a builder, so no call site
- * gets the unscoped one by typing the obvious name.
+ * The two ways to get a query builder, and the choice between them — which is
+ * the whole reason this type exists rather than a method. `queryBuilder` alone
+ * is this object rather than a builder, so no call site ends up with the
+ * unscoped one by typing the obvious name: `base` and `withOrg` both have to be
+ * asked for, and only one of them is about the org.
+ *
+ * See docs/01-architecture.md#org_id-scoping
  */
-export class OrgQueryBuilders<T extends ObjectLiteral> {
+export class QueryBuilders<T extends ObjectLiteral> {
   constructor(
     private readonly repository: Repository<T>,
     private readonly scopeColumn: 'orgId' | 'id',
   ) {}
 
   /**
-   * The plain TypeORM builder. Correct — not an escape — for the tables with
-   * no `org_id`: `identity.*` and `billing.plans`.
-   *
-   * On a table that has one, this crosses orgs, and the call should be able to
-   * say why `withOrg` could not do the job.
+   * Unscoped. Correct — not an escape — for the tables with no `org_id`:
+   * `identity.*` and `billing.plans`. On a table that has one this crosses
+   * orgs, and the call should be able to say why `withOrg` could not do it.
    */
   base(alias: string): SelectQueryBuilder<T> {
     return this.repository.createQueryBuilder(alias)
   }
 
-  /**
-   * Scoped to the current org. Guarded three ways: the conditional type
-   * removes the method from entities with no `orgId` (without it,
-   * `users.queryBuilder.withOrg()` threw `Property "orgId" was not found in
-   * "User"` at runtime), the return type omits `where`/`orWhere`, and the
-   * Proxy covers the rest of the chain.
-   */
-  withOrg: T extends OrgScoped
-    ? (alias: string) => ScopedQueryBuilder<T>
-    : never = ((alias: string): ScopedQueryBuilder<T> => {
+  /** Scoped to the current org, and sealed against being widened again. */
+  withOrg: WithOrg<T> = ((alias: string): ScopedQueryBuilder<T> => {
     const { orgId } = requireRequestContext()
 
     const builder = this.repository
       .createQueryBuilder(alias)
       .where(`${alias}.${this.scopeColumn} = :__orgId`, { __orgId: orgId })
 
-    return guard(builder, alias)
-  }) as T extends OrgScoped ? (alias: string) => ScopedQueryBuilder<T> : never
+    return sealScope(builder, alias)
+  }) as WithOrg<T>
 }
