@@ -1,13 +1,13 @@
 import { Column, Entity } from 'typeorm'
 
-import { BaseEntity } from '../../shared/base.entity'
+import { OrgScopedEntity } from '../../shared/base.entity'
 
 /**
  * Membership of an org. Joining is creating the row, so there is no separate
  * `joinedAt` — that is `createdAt`.
  */
 @Entity({ schema: 'organization', name: 'members' })
-export class OrganizationMember extends BaseEntity {
+export class OrganizationMember extends OrgScopedEntity {
   @Column('uuid')
   userId!: string
 

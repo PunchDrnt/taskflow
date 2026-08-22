@@ -1,9 +1,9 @@
 import { Column, Entity } from 'typeorm'
 
-import { BaseEntity } from '../../shared/base.entity'
+import { OrgScopedEntity } from '../../shared/base.entity'
 
 @Entity({ schema: 'billing', name: 'ai_usage' })
-export class AiUsage extends BaseEntity {
+export class AiUsage extends OrgScopedEntity {
   @Column('uuid')
   userId!: string
 

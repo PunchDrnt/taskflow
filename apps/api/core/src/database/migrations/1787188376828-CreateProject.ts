@@ -64,11 +64,6 @@ export class CreateProject1787188376828 implements MigrationInterface {
         created_by  uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
         updated_at  timestamptz NOT NULL DEFAULT now(),
         updated_by  uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
-        deleted_at  timestamptz,
-        deleted_by  uuid        REFERENCES identity.users(id) ON DELETE RESTRICT,
-
-        CONSTRAINT project_members_deleted_pair_check
-          CHECK ((deleted_at IS NULL) = (deleted_by IS NULL)),
 
         CONSTRAINT project_members_project_fkey
           FOREIGN KEY (project_id, org_id)
@@ -77,7 +72,7 @@ export class CreateProject1787188376828 implements MigrationInterface {
     `)
     await queryRunner.query(`
       CREATE UNIQUE INDEX project_members_project_user_unique
-        ON project.members (project_id, user_id) WHERE deleted_at IS NULL
+        ON project.members (project_id, user_id)
     `)
     // "Which projects can this user see" — org_id leads, per the scoping rule.
     await queryRunner.query(`

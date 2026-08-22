@@ -9,14 +9,19 @@ import {
 /**
  * The columns every table carries, in the four shapes the schema uses.
  * `org_id` and soft delete are independent axes; which table takes which is in
- * docs/02-database.md#base-entity--on-every-table-with-three-named-exceptions.
+ * docs/02-database.md#base-entity--on-every-table-with-four-named-exceptions.
  *
- * | Class                 | org_id | soft delete | Used by                          |
- * | --------------------- | ------ | ----------- | -------------------------------- |
- * | `BaseEntity`          | yes    | yes         | almost everything                |
- * | `SoftDeletableEntity` | no     | yes         | identity.*, organizations, plans |
- * | `OrgScopedEntity`     | yes    | no          | notify.outbox                    |
- * | `TimestampedEntity`   | no     | no          | sessions, password_reset_tokens  |
+ * | Class                 | org_id | soft delete | Used by                              |
+ * | --------------------- | ------ | ----------- | ------------------------------------ |
+ * | `BaseEntity`          | yes    | yes         | anything a person deletes and may     |
+ * |                       |        |             | want back — tasks, projects, teams    |
+ * | `SoftDeletableEntity` | no     | yes         | identity.users, organizations, plans  |
+ * | `OrgScopedEntity`     | yes    | no          | notify.outbox, and the join tables:   |
+ * |                       |        |             | organization.members, team_members,   |
+ * |                       |        |             | project.members, task.assignees,      |
+ * |                       |        |             | billing.ai_usage                      |
+ * | `TimestampedEntity`   | no     | no          | sessions, password_reset_tokens,      |
+ * |                       |        |             | identity.role_permissions, user_roles |
  *
  * Dates say `timestamptz` explicitly: TypeORM's default is `timestamp`, which
  * would silently reinterpret every value.
@@ -48,7 +53,24 @@ export abstract class SoftDeletableEntity extends TimestampedEntity {
   deletedBy!: string | null
 }
 
-/** For tables retention hard-deletes, which already track their own end. */
+/**
+ * Hard delete, for two kinds of table.
+ *
+ * Ones that track their own end (`notify.outbox.status`) and would otherwise
+ * carry a second delete marker to keep in sync. And **join tables** —
+ * membership and assignment — where removing a row is a relationship changing
+ * rather than data being destroyed: re-adding costs nothing, so there is
+ * nothing to restore, and `audit.logs` already records who removed whom.
+ *
+ * The deciding reason is narrower than either: on a join table a query that
+ * forgets `deleted_at IS NULL` is an access-control bug, not a display one —
+ * a soft-deleted `project.members` row means someone removed from a project
+ * can still reach it. Hard delete leaves nothing to forget.
+ *
+ * Cascade deliberately does not reach these (see cascade-soft-delete.ts), so a
+ * soft-deleted project still has its members and comes back whole; the FKs are
+ * `ON DELETE CASCADE`, so retention's hard delete clears them for real.
+ */
 export abstract class OrgScopedEntity extends TimestampedEntity {
   @Column('uuid')
   orgId!: string

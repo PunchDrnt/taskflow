@@ -659,7 +659,7 @@ CREATE TABLE audit.logs_2026_08 PARTITION OF audit.logs
 
 > ⚠️ **ตารางที่ partition ต้องมี partition key อยู่ใน unique/primary key ทุกตัว** — Postgres บังคับ ดังนั้น `PRIMARY KEY (id)` เฉยๆ จะสร้างไม่ผ่าน ต้องเป็น `PRIMARY KEY (id, occurred_at)`
 >
-> ฝั่ง TypeORM entity ก็ต้องประกาศเป็น composite (`@PrimaryColumn()` สองตัว) ไม่ใช่ `@PrimaryGeneratedColumn('uuid')` ตัวเดียว — `audit.logs` จึงเป็นตารางเดียวที่**ไม่ใช้ base entity เลยสักคอลัมน์** (อีกสองข้อยกเว้นใช้บางส่วน ดู [ตารางเทียบ](./02-database.md#base-entity--on-every-table-with-three-named-exceptions))
+> ฝั่ง TypeORM entity ก็ต้องประกาศเป็น composite (`@PrimaryColumn()` สองตัว) ไม่ใช่ `@PrimaryGeneratedColumn('uuid')` ตัวเดียว — `audit.logs` จึงเป็นตารางเดียวที่**ไม่ใช้ base entity เลยสักคอลัมน์** (อีกสองข้อยกเว้นใช้บางส่วน ดู [ตารางเทียบ](./02-database.md#base-entity--on-every-table-with-four-named-exceptions))
 
 #### Where the retention jobs live
 
