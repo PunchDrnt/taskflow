@@ -137,9 +137,7 @@ export class CreateIdentityRest1787188325061 implements MigrationInterface {
         permission_id  uuid        NOT NULL REFERENCES identity.permissions(id) ON DELETE CASCADE,
 
         created_at     timestamptz NOT NULL DEFAULT now(),
-        created_by     uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
-        updated_at     timestamptz NOT NULL DEFAULT now(),
-        updated_by     uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT
+        created_by     uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT
       )
     `)
     await queryRunner.query(`
@@ -161,9 +159,7 @@ export class CreateIdentityRest1787188325061 implements MigrationInterface {
 
         -- granted_at is created_at under another name, so it is not repeated.
         created_at  timestamptz NOT NULL DEFAULT now(),
-        created_by  uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
-        updated_at  timestamptz NOT NULL DEFAULT now(),
-        updated_by  uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT
+        created_by  uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT
       )
     `)
     await queryRunner.query(`

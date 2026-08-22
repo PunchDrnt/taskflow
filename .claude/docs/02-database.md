@@ -187,6 +187,10 @@ CHECK ((deleted_at IS NULL) = (deleted_by IS NULL))   -- ตั้งพร้�
 
 **cascade ไม่ลงไปหาตารางกลุ่มนี้** โดยตั้งใจ — soft delete project แล้ว member ยังอยู่ครบ **restore แล้วได้คนเดิมกลับมา** · ตอน hard delete จริงตอน retention `ON DELETE CASCADE` ของ FK เก็บกวาดให้เอง
 
+**ในกลุ่มที่สี่ สามตารางไม่มี `updated_at`/`updated_by` ด้วย** — `identity.role_permissions` · `identity.user_roles` · `task.assignees` เพราะไม่มีคอลัมน์ไหนถูก "แก้" หลังสร้างเลย มีแต่ FK สองสามตัวที่เป็น**สิทธิ์**ตัวมันเอง (สิทธิ์นี้ผูกกับ role นี้ไหม, task นี้มอบให้คนนี้ไหม) ถอนแล้วให้ใหม่คือลบแถวสร้างใหม่ ไม่ใช่ UPDATE · ถ้าเก็บสองคอลัมน์นี้ไว้ ค่าจะเท่ากับ `created_at`/`created_by` ตลอดไป พร้อมแบก FK `ON DELETE RESTRICT` ที่ไม่เคยได้ใช้
+
+`organization.members` · `organization.team_members` · `project.members` · `billing.ai_usage` ยังมี `updated_at`/`updated_by` เหมือนเดิม — สามตัวแรกมีคอลัมน์ `role` ที่เปลี่ยนได้จริง (เลื่อนขั้น/ลดขั้น) ส่วน `ai_usage` ยังไม่ commit เป็น spec (§Phase 7-8) จึงไม่ตัดสินล่วงหน้าว่า token นับสะสมด้วย UPDATE หรือ insert ใหม่ทุกครั้ง
+
 > ⚠️ **ทุก field ที่เป็นวันเวลาใช้ `timestamptz` (timestamp with time zone) เท่านั้น**
 >
 > ห้ามใช้ `timestamp` (without time zone) เด็ดขาด — เก็บเป็น UTC ใน DB แล้วแปลงเป็น timezone ผู้ใช้ที่ frontend
