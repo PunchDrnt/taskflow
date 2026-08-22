@@ -7,6 +7,8 @@ const navItems = [
   { href: '/design-system/buttons', label: 'Buttons' },
   { href: '/design-system/badges', label: 'Badges' },
   { href: '/design-system/forms', label: 'Forms' },
+  { href: '/design-system/navigation', label: 'Navigation' },
+  { href: '/design-system/feedback', label: 'Feedback' },
   { href: '/design-system/overlays', label: 'Overlays' },
   { href: '/design-system/data-display', label: 'Data display' },
 ]

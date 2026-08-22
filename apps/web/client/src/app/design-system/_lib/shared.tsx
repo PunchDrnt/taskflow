@@ -90,6 +90,34 @@ export function Section({
   )
 }
 
+export function Example({
+  title,
+  description,
+  children,
+  className,
+}: {
+  title: string
+  description?: string
+  children: React.ReactNode
+  className?: string
+}) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <h3 className="subtitle-2">{title}</h3>
+        {description && (
+          <p className="body-2 text-text-secondary">{description}</p>
+        )}
+      </div>
+      <div
+        className={`border-divider bg-paper-elevation-0 flex flex-wrap items-center gap-4 rounded-lg border p-6 ${className ?? ''}`}
+      >
+        {children}
+      </div>
+    </div>
+  )
+}
+
 export function Swatch({
   label,
   className,

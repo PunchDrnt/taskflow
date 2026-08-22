@@ -27,14 +27,24 @@ const sections = [
     description: 'Input, select, checkbox, etc.',
   },
   {
+    href: '/design-system/navigation',
+    title: 'Navigation',
+    description: 'Tabs, collapsible, sidebar',
+  },
+  {
+    href: '/design-system/feedback',
+    title: 'Feedback',
+    description: 'Progress, skeleton, spinner, toast, tooltip',
+  },
+  {
     href: '/design-system/overlays',
     title: 'Overlays',
-    description: 'Dialog, tooltip, toast',
+    description: 'Dialog, alert dialog, dropdown, popover, sheet',
   },
   {
     href: '/design-system/data-display',
     title: 'Data display',
-    description: 'Table, pagination, more',
+    description: 'Table, avatar, attachment, more',
   },
 ]
 
