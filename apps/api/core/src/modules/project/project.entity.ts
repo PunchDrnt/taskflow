@@ -1,6 +1,6 @@
 import { Column, Entity } from 'typeorm'
 
-import { BaseEntity } from '../../shared/base.entity'
+import { BaseEntity } from '#shared/entity/base.entity'
 
 /**
  * Where tasks live. Has its own members, independent of teams — closer to a

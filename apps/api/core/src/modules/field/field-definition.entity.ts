@@ -1,6 +1,6 @@
 import { Column, Entity } from 'typeorm'
 
-import { BaseEntity } from '../../shared/base.entity'
+import { BaseEntity } from '#shared/entity/base.entity'
 
 /**
  * A custom field on a project (Phase 4). Values live in

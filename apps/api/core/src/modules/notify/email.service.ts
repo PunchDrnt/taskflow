@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common'
 import type { EntityManager } from 'typeorm'
 
-import { requireRequestContext } from '../../shared/request-context'
+import { requireRequestContext } from '#shared/org-scope/request-context'
+
 import { Outbox } from './outbox.entity'
 
 export interface Notification {

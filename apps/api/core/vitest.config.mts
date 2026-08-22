@@ -12,6 +12,20 @@ if (existsSync(rootEnvFile)) {
 }
 
 export default defineConfig({
+  resolve: {
+    // `#shared/*` is a package.json subpath import, which resolves to dist/ so
+    // that plain `node dist/main.js` works with no loader and no build step.
+    // Vitest runs the TypeScript sources instead, so without this it would test
+    // whatever the last `nest build` left behind. An alias resolves before
+    // Node's own condition matching, which makes the source win here and only
+    // here.
+    alias: [
+      {
+        find: /^#shared\/(.*)$/,
+        replacement: join(import.meta.dirname, 'src', 'shared', '$1'),
+      },
+    ],
+  },
   test: {
     globals: true,
     environment: 'node',

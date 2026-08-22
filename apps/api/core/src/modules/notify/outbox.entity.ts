@@ -1,6 +1,6 @@
 import { Column, Entity } from 'typeorm'
 
-import { OrgScopedEntity } from '../../shared/base.entity'
+import { OrgScopedEntity } from '#shared/entity/base.entity'
 
 /**
  * A notification waiting to go out — written inside the business transaction,

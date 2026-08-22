@@ -1,7 +1,8 @@
 import { join } from 'node:path'
 import type { DataSourceOptions } from 'typeorm'
 
-import { AuditColumnsSubscriber } from '../shared/audit-columns.subscriber'
+import { AuditColumnsSubscriber } from '#shared/entity/audit-columns.subscriber'
+
 import { entities } from './entities'
 import { SnakeNamingStrategy } from './snake-naming.strategy'
 

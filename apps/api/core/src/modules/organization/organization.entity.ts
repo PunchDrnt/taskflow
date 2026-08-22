@@ -1,6 +1,6 @@
 import { Column, Entity } from 'typeorm'
 
-import { SoftDeletableEntity } from '../../shared/base.entity'
+import { SoftDeletableEntity } from '#shared/entity/base.entity'
 
 /**
  * The customer's top level. No `org_id` — it would always equal `id`, so

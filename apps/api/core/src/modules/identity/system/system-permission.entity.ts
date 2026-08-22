@@ -1,6 +1,6 @@
 import { Column, Entity } from 'typeorm'
 
-import { SoftDeletableEntity } from '../../shared/base.entity'
+import { SoftDeletableEntity } from '#shared/entity/base.entity'
 
 /**
  * Keys are defined in code for type safety and seeded from a migration; the

@@ -24,6 +24,13 @@ export default {
     '',
     '^@repo/(.*)$',
     '',
+    // `#shared/*` in apps/api/core — a package.json subpath import, so it is
+    // neither a workspace package nor a relative path and would otherwise land
+    // among the third-party modules. Its own group puts the app's own shared
+    // layer where a reader expects it: after what the repo depends on, before
+    // what sits next to the file.
+    '^#',
+    '',
     '^[./]',
   ],
   importOrderTypeScriptVersion: '6.0.3',

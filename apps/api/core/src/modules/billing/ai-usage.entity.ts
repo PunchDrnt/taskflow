@@ -1,6 +1,6 @@
 import { Column, Entity } from 'typeorm'
 
-import { OrgScopedEntity } from '../../shared/base.entity'
+import { OrgScopedEntity } from '#shared/entity/base.entity'
 
 @Entity({ schema: 'billing', name: 'ai_usage' })
 export class AiUsage extends OrgScopedEntity {

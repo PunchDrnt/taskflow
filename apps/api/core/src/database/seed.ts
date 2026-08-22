@@ -1,7 +1,8 @@
 import { DataSource } from 'typeorm'
 
+import { SYSTEM_USER_ID } from '#shared/system-user'
+
 import { validateDatabaseUrl } from '../config/env'
-import { SYSTEM_USER_ID } from '../shared/system-user'
 import { buildDataSourceOptions } from './data-source.options'
 
 /**

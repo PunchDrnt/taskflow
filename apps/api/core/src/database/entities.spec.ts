@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { provideOrgRepository } from '../shared/org-repository.provider'
+import { provideOrgRepository } from '#shared/org-scope/org-repository.provider'
+
 import { entities } from './entities'
 
 describe('the registered entities', () => {

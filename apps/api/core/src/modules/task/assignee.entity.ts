@@ -1,6 +1,6 @@
 import { Column, Entity } from 'typeorm'
 
-import { OrgScopedCreatedEntity } from '../../shared/base.entity'
+import { OrgScopedCreatedEntity } from '#shared/entity/base.entity'
 
 /**
  * Polymorphic — a person or a whole team — so `assigneeId` has no foreign key

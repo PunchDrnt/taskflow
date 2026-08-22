@@ -1,6 +1,6 @@
 import { Column, Entity } from 'typeorm'
 
-import { SoftDeletableEntity } from '../../shared/base.entity'
+import { SoftDeletableEntity } from '#shared/entity/base.entity'
 
 /**
  * System-level RBAC — our staff, across every org. `SystemRole` in TypeScript

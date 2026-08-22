@@ -1,6 +1,6 @@
 import { Column, Entity } from 'typeorm'
 
-import { BaseEntity } from '../../shared/base.entity'
+import { BaseEntity } from '#shared/entity/base.entity'
 
 /**
  * A file in object storage. Deleting this row must be followed by deleting

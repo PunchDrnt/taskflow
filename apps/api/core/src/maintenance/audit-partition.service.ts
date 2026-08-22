@@ -2,8 +2,8 @@ import { Injectable, Logger } from '@nestjs/common'
 import { InjectDataSource } from '@nestjs/typeorm'
 import { DataSource } from 'typeorm'
 
-import { LOCK_KEYS, withAdvisoryLock } from '../shared/advisory-lock'
-import { alertsFor } from '../shared/alert'
+import { LOCK_KEYS, withAdvisoryLock } from '#shared/jobs/advisory-lock'
+import { alertsFor } from '#shared/jobs/alert'
 
 const alerts = alertsFor('maintenance')
 

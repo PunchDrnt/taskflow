@@ -1,6 +1,6 @@
 import { Column, Entity } from 'typeorm'
 
-import { BaseEntity } from '../../shared/base.entity'
+import { BaseEntity } from '#shared/entity/base.entity'
 
 /**
  * One unit of work, always inside a project, nesting up to MAX_TASK_DEPTH.

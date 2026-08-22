@@ -1,6 +1,6 @@
 import { Column, Entity } from 'typeorm'
 
-import { OrgScopedEntity } from '../../shared/base.entity'
+import { OrgScopedEntity } from '#shared/entity/base.entity'
 
 /**
  * Membership of a project, independent of teams — a person joins a project

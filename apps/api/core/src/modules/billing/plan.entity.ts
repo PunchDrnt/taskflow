@@ -1,6 +1,6 @@
 import { Column, Entity } from 'typeorm'
 
-import { SoftDeletableEntity } from '../../shared/base.entity'
+import { SoftDeletableEntity } from '#shared/entity/base.entity'
 
 /**
  * A price tier. The documented second exception to the org_id rule: a

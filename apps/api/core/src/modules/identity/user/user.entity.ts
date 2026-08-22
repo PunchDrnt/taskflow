@@ -1,6 +1,6 @@
 import { Column, Entity } from 'typeorm'
 
-import { SoftDeletableEntity } from '../../shared/base.entity'
+import { SoftDeletableEntity } from '#shared/entity/base.entity'
 
 /** A person. One belongs to many orgs, which is why identity has no org_id. */
 @Entity({ schema: 'identity', name: 'users' })
