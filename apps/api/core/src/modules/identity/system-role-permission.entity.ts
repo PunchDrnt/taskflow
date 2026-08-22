@@ -1,9 +1,9 @@
 import { Column, Entity } from 'typeorm'
 
-import { TimestampedEntity } from '../../shared/base.entity'
+import { CreatedEntity } from '../../shared/base.entity'
 
 @Entity({ schema: 'identity', name: 'role_permissions' })
-export class SystemRolePermission extends TimestampedEntity {
+export class SystemRolePermission extends CreatedEntity {
   @Column('uuid')
   roleId!: string
 

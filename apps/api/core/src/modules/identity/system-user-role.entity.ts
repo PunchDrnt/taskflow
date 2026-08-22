@@ -1,9 +1,9 @@
 import { Column, Entity } from 'typeorm'
 
-import { TimestampedEntity } from '../../shared/base.entity'
+import { CreatedEntity } from '../../shared/base.entity'
 
 @Entity({ schema: 'identity', name: 'user_roles' })
-export class SystemUserRole extends TimestampedEntity {
+export class SystemUserRole extends CreatedEntity {
   @Column('uuid')
   userId!: string
 

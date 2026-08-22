@@ -210,8 +210,8 @@ describe.skipIf(!hasTestDatabase)('cascade soft delete', () => {
 
       await dataSource.query(
         `INSERT INTO task.assignees
-           (org_id, task_id, assignee_type, assignee_id, created_by, updated_by)
-         VALUES ($1, $2, 'user', $3, $3, $3)`,
+           (org_id, task_id, assignee_type, assignee_id, created_by)
+         VALUES ($1, $2, 'user', $3, $3)`,
         [orgA, taskId, SYSTEM_USER_ID],
       )
 

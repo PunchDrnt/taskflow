@@ -281,8 +281,8 @@ async function seed(dataSource: DataSource): Promise<void> {
         ],
       )
       await manager.query(
-        `INSERT INTO task.assignees (org_id, task_id, assignee_type, assignee_id, created_by, updated_by)
-         VALUES ($1, $2, 'user', $3, $4, $4)`,
+        `INSERT INTO task.assignees (org_id, task_id, assignee_type, assignee_id, created_by)
+         VALUES ($1, $2, 'user', $3, $4)`,
         [ORG_ID, id, assignee, OWNER],
       )
     }

@@ -126,8 +126,6 @@ export class CreateTask1787190804974 implements MigrationInterface {
         -- assigned_at is created_at under another name, so it is not repeated.
         created_at     timestamptz NOT NULL DEFAULT now(),
         created_by     uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
-        updated_at     timestamptz NOT NULL DEFAULT now(),
-        updated_by     uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
 
         CONSTRAINT assignees_task_fkey
           FOREIGN KEY (task_id, org_id)
