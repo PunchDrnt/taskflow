@@ -1,16 +1,17 @@
 import type { DataSource } from 'typeorm'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
-import { RetentionService } from '../src/maintenance/retention.service'
-import { Project } from '../src/modules/project/project.entity'
 import {
   AGGREGATE_CHILDREN,
   CascadeSoftDelete,
   ROOTS,
-} from '../src/shared/cascade-soft-delete'
-import { OrgScopedRepository } from '../src/shared/org-scoped.repository'
-import { runWithRequestContext } from '../src/shared/request-context'
-import { SYSTEM_USER_ID } from '../src/shared/system-user'
+} from '#shared/entity/cascade-soft-delete'
+import { OrgScopedRepository } from '#shared/org-scope/org-scoped.repository'
+import { runWithRequestContext } from '#shared/org-scope/request-context'
+import { SYSTEM_USER_ID } from '#shared/system-user'
+
+import { RetentionService } from '../src/maintenance/retention.service'
+import { Project } from '../src/modules/project/project.entity'
 import { createMigratedTestDataSource, hasTestDatabase } from './database'
 
 /**

@@ -1,11 +1,10 @@
 import { Injectable } from '@nestjs/common'
 import type { EntityManager } from 'typeorm'
 
-import {
-  InjectOrgRepository,
-  type OrgScopedRepository,
-} from '../../shared/org-repository.provider'
-import { requireRequestContext } from '../../shared/request-context'
+import { InjectOrgRepository } from '#shared/org-scope/org-repository.provider'
+import { OrgScopedRepository } from '#shared/org-scope/org-scoped.repository'
+import { requireRequestContext } from '#shared/org-scope/request-context'
+
 import type { Changes } from './changes'
 import { AuditLog } from './log.entity'
 

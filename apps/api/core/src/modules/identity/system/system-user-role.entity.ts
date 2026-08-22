@@ -1,6 +1,6 @@
 import { Column, Entity } from 'typeorm'
 
-import { CreatedEntity } from '../../shared/base.entity'
+import { CreatedEntity } from '#shared/entity/base.entity'
 
 @Entity({ schema: 'identity', name: 'user_roles' })
 export class SystemUserRole extends CreatedEntity {

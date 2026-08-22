@@ -1,6 +1,15 @@
 {
   "editor.formatOnSave": true,
   "editor.defaultFormatter": "esbenp.prettier-vscode",
+  // Use the repo's TypeScript, not the one bundled with the editor. The two
+  // disagree about `#shared/*`: it is a package.json subpath import whose
+  // `types` condition only resolves on a new enough TypeScript, so an older
+  // bundled version reports the import as unresolved and then every value that
+  // came through it as an implicit `any` — errors `yarn check-types` does not
+  // have. Pinning the version is what keeps the editor and CI telling the same
+  // story.
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
   "tailwindCSS.experimental.classRegex": [
     ["cva\\(([^)]*)\\)", "[\"'`]([^\"'`]*).*?[\"'`]"],
     ["cn\\(([^)]*)\\)", "(?:'|\"|`)([^']*)(?:'|\"|`)"]

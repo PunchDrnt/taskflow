@@ -1,6 +1,6 @@
 import { Column, Entity } from 'typeorm'
 
-import { BaseEntity } from '../../shared/base.entity'
+import { BaseEntity } from '#shared/entity/base.entity'
 
 @Entity({ schema: 'view', name: 'columns' })
 export class ViewColumn extends BaseEntity {

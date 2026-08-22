@@ -9,6 +9,9 @@ import {
   vi,
 } from 'vitest'
 
+import { runWithRequestContext } from '#shared/org-scope/request-context'
+import { SYSTEM_USER_ID } from '#shared/system-user'
+
 import { EmailService } from '../src/modules/notify/email.service'
 import type { EmailTransport } from '../src/modules/notify/email.transport'
 import {
@@ -16,8 +19,6 @@ import {
   MAX_ATTEMPTS,
   OutboxWorker,
 } from '../src/modules/notify/outbox.worker'
-import { runWithRequestContext } from '../src/shared/request-context'
-import { SYSTEM_USER_ID } from '../src/shared/system-user'
 import { createMigratedTestDataSource, hasTestDatabase } from './database'
 
 /**

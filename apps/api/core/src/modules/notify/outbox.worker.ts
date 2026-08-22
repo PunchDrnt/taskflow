@@ -4,10 +4,11 @@ import { Interval } from '@nestjs/schedule'
 import { InjectDataSource } from '@nestjs/typeorm'
 import { DataSource } from 'typeorm'
 
+import { LOCK_KEYS, withAdvisoryLock } from '#shared/jobs/advisory-lock'
+import { alertsFor } from '#shared/jobs/alert'
+import { SYSTEM_USER_ID } from '#shared/system-user'
+
 import type { Env } from '../../config/env'
-import { LOCK_KEYS, withAdvisoryLock } from '../../shared/advisory-lock'
-import { alertsFor } from '../../shared/alert'
-import { SYSTEM_USER_ID } from '../../shared/system-user'
 import { EmailTransport } from './email.transport'
 import { renderTemplate } from './templates'
 

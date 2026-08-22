@@ -1,13 +1,14 @@
 import type { DataSource } from 'typeorm'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
+import { createOrgScopedRepository } from '#shared/org-scope/org-scoped.repository'
+import { runWithRequestContext } from '#shared/org-scope/request-context'
+import { SYSTEM_USER_ID } from '#shared/system-user'
+
 import { AuditService } from '../src/modules/audit/audit.service'
 import { changesBetween } from '../src/modules/audit/changes'
 import { AuditLog } from '../src/modules/audit/log.entity'
 import { Project } from '../src/modules/project/project.entity'
-import { createOrgScopedRepository } from '../src/shared/org-scoped.repository'
-import { runWithRequestContext } from '../src/shared/request-context'
-import { SYSTEM_USER_ID } from '../src/shared/system-user'
 import { createMigratedTestDataSource, hasTestDatabase } from './database'
 
 /**

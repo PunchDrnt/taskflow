@@ -2,6 +2,12 @@
   "name": "@api/core",
   "version": "0.1.0",
   "private": true,
+  "imports": {
+    "#shared/*": {
+      "types": "./src/shared/*.ts",
+      "default": "./dist/shared/*.js"
+    }
+  },
   "scripts": {
     "dev": "nest start --watch",
     "build": "nest build",

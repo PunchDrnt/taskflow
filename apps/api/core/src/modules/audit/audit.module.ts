@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common'
 
-import { provideOrgRepository } from '../../shared/org-repository.provider'
+import { provideOrgRepository } from '#shared/org-scope/org-repository.provider'
+
 import { AuditService } from './audit.service'
 import { AuditLog } from './log.entity'
 

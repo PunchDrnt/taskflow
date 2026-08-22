@@ -1,6 +1,6 @@
 import { Column, Entity } from 'typeorm'
 
-import { TimestampedEntity } from '../../shared/base.entity'
+import { TimestampedEntity } from '#shared/entity/base.entity'
 
 /**
  * One login from one device. Rotation changes the hashes in place. No soft

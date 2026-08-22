@@ -1,6 +1,6 @@
 import { Column, Entity } from 'typeorm'
 
-import { TimestampedEntity } from '../../shared/base.entity'
+import { TimestampedEntity } from '#shared/entity/base.entity'
 
 /**
  * Single-use, ten minutes long, hashed rather than stored. No soft delete:

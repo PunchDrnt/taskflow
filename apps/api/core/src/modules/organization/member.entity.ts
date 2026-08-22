@@ -1,6 +1,6 @@
 import { Column, Entity } from 'typeorm'
 
-import { OrgScopedEntity } from '../../shared/base.entity'
+import { OrgScopedEntity } from '#shared/entity/base.entity'
 
 /**
  * Membership of an org. Joining is creating the row, so there is no separate

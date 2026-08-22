@@ -1,6 +1,6 @@
 import { Global, Module } from '@nestjs/common'
 
-import { CascadeSoftDelete } from './cascade-soft-delete'
+import { CascadeSoftDelete } from './entity/cascade-soft-delete'
 
 /**
  * Global so that domain modules can inject the scoping layer without each one

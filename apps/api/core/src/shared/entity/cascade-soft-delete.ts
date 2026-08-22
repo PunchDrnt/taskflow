@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common'
 import { InjectDataSource } from '@nestjs/typeorm'
 import { DataSource, type EntityManager } from 'typeorm'
 
-import { requireRequestContext } from './request-context'
+import { requireRequestContext } from '../org-scope/request-context'
 
 interface ChildLink {
   /** `schema.table`. */

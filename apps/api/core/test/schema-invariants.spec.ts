@@ -3,8 +3,9 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { MAX_TASK_DEPTH } from '@repo/shared'
 
+import { SYSTEM_USER_ID } from '#shared/system-user'
+
 import { SYSTEM_PERMISSIONS } from '../src/permission/system-permissions'
-import { SYSTEM_USER_ID } from '../src/shared/system-user'
 import { createMigratedTestDataSource, hasTestDatabase } from './database'
 
 /**

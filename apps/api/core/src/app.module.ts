@@ -10,6 +10,9 @@ import { EventEmitterModule } from '@nestjs/event-emitter'
 import { SentryGlobalFilter, SentryModule } from '@sentry/nestjs/setup'
 import { LoggerModule } from 'nestjs-pino'
 
+import { RequestContextMiddleware } from '#shared/org-scope/request-context.middleware'
+import { SharedModule } from '#shared/shared.module'
+
 import { AppController } from './app.controller'
 import { AppService } from './app.service'
 import { validateEnv, type Env } from './config/env'
@@ -21,8 +24,6 @@ import { AuditModule } from './modules/audit/audit.module'
 import { NotifyModule } from './modules/notify/notify.module'
 import { StorageModule } from './modules/storage/storage.module'
 import { PermissionModule } from './permission/permission.module'
-import { RequestContextMiddleware } from './shared/request-context.middleware'
-import { SharedModule } from './shared/shared.module'
 
 // The repo keeps a single .env at its root, shared with docker-compose.
 // ConfigModule resolves envFilePath from the process cwd, which is this

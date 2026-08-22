@@ -6,7 +6,7 @@ import {
   type UpdateEvent,
 } from 'typeorm'
 
-import { getRequestContext } from './request-context'
+import { getRequestContext } from '../org-scope/request-context'
 
 /**
  * Fills the `*By` half of the audit columns from the request context; the
