@@ -100,9 +100,9 @@ CREATE INDEX ON discussion.comments (org_id, entity_type, entity_id, created_at)
 
 ## 3. Multi-tenancy
 
-> 🔒 **ต้องทำ** — `org_id` ทุกตาราง ทุก schema ยกเว้น `identity` ทั้งก้อน
+> 🔒 **ต้องทำ** — ตารางต้องมี `org_id` ถ้าแถวของมันเป็นของ org ใด org หนึ่ง · ยกเว้นแถวที่ไม่ได้เป็นของ org ไหนเลย ([เกณฑ์เต็ม + สามกรณี](#the-org_id-rule--one-test-not-a-list))
 
-- `org_id` **ทุกตาราง ทุก schema** รวมถึงตารางกลาง (ข้อยกเว้น 3 ข้อด้านล่าง)
+- `org_id` **ทุกตาราง ทุก schema** รวมถึงตารางกลาง — **ตารางกลางยิ่งต้องมี** เพราะ composite FK คือสิ่งเดียวที่กันการผูกข้าม org ([ทำไม](#เกณฑ์นี้ไม่ใช่-หา-org-จากแม่ได้มั้ย))
 - Composite index ขึ้นต้นด้วย `org_id` เสมอ
   ```sql
   CREATE INDEX ON task.tasks (org_id, project_id, status_id);
@@ -218,11 +218,14 @@ export abstract class BaseEntity {
 - `createdBy` / `updatedBy` / `deletedBy` เติมอัตโนมัติจาก request context ผ่าน TypeORM subscriber ไม่ต้อง set เองทุกที่
 - `org_id` เติมและกรองอัตโนมัติผ่าน global interceptor เช่นกัน
 
-### The `org_id` Rule — Tied to the Schema
+### The `org_id` Rule — One Test, Not a List
 
-> **ทุกตารางต้องมี `org_id` · ยกเว้น schema `identity` ทั้งก้อน**
+> **ตารางต้องมี `org_id` ถ้าแถวของมันเป็นของ org ใด org หนึ่ง**
+> ข้อยกเว้นคือแถวที่ **ไม่ได้เป็นของ org ไหนเลย** — ตอนนี้มีสามกรณี และทั้งสามเป็น _ผลลัพธ์_ ของเกณฑ์นี้ ไม่ใช่รายชื่อที่ตั้งขึ้นมาแยกต่างหาก
 
-`identity` ไม่มี `org_id` เพราะ:
+เขียนเป็นเกณฑ์เพราะตารางใหม่โผล่มาเรื่อยๆ · รายชื่อข้อยกเว้นตอบได้แค่ตารางที่มีอยู่แล้ว พอเจอตารางที่ไม่อยู่ในลิสต์ คนอ่านต้องเดาเอง แล้วเดาผิดทางไหนก็ได้
+
+**กรณีที่ 1 — schema `identity` ทั้งก้อน** ไม่มี `org_id` เพราะ:
 
 | ตาราง                                                    | เหตุผล                                          |
 | -------------------------------------------------------- | ---------------------------------------------- |
@@ -230,12 +233,43 @@ export abstract class BaseEntity {
 | `sessions`, `password_reset_tokens`                      | ผูกกับ user ไม่ใช่ org                             |
 | `roles`, `permissions`, `role_permissions`, `user_roles` | สิทธิ์ระดับทั้งเว็บ อยู่**เหนือ** org                    |
 
-> **ข้อยกเว้นที่สอง: `billing.plans`** — เป็นแค็ตตาล็อกราคาระดับทั้งระบบ ไม่ได้เป็นของ org ใด จึงไม่มี `org_id`
+> **กรณีที่ 2 — `billing.plans`** เป็นแค็ตตาล็อกราคาระดับทั้งระบบ ไม่ได้เป็นของ org ใด จึงไม่มี `org_id`
 > ส่วน `billing.subscriptions`, `ai_wallet`, `ai_usage` มี `org_id` ตามปกติ
 
-> **ข้อยกเว้นที่สาม: `organization.organizations`** — `org_id` ของมันจะเท่ากับ `id` ตัวเองเสมอ เก็บไว้ก็คือเก็บค่าเดิมสองที่ทุกแถว
+> **กรณีที่ 3 — `organization.organizations`** `org_id` ของมันจะเท่ากับ `id` ตัวเองเสมอ เก็บไว้ก็คือเก็บค่าเดิมสองที่ทุกแถว
 >
 > `OrgScopedRepository` จึง scope ตารางนี้ด้วย `id` แทน — เป็นเคสพิเศษ **หนึ่งจุดที่ตั้งใจ** ในโค้ดที่เดียว ไม่ใช่คอลัมน์ซ้ำที่ทุกแถวต้องแบก
+
+#### เกณฑ์นี้ไม่ใช่ "หา org จากแม่ได้มั้ย"
+
+คำถามที่มาบ่อยคือ *"ตารางกลางที่ FK ชี้ไปตารางที่มี `org_id` อยู่แล้ว จะเก็บซ้ำทำไม"* — คำตอบคือ **ตารางกลางยิ่งต้องมี ไม่ใช่ยิ่งไม่ต้อง**
+
+สมมติ `task.dependencies (predecessor_id, successor_id)` ที่ทั้งสองขาชี้ไป `task.tasks` · ถ้าไม่มี `org_id`:
+
+```sql
+INSERT INTO task.dependencies (predecessor_id, successor_id)
+VALUES ('<task ของ org A>', '<task ของ org B>');   -- ผ่าน
+```
+
+FK แต่ละขาเช็คแค่ว่า task นั้นมีจริง **ไม่มีขาไหนรู้จักอีกขา** · จะกันได้ต้องเขียน trigger หรือเช็คในโค้ด ซึ่งเป็นของที่ลืมได้
+
+พอมี `org_id` กฎ composite FK ที่ [§2](#2-foreign-key-rules) บังคับอยู่แล้วจะปิดช่องนี้ให้เอง:
+
+```sql
+FOREIGN KEY (predecessor_id, org_id) REFERENCES task.tasks (id, org_id),
+FOREIGN KEY (successor_id,   org_id) REFERENCES task.tasks (id, org_id)
+```
+
+สองขาถูกบังคับให้แชร์ `org_id` ค่าเดียวกันของแถวนั้น → **ผูกข้าม org ไม่ได้ในระดับ database** ไม่ต้องมีโค้ดเช็ค
+
+อีกสองอย่างที่หายไปพร้อมกันถ้าไม่มีคอลัมน์นี้:
+
+| หายไป | ทำไมสำคัญ |
+| --- | --- |
+| **RLS (Phase 2)** | policy เป็นราย table · ไม่มี `org_id` ต้องเขียนเป็น subquery ไล่ทุก FK ช้ากว่าและพลาดง่ายกว่า |
+| **`queryBuilder.withOrg()`** | เป็น conditional type (`T extends { orgId } ? … : never`) — ตารางที่ไม่มีคอลัมน์นี้ **เรียกไม่ได้ตั้งแต่ compile** เหลือทางเดียวคือ `base()` ซึ่งแปลว่า "ตั้งใจข้าม org" → ทุก query บนตารางนั้นกลายเป็น query ที่ไม่ scope โดยปริยาย |
+
+ราคาของการมี: 16 ไบต์ต่อแถว กับคอลัมน์ที่ยังไงก็อยู่หัว composite index อยู่แล้ว
 
 ด้านล่างจะไม่เขียนฟิลด์ base ซ้ำ แสดงเฉพาะฟิลด์เฉพาะของแต่ละตาราง
 
