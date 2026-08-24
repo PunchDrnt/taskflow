@@ -252,7 +252,7 @@
 - `org_id` scoping ผ่าน Guard/Interceptor ระดับ global (RLS ตามมาใน Phase 2)
 - `parent_task_id` + `depth`
 - `sprints` table + `tasks.sprint_id` (nullable — ไม่บังคับใช้)
-- `FeatureService.isEnabled(org, feature)` — return `true` เสมอ (เผื่อ SaaS ดู [`05-saas-notes.md`](./05-saas-notes.md))
+- `FeatureService.isEnabled(org, feature)` — allow-list ว่าง ปิดทุกอย่างเป็น default (เผื่อ SaaS ดู [`05-saas-notes.md`](./05-saas-notes.md))
 - `tasks.estimate` + `projects.estimate_unit` (UI เปิด Phase 4)
 - `parent_comment_id` เผื่อ comment thread
 - comments / attachments แบบ polymorphic (`entity_type`, `entity_id`)

@@ -23,6 +23,26 @@ export function runWithRequestContext<T>(
   return storage.run(context, fn)
 }
 
+/**
+ * Sets the context for the rest of the current async chain, with no callback
+ * to close it.
+ *
+ * For `AuthGuard`, and deliberately awkward everywhere else. `canActivate`
+ * returns a boolean rather than calling the handler, so a scope opened with
+ * `runWithRequestContext` closes before the controller runs and the request
+ * arrives with no context at all. `enterWith` has no such boundary: it writes
+ * into the async resource the request is already on, which the handler, the
+ * services below it and every `await` in them inherit.
+ *
+ * The cost is that nothing closes it — the store lives as long as the async
+ * resource does. That is right for one HTTP request, whose resource ends with
+ * it, and wrong for a job, a seed or a test, where `runWithRequestContext` is
+ * still the answer.
+ */
+export function enterRequestContext(context: RequestContext): void {
+  storage.enterWith(context)
+}
+
 /** `undefined` outside a request: startup, a migration, a background job. */
 export function getRequestContext(): RequestContext | undefined {
   return storage.getStore()
