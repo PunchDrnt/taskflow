@@ -21,12 +21,13 @@
 | `identity`     | users, sessions, password_reset_tokens, roles, permissions, role_permissions, user_roles · oauth_accounts _(ยังไม่สร้าง)_ | `identity/`     |
 | `organization` | organizations, members, teams, team_members                                              | `organization/` |
 | `project`      | projects, members, statuses, sprints                                                     | `project/`      |
-| `task`         | tasks, assignees                                                                         | `task/`         |
+| `task`         | tasks, assignees · dependencies _(Phase 5)_                                              | `task/`         |
 | `audit`        | logs                                                                                     | `audit/`        |
 | `discussion`   | comments, attachments _(Phase 3)_                                                        | `discussion/`   |
 | `field`        | definitions _(Phase 4)_                                                                  | `field/`        |
 | `view`         | views, columns _(Phase 4)_                                                               | `view/`         |
 | `chat`         | identities, channels _(Phase 2)_                                                         | `chat/`         |
+| `automation`   | rules _(Phase 5)_                                                                        | `automation/`   |
 | `notify`       | outbox                                                                                   | `notify/`       |
 | `billing`      | plans, subscriptions, ai_wallet, ai_usage _(ตารางว่าง เผื่ออนาคต)_                          | —               |
 | `public`       | extension + `migrations` (สมุดบันทึกของ TypeORM CLI) เท่านั้น — ห้ามมีตารางของ module            | —               |
@@ -83,6 +84,8 @@ CREATE INDEX ON discussion.comments (org_id, entity_type, entity_id, created_at)
 | `project.statuses.project_id` · `project.members.project_id` · `project.sprints.project_id` | `CASCADE`                 |
 | `chat.channels.project_id` · `field.definitions.project_id` · `view.views.project_id`       | `CASCADE`                 |
 | `task.assignees.task_id` · `task.tasks.parent_task_id`                                      | `CASCADE`                 |
+| `task.dependencies.predecessor_id` · `.successor_id` _(Phase 5)_                            | `CASCADE`                 |
+| `automation.rules.project_id` _(Phase 5)_                                                   | `CASCADE`                 |
 | `organization.members.org_id` · `organization.team_members.team_id`                         | `CASCADE`                 |
 | `identity.sessions.user_id` · `password_reset_tokens.user_id`                               | `CASCADE`                 |
 | `identity.role_permissions.*` · `user_roles.role_id`                                        | `CASCADE`                 |
@@ -174,7 +177,7 @@ CHECK ((deleted_at IS NULL) = (deleted_by IS NULL))   -- ตั้งพร้�
 | `audit.logs`                                          | base entity ทั้งชุด          | composite PK · `occurred_at`/`actor_id` ทำหน้าที่แทน `created_at`/`created_by` |
 | `organization.organizations`                          | `org_id`                  | เท่ากับ `id` เสมอ                                                        |
 | `identity.sessions` · `identity.password_reset_tokens` · `notify.outbox` | `deleted_at`/`deleted_by` | มี `revoked_at` / `used_at` / `status` อยู่แล้ว และนโยบายคือ hard delete       |
-| **ตารางความสัมพันธ์** — `organization.members` · `organization.team_members` · `project.members` · `task.assignees` · `identity.role_permissions` · `identity.user_roles` · และ `billing.ai_usage` | `deleted_at`/`deleted_by` | ดูด้านล่าง |
+| **ตารางความสัมพันธ์** — `organization.members` · `organization.team_members` · `project.members` · `billing.ai_usage` · `task.assignees` · `task.dependencies` _(Phase 5)_ · `identity.role_permissions` · `identity.user_roles` | `deleted_at`/`deleted_by` — และสี่ตัวท้าย**ไม่มี `updated_at`/`updated_by` ด้วย** | ดูด้านล่าง · สี่ตัวแรกมีคอลัมน์ `role` (หรือยอดใช้งาน) ให้แก้ จึงยังแก้ได้ · สี่ตัวท้ายเป็นข้อเท็จจริงที่จริงหรือไม่จริงเท่านั้น ไม่มีสถานะกลางให้อัปเดต สองคอลัมน์นั้นจะเท่ากับคู่ `created_*` ตลอดไป |
 
 กลุ่มที่สามคือบั๊กแบบเดียวกับที่ `identity.users` เคยมี — **ตัวบอกการลบสองตัวในตารางเดียวย่อมขัดกันได้**
 
@@ -521,7 +524,43 @@ assignees
   assignee_type       text  'user' | 'team'
   assignee_id         uuid  ชี้ไป identity.users หรือ organization.teams ตาม type (ไม่มี FK)
   UNIQUE (task_id, assignee_type, assignee_id)   -- assigned_at คือ created_at
+
+dependencies                                     -- Phase 5 · คู่กับ Gantt
+  predecessor_id      uuid  FK → task.tasks      -- ต้องเสร็จก่อน
+  successor_id        uuid  FK → task.tasks      -- ถึงจะเริ่มได้
+  type                text  'finish_to_start'    -- แบบเดียวพอ ดูด้านล่าง
+
+  UNIQUE (org_id, predecessor_id, successor_id)
+  CHECK  (predecessor_id <> successor_id)        -- งานรอตัวเองไม่ได้
+
+  FOREIGN KEY (predecessor_id, org_id) REFERENCES task.tasks (id, org_id) ON DELETE CASCADE
+  FOREIGN KEY (successor_id,   org_id) REFERENCES task.tasks (id, org_id) ON DELETE CASCADE
+
+  CREATE INDEX ON task.dependencies (org_id, successor_id);    -- "งานนี้รออะไรอยู่"
+  CREATE INDEX ON task.dependencies (org_id, predecessor_id);  -- "เลื่อนอันนี้แล้วใครกระทบ"
 ```
+
+**`UNIQUE` ธรรมดา ไม่ใช่ partial** เพราะตารางนี้ไม่ soft delete — ผูกกับเลิกผูกคือความสัมพันธ์เปลี่ยน ไม่ใช่ข้อมูลถูกทำลาย เอากลับมาก็แค่ผูกใหม่ ([base entity](#base-entity--on-every-table-with-four-named-exceptions) กลุ่มที่สี่) · ใครเลิกผูกเมื่อไหร่อยู่ใน `audit.logs` อยู่แล้ว
+
+**composite FK ทั้งสองขาคือหัวใจ** — บังคับให้ทั้ง predecessor และ successor แชร์ `org_id` ค่าเดียวกันของแถวนี้ → ผูกงานข้าม org ไม่ได้ในระดับ database ไม่ต้องมี trigger ([เหตุผลเต็ม](#เกณฑ์นี้ไม่ใช่-หา-org-จากแม่ได้มั้ย))
+
+**กัน cycle ต้องเช็คตอน insert ด้วย recursive CTE** — `A → B → A` FK กันไม่ได้ และ `CHECK` ก็กันได้แค่ชั้นเดียว
+
+```sql
+WITH RECURSIVE reachable AS (
+  SELECT successor_id FROM task.dependencies
+   WHERE org_id = $1 AND predecessor_id = $successor      -- เริ่มจากปลายทางที่จะเพิ่ม
+  UNION
+  SELECT d.successor_id FROM task.dependencies d
+    JOIN reachable r ON d.predecessor_id = r.successor_id
+   WHERE d.org_id = $1
+)
+SELECT 1 FROM reachable WHERE successor_id = $predecessor  -- เจอ = จะเกิด cycle
+```
+
+**เตือน ไม่บล็อก** — ห้ามกันไม่ให้เปลี่ยน status ของ successor ทั้งที่ predecessor ยังไม่เสร็จ ให้ขึ้นเตือนแทน · หลักเดียวกับ prompt ตอนปิด parent ที่ยังมี sub-task ค้าง
+
+**เริ่มจาก `finish_to_start` อย่างเดียว** — SS/FF/SF ของ MS Project แทบไม่มีใครใช้ · คอลัมน์ `type` มีไว้ให้เพิ่มทีหลังโดยไม่ต้อง migrate
 
 ### Schema `audit`
 
@@ -633,6 +672,44 @@ channels
   default_assignee_id uuid  null
   UNIQUE (platform, external_channel_id)   -- 1 ห้องผูกได้ org เดียว กันข้อมูลข้ามบริษัท
 ```
+
+### Schema `automation` (Phase 5)
+
+```
+rules
+  project_id        uuid     FK → project.projects
+  name              text
+  is_enabled        bool     default true
+  trigger_type      text     ดูตารางด้านล่าง · ไม่ใส่ CHECK (ค่าโตตามฟีเจอร์)
+  conditions_json   jsonb    default '{}'
+  actions_json      jsonb    NOT NULL
+
+  FOREIGN KEY (project_id, org_id) REFERENCES project.projects (id, org_id) ON DELETE CASCADE
+  CREATE INDEX ON automation.rules (org_id, project_id, trigger_type) WHERE is_enabled;
+```
+
+ใช้ base entity เต็มชุด (soft delete + แก้ได้) — rule เป็นของที่คนเขียนเอง ลบผิดแล้วอยากได้คืน เหมือน project
+
+**Trigger มีสองชนิด ไม่ใช่ลิสต์เดียว** — จุดที่พลาดง่ายที่สุดของฟีเจอร์นี้
+
+| ชนิด | มาจาก | ตัวอย่าง |
+| --- | --- | --- |
+| **เหตุการณ์** | event emitter หลัง commit | `task.created` · `task.assigned` · `task.completed` (มีแล้ว) · `task.status_changed` (**ต้องเพิ่ม**) |
+| **เวลา** | cron ใน [`src/maintenance/`](../../apps/api/core/src/maintenance/) | "เลย due date 2 วัน" · "ใกล้ครบกำหนดพรุ่งนี้" |
+
+ชนิดที่สอง **ไม่มีใคร emit** — ไม่มีการกระทำของผู้ใช้ให้ยิง มีแต่เวลาที่เดินผ่านไป · `due_soon` ที่เห็นใน `notify.outbox.template` เป็น _ปลายทาง_ ของ noti ไม่ใช่ trigger
+
+> 🔒 **action ของ automation ต้องเดินผ่าน outbox ไม่ใช่ listener เปล่า**
+>
+> emitter ยิงหลัง commit แบบ fire-and-forget — listener ที่พังทำให้งานหายเงียบ ไม่มี error ที่ไหน **เหตุผลเดียวกับที่ audit ห้ามใช้ emitter** ([ทำไม](./01-architecture.md#how-the-activity-log-is-written))
+>
+> ตอนนี้ยังไม่เจ็บเพราะ consumer เดียวคือ notification ซึ่งมี outbox + retry รองรับ · แต่ automation **เขียนข้อมูล** — automation ที่พังเงียบแปลว่างานไม่ถูก assign โดยไม่มีใครรู้ ต่างจากอีเมลไม่ถึงที่คนทักมาเอง
+
+**กันลูป: นับความลึก สูงสุด 3 ชั้น** — rule A เปลี่ยน status → trigger rule B → เปลี่ยนกลับ → trigger A
+
+เลือกนับความลึกแทน "action จาก automation ไม่ trigger ตัวอื่น" เพราะ chain คือประโยชน์ครึ่งหนึ่งของฟีเจอร์ (`→ รอตรวจ` แล้ว `→ assign QA` แล้ว `→ แจ้งเข้าห้อง`) · พา depth ไปกับ event payload แล้วตัดที่ 3
+
+ทุกครั้งที่ automation ทำงานต้องลง `audit.logs` โดย `actor_id` = [`SYSTEM_USER_ID`](../../apps/api/core/src/shared/system-user.ts) พร้อมระบุ rule id ใน `changes_json` — ไม่งั้นจะมีการเปลี่ยนแปลงที่ไม่มีใครรับผิดชอบ
 
 ### Schema `notify`
 

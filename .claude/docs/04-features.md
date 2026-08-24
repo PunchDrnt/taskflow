@@ -32,7 +32,7 @@
 - Migration เขียนมือทั้งหมด · `synchronize: false` ถาวร — `synchronize` สร้าง partition, partial index, `COLLATE "C"` และ extension ให้ไม่ได้
 - **Seed system user เป็น migration แรก** — base entity บังคับ `created_by NOT NULL` ทุกตารางรวม `identity.users` เอง แถวแรกจึงต้อง insert โดยชี้ `created_by` มาที่ id ของตัวเอง (Postgres ทำได้ใน INSERT เดียว แต่ต้องตั้งใจวางลำดับ)
 - Permission layer `can(user, action, resource)` (CASL) โครงเปล่า
-- Activity log service — **เขียน audit row ใน transaction เดียวกับ business logic** ไม่ผ่าน event emitter ([เหตุผล](./01-architecture.md#how-the-activity-log-is-written)) · event emitter ใช้กับ notification เท่านั้น
+- Activity log service — **เขียน audit row ใน transaction เดียวกับ business logic** ไม่ผ่าน event emitter ([เหตุผล](./01-architecture.md#how-the-activity-log-is-written)) · event emitter มี consumer เดียวคือ notification จนถึง Phase 5 ที่ [Automation](#automation) มาเป็นตัวที่สอง — audit ยังห้ามเดินทางเส้นนี้เหมือนเดิม
 - `StorageService` ห่อ Garage (S3) — [ทำไมไม่ใช่ MinIO](./01-architecture.md#object-storage)
 - `EmailService` ห่อ Resend + outbox worker
 - CI/CD + **deploy ขึ้น Bangmod ให้ได้จริง**
@@ -541,6 +541,40 @@ project.projects
 
 - Permission layer ใช้งานเต็ม (org / team / project role)
 
+#### Activity Log บนหน้า Task
+
+เลื่อนขึ้นมาจาก Phase 3 เพราะ Team + assign ให้ทีม + `completion_policy: anyone` รวมกันทำให้หลายคนแตะงานเดียวกันได้เป็นครั้งแรก · คำถาม "ทำไม due date เปลี่ยน" กับ "ใครย้ายไป Done" มาถึงใน phase นี้
+
+**ต้นทุนต่ำเพราะข้อมูลครบตั้งแต่ Phase 0** — `audit.logs.changes_json` เก็บ `{ field: { from, to } }` อยู่แล้ว และมี index `(org_id, entity_type, entity_id, occurred_at DESC)` รองรับ query นี้พอดี **ไม่ต้องแตะ schema**
+
+```
+📝 สมชาย เปลี่ยนสถานะ To do → In progress    2 ชม.ที่แล้ว
+📅 สมหญิง เปลี่ยน due date 20 ส.ค. → 25 ส.ค.  เมื่อวาน
+👤 PM มอบหมายให้ ทีม Dev                      3 วันที่แล้ว
+```
+
+Phase 2 ทำแค่รายการในหน้า task · feed ระดับ project กับ filter อยู่ Phase 3
+
+**ใครเห็นอะไร — แบ่งตาม _หน่วยของคำถาม_ ไม่ใช่ระดับสิทธิ์**
+
+| คำถาม | ใครเห็น |
+| --- | --- |
+| "งานนี้เกิดอะไรขึ้นบ้าง" | ทุกคนที่เห็น task นั้น |
+| "project นี้เกิดอะไรบ้าง" _(Phase 3)_ | project member · แต่ event ระดับบริหาร (เพิ่ม/ถอดคน, แก้ settings) เฉพาะ admin/owner |
+| "คนนี้ทำอะไรบ้าง" | **ไม่ทำ** |
+
+ช่องสุดท้ายคือทรงเดียวกับ [leaderboard รายคน](#estimate--velocity) ที่ตัดสินไปแล้วว่าไม่ทำ · และเหตุผลที่ให้ไว้ตรงนั้น — พอวัดรายคนแล้วคนจะประมาณเผื่อจนข้อมูลเพี้ยน — **มาจากการรวมยอดรายคน ไม่ได้มาจากการเห็น event ทีละอัน** log ระดับ task จึงไม่ติดข้อนั้น เพราะเป็นข้อมูลชุดเดียวกับที่คนคนนั้นจะได้ถ้านั่งเฝ้า task อยู่แล้ว
+
+**Log อยู่กับ entity ของตัวเอง — ยกเว้นการเกิดและการตายของลูก**
+
+หน้า sub-task แสดง log ของ sub-task · หน้า parent ไม่ยกของลูกมารวม **ยกเว้น** "ลูกถูกสร้าง" กับ "ลูกถูกลบ" ซึ่งเป็นการเปลี่ยนแปลง _ของ parent_ จริงๆ ไม่ใช่ข้อยกเว้นแต่เป็นการระบุเจ้าของ event ให้ถูก
+
+ถ้าไม่ทำแบบนี้ **การลบจะเป็น event เดียวที่ไม่มีหน้าให้แสดง** — หน้าของ sub-task ที่ถูกลบหายไปจาก UI แล้ว คำถาม "งานย่อยหายไปไหน" จึงตอบไม่ได้ ทั้งที่เป็นคำถามที่ activity log มีไว้ตอบพอดี
+
+> 🔒 **ลบ task ไม่ลบ log** — `audit.logs` ไม่เคยถูกลบ ([retention](./01-architecture.md#retention--each-kind-of-data-has-its-own-lifetime)) และ sub-task ที่ "ลบ" คือ soft delete แถวยังอยู่ หาด้วย `withDeleted` ได้
+>
+> ลบ log ตอนลบ task คือการทิ้งบันทึกว่า _ใครลบ_ ไปพร้อมกัน ซึ่งเป็นแถวที่มีค่าที่สุดในเหตุการณ์นั้น · PDPA แยกกันคนละเรื่อง — ลบข้อมูลส่วนบุคคลผ่าน anonymize ที่ `identity.users` ไม่ได้บังคับให้ลบบันทึกการทำงาน ([ดู Delete Account](#delete-account))
+
 ---
 
 ### Phase 3 — Collaboration `v1.2.0`
@@ -726,6 +760,48 @@ projects.estimate_unit   -- 'none' (default) | 'point' | 'hour' | 'tshirt'
 - Time tracking
 - `completion_policy: all_assignees`
 
+#### Task Dependency
+
+ใช้ข้อมูลที่มีอยู่แล้ว (task, due date, status) แค่เพิ่มความสัมพันธ์ แล้วได้ของต่อเนื่องมาหลายอย่าง:
+
+- Gantt ที่มีความหมายจริง — **ทำคู่กับ Timeline/Gantt คุ้มกว่าแยกทำ** Gantt ที่ไม่มี dependency คือแผนภูมิแท่งเฉยๆ
+- เตือนอัตโนมัติ "งาน A เลื่อน → B, C ที่รออยู่จะเลื่อนตาม"
+- หา critical path ได้
+- ต่อยอด [Stale Detection](#stale-detection) — "งานนี้ไม่ขยับเพราะรออะไรอยู่"
+
+[Schema เต็ม + composite FK + recursive CTE กัน cycle](./02-database.md#schema-task) — สามอย่างที่ต้องระวัง:
+
+| | |
+| --- | --- |
+| **กัน cycle** | `A → B → A` · FK กันไม่ได้ ต้องเช็คตอน insert ด้วย recursive CTE |
+| **เตือน ไม่บล็อก** | อย่าห้ามเปลี่ยน status ของ successor ทั้งที่ predecessor ยังไม่เสร็จ · หลักเดียวกับ prompt ตอนปิด parent ที่มี sub-task ค้าง |
+| **`finish_to_start` อย่างเดียว** | SS/FF/SF ของ MS Project แทบไม่มีใครใช้ · คอลัมน์ `type` เผื่อไว้แล้ว เพิ่มทีหลังไม่ต้อง migrate |
+
+#### Automation
+
+สิ่งเดียวในลิสต์นี้ที่ทำให้ระบบ **ทำงานแทนคน** ไม่ใช่แค่บันทึกสิ่งที่คนทำ
+
+```
+Trigger → Condition → Action
+```
+
+**Action ที่คุ้มที่สุด 5 อย่าง** — เปลี่ยน status · assign ให้คน/ทีม · ตั้ง due date (+N วันจาก trigger) · ส่งแจ้งเตือน/เข้าแชท · สร้าง sub-task จาก template
+
+```
+เมื่อ status → "รอตรวจ"     ⇒ assign ให้ทีม QA
+เมื่อถูกสร้างใน project X   ⇒ ตั้ง due date +3 วัน
+เมื่อเลย due date 2 วัน      ⇒ แจ้งเข้าห้อง Discord
+เมื่อ status → "Done"        ⇒ แจ้งคนสร้าง task
+```
+
+**ต้องรอ Phase 4** — ถ้าไม่มี custom field กับ custom status ครบ เงื่อนไขที่ตั้งได้จะมีไม่กี่แบบจนไม่คุ้มทำ
+
+**Trigger มีสองชนิด** และนี่คือจุดที่พลาดง่ายที่สุด — [ตารางเต็ม](./02-database.md#schema-automation-phase-5) · ย่อ: เหตุการณ์มาจาก event emitter (`task.created` · `task.assigned` · `task.completed` มีแล้ว · `task.status_changed` ต้องเพิ่ม) ส่วนเงื่อนไขเรื่อง**เวลา**มาจาก cron ไม่ใช่ event เพราะไม่มีการกระทำของใครให้ยิง มีแต่เวลาที่เดินผ่านไป
+
+> 🔒 **action ต้องเดินผ่าน outbox ไม่ใช่ listener เปล่า** — emitter ยิงหลัง commit แบบ fire-and-forget listener ที่พังทำให้งานหายเงียบ **เหตุผลเดียวกับที่ audit ห้ามใช้ emitter** · notification รอดมาได้เพราะมี outbox + retry อยู่แล้ว แต่ automation _เขียนข้อมูล_ — พังเงียบแปลว่างานไม่ถูก assign โดยไม่มีใครรู้ ต่างจากอีเมลไม่ถึงที่คนทักมาเอง
+
+**กันลูป: นับความลึกสูงสุด 3 ชั้น** — เลือกทางนี้แทน "action จาก automation ไม่ trigger ตัวอื่น" เพราะ chain คือประโยชน์ครึ่งหนึ่งของฟีเจอร์ · ทุกครั้งที่ทำงานต้องลง `audit.logs` ด้วย actor = system user + rule id ไม่งั้นจะมีการเปลี่ยนแปลงที่ไม่มีใครรับผิดชอบ
+
 #### Semantic Search + Duplicate Detection
 
 ใช้ **embedding อย่างเดียว ไม่ต้องมี LLM** — ต้นทุนเกือบเป็นศูนย์ จึงทำได้ก่อนถึง SaaS
@@ -764,3 +840,26 @@ task.task_embeddings (
 - **Chat Integration — Microsoft Teams** (ต้องผ่าน app approval ใช้เวลานาน)
 - Integration อื่น — Google Calendar, Slack, webhook ทั่วไป
 - Performance tuning
+
+---
+
+## ยังไม่อยู่ phase ไหน — รอเงื่อนไข
+
+ของที่ตัดสินแล้วว่า **ยังไม่ทำ** ไม่ใช่ของที่รอคิว · [ตารางเงื่อนไขใน `03-roadmap.md`](./03-roadmap.md#ยังไม่อยู่-phase-ไหน--รอเงื่อนไข)
+
+### Import จาก Excel/CSV
+
+**เงื่อนไขที่จะทำ:** เริ่มมีคนนอกบริษัท/ลูกค้าใช้ — ตอนนี้ทีมจดกันในแชท ไม่มีอะไรให้ import
+
+**Export ง่าย** — query แล้วเขียนไฟล์ อยู่ใน Phase 4 แล้ว · **Import ยากกว่า 3-4 เท่า** และความยากไม่ได้อยู่ที่การอ่านไฟล์ แต่อยู่ที่การจัดการความไม่สมบูรณ์ของข้อมูล:
+
+| ปัญหา | ต้องตัดสินว่า |
+| --- | --- |
+| Map คอลัมน์ | ไฟล์ลูกค้าไม่มีทางตรงกับ field ของเรา — ต้องให้เลือกเองว่า "คอลัมน์ B คือ Title" |
+| Status ที่ไม่มีอยู่ | สร้างใหม่ / map ไป default / ถามผู้ใช้ |
+| คนที่ไม่มีในระบบ | สร้าง user ใหม่ / ข้าม / เชิญ |
+| วันที่หลายรูปแบบ | `1/2/2026` คือ 1 ก.พ. หรือ 2 ม.ค. · พ.ศ. หรือ ค.ศ. |
+| แถวที่ error กลางทาง | rollback ทั้งหมด หรือ import เท่าที่ได้แล้วรายงาน |
+| ไฟล์ใหญ่ | ต้องเป็น background job ไม่ใช่ใน request |
+
+**ที่แนะนำ: preview ก่อน import จริง** — แสดง 10 แถวแรกว่าจะกลายเป็นอะไร พร้อมชี้จุดที่มีปัญหาให้แก้ก่อนกดยืนยัน · ตัดคำถามข้างบนไปได้เกือบหมดโดยไม่ต้องเดาแทนผู้ใช้

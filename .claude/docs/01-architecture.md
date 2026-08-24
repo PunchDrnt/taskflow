@@ -544,7 +544,8 @@ await this.dataSource.transaction(async (manager) => {
 ```
 TaskService
   ├─ tx: save(task) + insert(auditLog)   ← atomic
-  └─ commit → emit 'task.assigned'       ← notification เท่านั้น
+  └─ commit → emit 'task.assigned'       ← notification · Phase 5 เพิ่ม automation
+                                            ห้าม audit เด็ดขาด (ดูด้านล่าง)
 ```
 
 **Event emitter ยังใช้ต่อ** — แต่ใช้กับ notification อย่างเดียว ซึ่ง at-most-once รับได้ (และมี `notify.outbox` รองรับอีกชั้น)

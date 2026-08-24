@@ -129,12 +129,15 @@
 | 9   | 🟡  | แยก sub-task ออก          | งานย่อยที่โตขึ้นแยกเป็นงานหลักได้ โดยไม่เสีย comment/ประวัติ                        |
 | 10  | 🟡  | Remove จาก org            | เอาคนออกจาก org โดยที่ account เขายังใช้กับที่อื่นได้                             |
 | 11  | 🟢  | ลบ account + anonymize    | ลบข้อมูลส่วนบุคคลตาม PDPA โดยไม่ทำให้ประวัติงานพัง (กู้คืนได้ใน 30 วัน)               |
+| 12  | 🟡  | **Activity log ในหน้า task** | "ใครแก้ due date" "ใครย้ายไป Done" — คำถามที่มาทันทีที่หลายคนแตะงานเดียวกันได้ |
 
 > ข้อ 5 เป็น 🔴 ทั้งที่ดูเหมือนของเสริม — เพราะเป็นจุดขายหลักและตัวเปลี่ยนพฤติกรรมคนใช้ ถ้าเลื่อนออกไปเรื่อยๆ จะไม่ได้ทำเลย
+>
+> ข้อ 12 เลื่อนขึ้นมาจาก Phase 3 — ข้อ 1, 2 และ 8 รวมกันทำให้หลายคนแตะงานเดียวกันได้เป็นครั้งแรก คำถามว่า "ใครแก้" จึงมาถึงใน phase นี้ ไม่ใช่ phase หน้า · ต้นทุนต่ำเพราะข้อมูลครบตั้งแต่ Phase 0 แค่ query + render (feed ระดับ project กับ filter ยังอยู่ Phase 3)
 
 **รายละเอียด** → [Phase 2 ใน `04-features.md`](./04-features.md#phase-2--team--sub-task--sprint--chat-v110)
 
-ข้อ 1 → [Team](./04-features.md#team) · ข้อ 2, 8 → [Assigning to a Whole Team](./04-features.md#assigning-to-a-whole-team) · ข้อ 3, 4, 9 → [Sub-task](./04-features.md#sub-task) · ข้อ 5 → [Chat — Discord](./04-features.md#chat-integration--discord) · ข้อ 6, 7 → [Sprint](./04-features.md#sprint-basics) · ข้อ 10 → [Remove From Org](./04-features.md#remove-from-org) · ข้อ 11 → [Delete Account](./04-features.md#delete-account)
+ข้อ 1 → [Team](./04-features.md#team) · ข้อ 2, 8 → [Assigning to a Whole Team](./04-features.md#assigning-to-a-whole-team) · ข้อ 3, 4, 9 → [Sub-task](./04-features.md#sub-task) · ข้อ 5 → [Chat — Discord](./04-features.md#chat-integration--discord) · ข้อ 6, 7 → [Sprint](./04-features.md#sprint-basics) · ข้อ 10 → [Remove From Org](./04-features.md#remove-from-org) · ข้อ 11 → [Delete Account](./04-features.md#delete-account) · ข้อ 12 → [Activity Log บนหน้า Task](./04-features.md#activity-log-บนหน้า-task)
 
 </details>
 
@@ -151,7 +154,7 @@
 | 6   | 🟡  | Sprint board + carry over | Kanban ที่กรองด้วย sprint · ปิด sprint แล้วเลือกว่างานค้างจะไปไหน |
 | 7   | 🟡  | Table view                | ดูงานเยอะๆ แบบ spreadsheet แก้ค่าในตารางได้เลย                |
 | 8   | 🟡  | Tag / Label               | จัดหมวดข้ามโปรเจกต์ เช่น "ด่วน" "รอลูกค้า"                       |
-| 9   | 🟢  | Activity log UI           | ดูว่าใครแก้อะไรเมื่อไหร่ — ใช้ตอนงานผิดพลาดแล้วต้องสืบ               |
+| 9   | 🟢  | Activity log — feed + filter | ไล่ประวัติทั้ง project ไม่ใช่ทีละงาน · กรองตามคน/ชนิด/ช่วงเวลา (หน้า task มาแล้ว Phase 2) |
 | 10  | 🟢  | **Stale detection** ⭐    | จับงานที่ค้างผิดปกติก่อนถึง deadline โดยเทียบกับพฤติกรรมจริงของทีม     |
 
 **รายละเอียด** → [Phase 3 ใน `04-features.md`](./04-features.md#phase-3--collaboration-v120)
@@ -194,12 +197,16 @@
 | 6   | 🟢  | Timeline / Gantt                   | ดูงานเรียงตามเวลาและความต่อเนื่อง                                  |
 | 7   | 🟢  | Time tracking                      | บันทึกชั่วโมงที่ใช้จริง มักใช้กับงานคิดเงินลูกค้า                            |
 | 8   | 🟢  | `all_assignees`                    | บังคับให้ทุกคนที่ถูก assign กดเสร็จ                                   |
+| 9   | 🟢  | **Task dependency**                | "งาน A เลื่อน → B, C ที่รออยู่กระทบ" · ทำให้ Gantt (ข้อ 6) มีความหมายจริง |
+| 10  | 🟢  | **Automation**                     | สิ่งเดียวที่ทำให้ระบบ _ทำงานแทนคน_ ไม่ใช่แค่บันทึกสิ่งที่คนทำ                  |
 
 > Phase 5 ไม่มี 🔴 เลย — ทั้ง phase เป็นของเสริม ให้เรียงตามสัญญาณจากผู้ใช้จริง ไม่ต้องทำตามลำดับนี้
+>
+> ข้อ 9 ทำคู่กับข้อ 6 คุ้มกว่าแยกทำ — Gantt ที่ไม่มี dependency คือแผนภูมิแท่งเฉยๆ · ข้อ 10 ต้องรอ custom field กับ status จาก Phase 4 ก่อน ไม่งั้นตั้งเงื่อนไขได้ไม่กี่แบบ
 
 **รายละเอียด** → [Phase 5 ใน `04-features.md`](./04-features.md#phase-5--advanced-features--semantic-search-v200)
 
-ข้อ 4 → [Semantic Search](./04-features.md#semantic-search--duplicate-detection) · ที่เหลืออยู่ในลิสต์รวมของ Phase 5
+ข้อ 4 → [Semantic Search](./04-features.md#semantic-search--duplicate-detection) · ข้อ 9 → [Task Dependency](./04-features.md#task-dependency) · ข้อ 10 → [Automation](./04-features.md#automation) · ที่เหลืออยู่ในลิสต์รวมของ Phase 5
 
 </details>
 
@@ -241,7 +248,15 @@
 | Real-time collab | คนบ่นว่าแก้ทับกัน                   |
 | Microsoft Teams  | ลูกค้าองค์กรขอ                    |
 
-**สิ่งที่ยังไม่ commit เลย** — SaaS, billing, AI ที่ใช้ LLM → [`05-saas-notes.md`](./05-saas-notes.md)
+### ยังไม่อยู่ phase ไหน — รอเงื่อนไข
+
+ต่างจากตารางข้างบนตรงที่ข้างบนคือ "ทำก่อนหรือหลัง" ส่วนตรงนี้คือ **"ยังไม่ตัดสินว่าจะทำ"** · อย่าเผลอหยิบเข้า sprint เพราะเห็นว่าว่าง
+
+| Feature | เงื่อนไขที่จะทำ |
+| --- | --- |
+| **Import จาก Excel/CSV** | เริ่มมีคนนอกบริษัท/ลูกค้าใช้ — ตอนนี้ทีมจดกันในแชท ไม่มีอะไรให้ import · Export อยู่ Phase 4 ข้อ 8 แล้วและ**ง่ายกว่ากันหลายเท่า** ([ทำไม](./04-features.md#import-จาก-excelcsv)) |
+
+**สิ่งที่ยังไม่ commit เลย** — SaaS, billing, AI ที่ใช้ LLM และ**แบบตรวจ (Inspection)** → [`05-saas-notes.md`](./05-saas-notes.md)
 
 ---
 
