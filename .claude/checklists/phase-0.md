@@ -96,7 +96,7 @@
 - [x] `@DeleteDateColumn` — TypeORM กรอง `deleted_at IS NULL` ให้อัตโนมัติ
 - [x] วัดจริงว่าครอบคลุมแค่ไหน ([ตาราง](../docs/01-architecture.md#soft-delete)) — **QueryBuilder กรองให้ด้วย** ตรงข้ามกับที่ doc เดิมเขียนไว้ · ที่ไม่กรองคือ `update()` กับ raw SQL
   - `softDeleteById` เลยต้องเติม `deletedAt: IsNull()` เอง ไม่งั้นลบซ้ำได้ เขียนทับว่าใครลบ และนับ 90 วันใหม่
-- [x] Cascade soft delete — [`shared/cascade-soft-delete.ts`](../../apps/api/core/src/shared/cascade-soft-delete.ts) เดินลงใน transaction เดียว
+- [x] Cascade soft delete — [`shared/entity/cascade-soft-delete.ts`](../../apps/api/core/src/shared/entity/cascade-soft-delete.ts) เดินลงใน transaction เดียว
   - ข้อนี้คือสิ่งที่กัน retention ไม่ให้ติด — project ที่ soft delete แล้วแต่ task ยังอยู่ ลบไม่ออกเพราะ `tasks.project_id` เป็น RESTRICT · มี test พิสูจน์ครบวง cascade → purge
   - แผนที่ `AGGREGATE_CHILDREN` เขียนมือ **ไม่ได้อ่านจาก `pg_constraint`** เหมือน retention — DB ตอบไม่ได้ว่าอะไรเป็นของอะไร (RESTRICT ไม่ได้แปลว่าไม่ใช่ลูก, NOT NULL ไม่ได้แปลว่าใช่)
   - Test บังคับว่าทุกตารางที่ soft delete ได้ ต้องอยู่ใน `AGGREGATE_CHILDREN` หรือ `ROOTS` — ตารางใหม่ที่ลืมใส่ fail ทันที

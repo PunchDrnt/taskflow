@@ -606,7 +606,7 @@ UNIQUE (project_id, name)
 
 **Soft delete แบบ cascade ต้องทำในโค้ด ไม่ใช่ DB** — `ON DELETE CASCADE` ทำงานกับ hard delete เท่านั้น
 
-อยู่ที่ [`shared/cascade-soft-delete.ts`](../../apps/api/core/src/shared/cascade-soft-delete.ts) — เดินลงตาม `AGGREGATE_CHILDREN` ใน transaction เดียว
+อยู่ที่ [`shared/entity/cascade-soft-delete.ts`](../../apps/api/core/src/shared/entity/cascade-soft-delete.ts) — เดินลงตาม `AGGREGATE_CHILDREN` ใน transaction เดียว
 
 - **แผนที่ "อะไรเป็นของอะไร" เขียนมือ ไม่ได้อ่านจาก DB** ต่างจาก retention ที่อ่านจาก `pg_constraint` ได้ · เพราะ DB ตอบคำถามนี้ไม่ได้: `tasks.project_id` เป็น RESTRICT ตั้งใจ (จะลบ project ต้องเคลียร์ task ก่อน) ซึ่งไม่ได้แปลว่า task ไม่ใช่ของ project · `NOT NULL` ก็ตอบไม่ได้: `tasks.status_id` เป็น NOT NULL แต่ลบ status ต้องย้าย task ไม่ใช่ลบ
 - **มี test บังคับว่าทุกตารางที่ soft delete ได้ ต้องอยู่ใน `AGGREGATE_CHILDREN` หรือ `ROOTS`** — ตารางใหม่ที่ลืมใส่จะ fail ทันที ไม่ใช่ปล่อยให้แถวอยู่ค้างเกินพ่อแม่มันไป
