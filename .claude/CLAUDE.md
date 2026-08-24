@@ -32,7 +32,7 @@ A doc that disagrees with the code is worse than no doc, because people trust it
 The full list with rationale is in [`docs/00-overview.md`](./docs/00-overview.md#binding-decisions). In short:
 
 - Date-times are `timestamptz`, stored UTC — never `timestamp`
-- `org_id` on every table except schema `identity`, `billing.plans` and `organization.organizations` (whose `org_id` would always equal its `id`), and the cross-org isolation test must exist
+- `org_id` on every table whose rows belong to one org — exempt only where a row belongs to no single org, which today means schema `identity`, `billing.plans` and `organization.organizations` (whose `org_id` would always equal its `id`). It is a test to apply, not a list to memorise, and a join table needs the column _most_: with both FKs composite on `(id, org_id)`, linking two orgs' rows becomes impossible in the database rather than merely discouraged. The cross-org isolation test must exist
 - Unique constraints on soft-deleted tables must be **partial** indexes (`WHERE deleted_at IS NULL`)
 - `created_by` / `updated_by` / `completed_by` are `RESTRICT` — deleting a user is anonymisation, not a hard delete
 - `deleted_at` and `deleted_by` are set together, enforced by a CHECK on every soft-deleted table. Tables that already carry a state column meaning "no longer usable" (`sessions.revoked_at`, `password_reset_tokens.used_at`, `outbox.status`) have neither: a second delete marker is one more thing to keep in sync, and the retention policy hard-deletes them anyway
