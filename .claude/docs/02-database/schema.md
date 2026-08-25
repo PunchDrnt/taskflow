@@ -95,12 +95,22 @@ oauth_accounts        ⚠ ยังไม่สร้าง — migrate ใน P
 
   CHECK (provider IN ('google'))
   -- กัน Google account เดียวถูกอ้างโดยสอง user — ถ้าไม่มี คือช่องยึดบัญชี
-  CREATE UNIQUE INDEX ON identity.oauth_accounts (provider, provider_user_id)
-    WHERE deleted_at IS NULL;
+  CREATE UNIQUE INDEX ON identity.oauth_accounts (provider, provider_user_id);
   -- 1 คน ผูก provider ละบัญชีเดียว · ผ่อนทีหลังแค่ drop index
-  CREATE UNIQUE INDEX ON identity.oauth_accounts (user_id, provider)
-    WHERE deleted_at IS NULL;
+  CREATE UNIQUE INDEX ON identity.oauth_accounts (user_id, provider);
 ```
+
+**`CreatedEntity` — hard delete และไม่มี `updated_at`/`updated_by`** ([สามคำถาม](./rules.md#base-entity))
+
+ตอบคำถามที่ 3 ว่า "ไม่" เพราะเข้าสัญญาณข้อ 1 เต็มๆ: flow ล็อกอินหาแถวด้วย `WHERE provider = $1 AND provider_user_id = $2` · **ลืม `AND deleted_at IS NULL` เมื่อไหร่ = คนที่ unlink ไปแล้วล็อกอินกลับเข้ามาได้** ซึ่งเป็นสิ่งที่ย่อหน้าล่างบอกเองว่าห้ามเกิด · hard delete แล้วแถวไม่อยู่ ไม่มีอะไรให้ลืม · unlink แล้ว link ใหม่คือคลิกเดียว ไม่มีอะไรให้กู้ และ `audit.logs` บันทึกว่าใครถอดเมื่อไหร่อยู่แล้ว
+
+index จึงเป็น `UNIQUE` ธรรมดา ไม่ใช่ partial — ผลเหมือนกันเป๊ะโดยไม่ต้องมี state ค้าง: A unlink บัญชี G แล้วแถวหายไปเลย B เอา G ไปผูกได้ทันที
+
+> ⚠️ **`ON DELETE CASCADE` บน `user_id` ไม่มีวันทำงาน — ต้อง `DELETE` เองตอน anonymise**
+>
+> CASCADE ยิงตอน hard delete เท่านั้น แต่ `identity.users` อยู่ใน [`NEVER_PURGED`](../../../apps/api/core/src/maintenance/retention.policy.ts) และการ anonymise เป็น `UPDATE` ไม่ใช่ `DELETE` · แถว oauth จึงค้างอยู่ถ้าไม่มีใครลบ แล้วเจอปัญหาข้างบนพอดี
+>
+> FK ยังคง `CASCADE` ไว้เป็นตาข่ายตอนลบ org ทิ้งจริง แต่**ห้ามพึ่งมันในเส้นทาง anonymise**
 
 **ตารางนี้ยังไม่มีในฐานข้อมูล — Phase 1 migrate แต่ยังไม่เปิดใช้** เป็นแพทเทิร์นเดียวกับ `identity.roles` / `permissions` / `role_permissions` / `user_roles` ที่ลงตั้งแต่ Phase 0 แล้วไม่มีใครอ่านจนถึง Phase 7 · schema ข้างบนตัดสินแล้ว ไม่ใช่ร่าง เขียน migration ตามนี้ได้เลย
 

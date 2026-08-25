@@ -138,7 +138,7 @@ CHECK ((deleted_at IS NULL) = (deleted_by IS NULL))   -- ตั้งพร้�
 | `SoftDeletableEntity` | ✗ | ✓ | ✓ | `identity.users` · `organizations` · `billing.plans` |
 | `OrgScopedEntity` | ✓ | ✓ | ✗ | `notify.outbox` · `*.members` · `team_members` · `ai_usage` |
 | `TimestampedEntity` | ✗ | ✓ | ✗ | `sessions` · `password_reset_tokens` |
-| `CreatedEntity` | ✗ | ✗ | ✗ | `role_permissions` · `user_roles` |
+| `CreatedEntity` | ✗ | ✗ | ✗ | `role_permissions` · `user_roles` · `oauth_accounts` _(Phase 1)_ |
 | `OrgScopedCreatedEntity` | ✓ | ✗ | ✗ | `task.assignees` · `task.dependencies` _(Phase 5)_ |
 
 #### คำถามที่ 2 ตอบยังไง — "แก้" ไม่ใช่ "เปลี่ยนสถานะ"
@@ -155,7 +155,7 @@ CHECK ((deleted_at IS NULL) = (deleted_by IS NULL))   -- ตั้งพร้�
 
 ตอบ **"ไม่"** ถ้าเข้าข้อใดข้อหนึ่ง เรียงจากหนักสุด
 
-1. **ลืม filter แล้วเป็นช่องโหว่สิทธิ์ ไม่ใช่บั๊กการแสดงผล** — แถว `project.members` ที่ `deleted_at` มีค่าแต่ query ลืมกรอง = คนที่ถูกถอดออกยังเข้าถึง project ได้ · hard delete แล้วแถวไม่อยู่ ไม่มีอะไรให้ลืม
+1. **ลืม filter แล้วเป็นช่องโหว่สิทธิ์ ไม่ใช่บั๊กการแสดงผล** — แถว `project.members` ที่ `deleted_at` มีค่าแต่ query ลืมกรอง = คนที่ถูกถอดออกยังเข้าถึง project ได้ · `identity.oauth_accounts` หนักกว่านั้นอีก เพราะ flow ล็อกอินหาแถวด้วย `provider_user_id` ตรงๆ ลืมกรองคือคนที่ unlink แล้ว**ล็อกอินกลับเข้ามาได้** · hard delete แล้วแถวไม่อยู่ ไม่มีอะไรให้ลืม
 2. **มีคอลัมน์บอกสถานะ "ใช้ไม่ได้แล้ว" อยู่แล้ว** — `sessions.revoked_at` · `password_reset_tokens.used_at` · `outbox.status` · ตัวบอกการลบสองตัวในตารางเดียวย่อมขัดกันได้ (บั๊กแบบเดียวกับที่ `identity.users` เคยมี)
 3. **การ "ลบ" คือความสัมพันธ์เปลี่ยน ไม่ใช่ข้อมูลถูกทำลาย** — เพิ่มกลับต้นทุนศูนย์ ไม่มีอะไรให้กู้ · soft delete ทำให้ถอด-ใส่ซ้ำสะสมแถวตาย และ upsert ต้องคิดเผื่อทุกครั้ง
 4. **เป็นบันทึกแบบ append-only** เช่น `billing.ai_usage` ที่เป็นการใช้เงิน — ให้ retention ลบจริง soft delete ไม่ตรงความหมาย

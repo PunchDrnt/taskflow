@@ -33,7 +33,8 @@
 - [ ] **`identity.oauth_accounts` — migrate ไว้ แต่ feature ปิด ยังไม่ใช้** (ตัดสินแล้ว)
       · ตารางลงตาม schema ใน [`02-database/README.md`](../docs/02-database/schema.md#schema-identity) · เป็นแพทเทิร์นเดียวกับ `identity.roles`/`permissions` ที่ migrate ตั้งแต่ Phase 0 แล้วไม่มีใครอ่านจนถึง Phase 7
       · **Google login ยังไม่เปิดใช้** — ปิดด้วยกลไกที่ปิดได้จริง ดูข้อบน ไม่ใช่ `FeatureService` ตามสภาพปัจจุบัน
-      · ตารางนี้ soft delete → **ต้องใส่ `AGGREGATE_CHILDREN` หรือ `ROOTS`** ไม่งั้น cascade test ฟ้อง
+      · **hard delete** (`CreatedEntity`) ตามสามคำถามใน [`02-database/rules.md`](../docs/02-database/rules.md#base-entity) — ลืม `deleted_at IS NULL` ใน flow ล็อกอินคือช่องให้คนที่ unlink แล้วเข้ากลับมาได้ · จึงไม่ต้องแตะ `AGGREGATE_CHILDREN`/`ROOTS` เลย และ index เป็น `UNIQUE` ธรรมดาไม่ใช่ partial
+      · 🔒 **anonymise ต้อง `DELETE` แถว oauth เอง** — `ON DELETE CASCADE` บน `user_id` ไม่ยิง เพราะ `identity.users` อยู่ใน `NEVER_PURGED` และ anonymise เป็น `UPDATE` · ไม่ลบ = แถวค้างให้ล็อกอินกลับเข้ามาได้
       · roadmap ไม่ได้จัด Google login ไว้ phase ไหน — ตอนเปิดใช้จริงค่อยเพิ่มเข้า roadmap
 
 ---
