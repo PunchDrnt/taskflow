@@ -9,7 +9,8 @@ import {
 /**
  * The columns every table carries, in the six shapes the schema uses.
  * `org_id`, soft delete, and whether a row is ever edited after it is created
- * are three independent axes; which table takes which is in
+ * are three independent axes. The three questions that pick one for a new
+ * table — rather than a list of which existing table took which — are in
  * docs/02-database/rules.md#base-entity.
  *
  * | Class                    | org_id | soft delete | updatable | Used by                            |

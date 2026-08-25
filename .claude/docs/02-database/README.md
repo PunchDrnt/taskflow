@@ -53,7 +53,19 @@ TypeORM กำหนดที่ entity: `@Entity({ schema: 'task', name: 'tasks
 
 **ไม่ใช้ `enum` type ของ Postgres ที่ไหนเลย** — เพิ่มค่าใหม่ต้องแยก migration สองรอบ (ค่าที่เพิ่งเพิ่มใช้ใน transaction เดียวกันไม่ได้) ลบค่าต้องสร้าง type ใหม่ทั้งตัว · ใช้ `text` ธรรมดา แล้วใส่ `CHECK` เอาถ้าจำเป็น — แก้ทีหลังแค่ drop constraint แล้ว add ใหม่
 
-ใส่ `CHECK` เฉพาะคอลัมน์ที่**มี partial index พึ่งค่ามันอยู่** เพราะค่าที่พิมพ์ผิดจะหลุดจาก index ไปเงียบ ๆ — insert ผ่าน ไม่มี error แต่ข้อจำกัดที่ตั้งใจไว้หายไป ตอนนี้มี 3 ตัว:
+**คอลัมน์ใหม่ที่มีค่าจำกัด ถามสองข้อตามลำดับ** — ไม่ต้องหาชื่อคอลัมน์ตัวเองในรายการ
+
+| ถาม | ถ้าใช่ |
+| --- | --- |
+| **1.** ค่าจะเพิ่มขึ้นทุกครั้งที่มีฟีเจอร์ใหม่ไหม | **ห้ามใส่ `CHECK`** — หยุดตรงนี้ |
+| **2.** มี partial index พึ่งค่านี้อยู่ไหม | **ใส่ `CHECK`** |
+| ตอบไม่ทั้งสองข้อ | ปล่อยเป็น `text` ให้ application คุม — เพิ่มทีหลังได้ตลอด |
+
+**ข้อ 1 มาก่อนเพราะมันเป็นข้อห้าม ไม่ใช่ข้อแนะนำ** — ทุกฟีเจอร์ใหม่จะกลายเป็น migration แถม และถ้าคอลัมน์นั้นอยู่ใน `audit.logs` ซึ่ง partition รายเดือนและไม่เคยลบ `VALIDATE` จะแพงขึ้นเรื่อยๆ ไม่มีวันถูกลง
+_ตัวอย่างที่เข้าข้อนี้:_ `audit.logs.entity_type` · `audit.logs.action` · `discussion.comments.entity_type` · `notify.outbox.template` · `view.columns.column_key` · `automation.rules.trigger_type` _(Phase 5)_
+
+**ข้อ 2 คือเหตุผลเดียวที่ `CHECK` คุ้มค่า** — ค่าที่พิมพ์ผิดจะหลุดจาก partial index ไปเงียบๆ insert ผ่าน ไม่มี error แต่ข้อจำกัดที่ตั้งใจไว้หายไป
+_ตอนนี้มีสามคอลัมน์:_
 
 | คอลัมน์ | index ที่พึ่งมัน |
 | --- | --- |
@@ -61,11 +73,9 @@ TypeORM กำหนดที่ entity: `@Entity({ schema: 'task', name: 'tasks
 | `project.sprints.status` | unique `(project_id) WHERE status = 'active'` |
 | `notify.outbox.status` | คิวของ worker `WHERE status = 'pending'` |
 
-คอลัมน์ค่าจำกัดตัวอื่น (`role`, `priority`, `platform`, `assignee_type`, `type` ฯลฯ) ปล่อยเป็น `text` ให้ application คุม — เพิ่ม `CHECK` ทีหลังได้ตลอดถ้าเจอปัญหาจริง
+_ที่ตอบไม่ทั้งสองข้อ:_ `role` · `priority` · `platform` · `assignee_type` · `type` ฯลฯ
 
-หัวข้อนี้พูดถึง `CHECK` ที่จำกัด**ชุดค่า**ของคอลัมน์เดียวเท่านั้น · `CHECK` ที่ผูกสองคอลัมน์เข้าด้วยกัน (invariant ข้ามคอลัมน์ เช่น `identity.users` ที่บังคับ `password_hash IS NULL` เมื่อ `is_system`) เป็นคนละเรื่อง ใส่ได้ตามที่จำเป็น ไม่ต้องเข้าเกณฑ์ข้างบน
-
-**ห้ามใส่** `CHECK` กับคอลัมน์ที่ค่าโตตามฟีเจอร์ — `audit.logs.entity_type` / `audit.logs.action` / `discussion.comments.entity_type` / `notify.outbox.template` / `view.columns.column_key` · ทุกฟีเจอร์ใหม่จะกลายเป็น migration แถม และ `audit.logs` เป็นตาราง partition ที่ไม่เคยลบ → `VALIDATE` แพงขึ้นเรื่อย ๆ
+เกณฑ์ข้างบนใช้กับ `CHECK` ที่จำกัด**ชุดค่า**ของคอลัมน์เดียวเท่านั้น · `CHECK` ที่ผูกสองคอลัมน์เข้าด้วยกัน (invariant ข้ามคอลัมน์ เช่น `identity.users` ที่บังคับ `password_hash IS NULL` เมื่อ `is_system`) เป็นคนละเรื่อง ใส่ได้ตามที่จำเป็น ไม่ต้องเข้าเกณฑ์นี้
 
 > ⚠️ `CHECK` ใน DB กับ union type ใน `@repo/shared` ไม่มีอะไร sync ให้ — แก้ที่ไหนต้องแก้อีกที่ด้วย
 

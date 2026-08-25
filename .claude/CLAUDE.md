@@ -155,7 +155,7 @@ yarn workspace @api/core migration:show
 
 **`entity/`** — the shape every table has, and the code that maintains it.
 
-- `base.entity.ts` — six classes, because `org_id`, soft delete, and whether a row is ever edited after creation are three independent axes. The third one is narrow: `role_permissions`, `user_roles` and `task.assignees` are grants and assignments that only ever get created or removed, never updated in place, so `updatedAt`/`updatedBy` would sit there forever equal to the created pair. See the exception table in `docs/02-database/rules.md`.
+- `base.entity.ts` — six classes, because `org_id`, soft delete, and whether a row is ever edited after creation are three independent axes. The third one is narrow: `role_permissions`, `user_roles` and `task.assignees` are grants and assignments that only ever get created or removed, never updated in place, so `updatedAt`/`updatedBy` would sit there forever equal to the created pair. A new table picks its class by answering three questions rather than by finding itself in a list — see `docs/02-database/rules.md#base-entity`.
 - `audit-columns.subscriber.ts` — fills `createdBy`/`updatedBy`/`deletedBy`. Registered in the DataSource's `subscribers`, not as a Nest provider, so it applies under the CLI and in tests too.
 - `cascade-soft-delete.ts` — `softDelete(table, id)` carries an aggregate down in one transaction, because `ON DELETE CASCADE` only fires on a hard delete. Its `AGGREGATE_CHILDREN` map is hand-written, unlike retention's purge order, because the database cannot answer what belongs to what: `tasks.project_id` is RESTRICT and `tasks.status_id` is NOT NULL, and neither means what the cascade needs. A test requires every soft-deletable table to be in the map or in `ROOTS`.
 
