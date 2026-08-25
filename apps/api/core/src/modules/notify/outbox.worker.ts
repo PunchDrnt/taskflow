@@ -90,8 +90,9 @@ export class OutboxWorker {
    * `SELECT ... FOR UPDATE SKIP LOCKED` through `dataSource.query()` runs in
    * its own implicit transaction, so the row locks are released the moment it
    * returns — measured: a second connection issuing the same query gets the
-   * same rows back. Inside an `UPDATE` the locks are held for the length of
-   * the statement, which is what makes SKIP LOCKED mean anything.
+   * same rows back, and two workers on that shape sent 23 emails for 12 rows.
+   * Inside an `UPDATE` the locks are held for the length of the statement,
+   * which is what makes SKIP LOCKED mean anything.
    *
    * Bumping `attempts` here rather than on failure also arms the backoff at
    * the moment of taking: a process that dies mid-send leaves the row pending
