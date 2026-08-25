@@ -53,16 +53,16 @@
 | API path / error format / naming / auth | [`01-architecture.md`](./01-architecture.md#conventions) |
 | ตารางไหนมีฟิลด์อะไร FK ชี้ทางไหน             | [`02-database/README.md`](./02-database/README.md)                     |
 | จะทำอะไรบ้าง phase ไหน อันไหนสำคัญก่อน      | [`03-roadmap.md`](./03-roadmap.md)                       |
-| รายละเอียดของ feature แต่ละอัน             | [`04-features.md`](./04-features.md)                     |
+| รายละเอียดของ feature แต่ละอัน             | [`04-features/`](./04-features/README.md) — แยกตาม phase        |
 | SaaS / billing / pricing / AI ที่ใช้ LLM   | [`05-saas-notes.md`](./05-saas-notes.md)                 |
 
 ## Where to Start
 
 | ถ้าคุณ                     | อ่านตามลำดับนี้                                                                                             |
 | ------------------------ | ------------------------------------------------------------------------------------------------------- |
-| กำลังจะเริ่มเขียนโค้ด Phase 0 | ไฟล์นี้ → `01-architecture.md` → `02-database/README.md` → Phase 0 ใน `04-features.md`                            |
+| กำลังจะเริ่มเขียนโค้ด Phase 0 | ไฟล์นี้ → `01-architecture.md` → `02-database/README.md` → [`04-features/phase-0.md`](./04-features/phase-0.md)                            |
 | อยากรู้ภาพรวมว่าทำอะไรบ้าง   | ไฟล์นี้ → `03-roadmap.md`                                                                                  |
-| กำลังทำ phase ใดอยู่        | `03-roadmap.md` (ดู priority) → `04-features.md` (ดูรายละเอียด)                                            |
+| กำลังทำ phase ใดอยู่        | `03-roadmap.md` (ดู priority) → `04-features/phase-N.md` (ดูรายละเอียด)                                            |
 | กำลังจะแตะ schema         | [Binding Decisions](#binding-decisions) → `02-database/README.md` → หัวข้อ Build From Day One ใน `03-roadmap.md` |
 | กำลังคิดเรื่องขาย            | `05-saas-notes.md`                                                                                      |
 
@@ -166,7 +166,7 @@ Schema วางครบทุก module ตั้งแต่ Phase 0 แล�
 | -------------------------------- | ----------------------------------------------------------------------------------- |
 | Transaction strategy ตอนเปิด RLS  | ตอนต้น Phase 2 พร้อมโค้ดจริง — [`01-architecture.md`](./01-architecture.md#transaction) |
 | ทุกอย่างใน `05-saas-notes.md`      | เมื่อ Phase 1-6 มีคนใช้จริงต่อเนื่อง และมีคนนอกถามหา                                         |
-| เคสของ chat integration ตอนทำจริง | ตอนลงมือทำ Phase 2 — [`04-features.md`](./04-features.md)                            |
+| เคสของ chat integration ตอนทำจริง | ตอนลงมือทำ Phase 2 — [`04-features/phase-2.md`](./04-features/phase-2.md)                            |
 
 ---
 
@@ -193,9 +193,11 @@ Schema วางครบทุก module ตั้งแต่ Phase 0 แล�
 3. Build From Day One, Even Without UI
 4. Cautions
 
-### [`04-features.md`](./04-features.md)
+### [`04-features/`](./04-features/README.md)
 
-รายละเอียดแต่ละ feature — Phase 0 ถึง Phase 6 · ลำดับหัวข้อตรงกับตารางใน `03-roadmap.md`
+รายละเอียดแต่ละ feature **แยกไฟล์ตาม phase** — ทำงาน phase ไหนเปิดไฟล์นั้นไฟล์เดียว
+
+[`phase-0.md`](./04-features/phase-0.md) … [`phase-6.md`](./04-features/phase-6.md) · ลำดับหัวข้อตรงกับตารางใน [`03-roadmap.md`](./03-roadmap.md) · [`on-hold.md`](./04-features/on-hold.md) คือของที่ตัดสินแล้วว่ายังไม่ทำ รอเงื่อนไข ไม่ใช่รอคิว
 
 ### [`05-saas-notes.md`](./05-saas-notes.md)
 

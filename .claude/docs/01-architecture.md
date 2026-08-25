@@ -787,7 +787,7 @@ email_verified = false → ปฏิเสธทันที (ไม่ link ไ
 ทุกกรณีที่ link สำเร็จ → audit.logs + ส่งเมลแจ้งเจ้าตัว
 ```
 
-`pending_deletion` ปลดล็อกได้เพราะ login ด้วย Google ก็คือการพิสูจน์ตัวตนแบบหนึ่ง ตรงกับที่ [Delete Account](./04-features.md#delete-account) เขียนไว้ว่า login ภายใน 30 วันกู้บัญชีคืน — ไม่ใช่กฎใหม่
+`pending_deletion` ปลดล็อกได้เพราะ login ด้วย Google ก็คือการพิสูจน์ตัวตนแบบหนึ่ง ตรงกับที่ [Delete Account](./04-features/phase-2.md#delete-account) เขียนไว้ว่า login ภายใน 30 วันกู้บัญชีคืน — ไม่ใช่กฎใหม่
 
 **prompt ถามก่อน link เป็น UX ไม่ใช่ security** — คนที่เห็นหน้าจอนั้นคือคนที่เพิ่งพิสูจน์ว่าคุมอีเมลนั้นได้ ถ้าเป็นคนร้ายก็กด "ใช่" เหมือนกัน · ที่กันจริงคือ `email_verified`
 

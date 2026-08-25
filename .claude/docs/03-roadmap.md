@@ -1,6 +1,6 @@
 # Roadmap
 
-จะทำอะไร phase ไหน อันไหนสำคัญก่อน — รายละเอียดของแต่ละ feature อยู่ใน [`04-features.md`](./04-features.md)
+จะทำอะไร phase ไหน อันไหนสำคัญก่อน — รายละเอียดของแต่ละ feature อยู่ใน [`04-features/README.md`](./04-features/README.md)
 
 > [← Overview](./00-overview.md)
 
@@ -79,7 +79,7 @@
 | 13  | 🟢  | Seed script                                                                       | ข้อมูลตัวอย่างสำหรับ dev/demo                                                                                            |
 | 14  | 🟢  | ตาราง RBAC ระดับระบบ                                                               | สร้างไว้เฉยๆ ไม่มีโค้ดอ่าน — back-office มา Phase 7                                                                       |
 
-**รายละเอียด** → [Phase 0 ใน `04-features.md`](./04-features.md#phase-0--foundation-v010)
+**รายละเอียด** → [Phase 0 — รายละเอียดทุกฟีเจอร์](./04-features/phase-0.md)
 
 </details>
 
@@ -107,9 +107,9 @@
 
 > 11-12 เป็น 🟡 แต่**ตัดทั้งคู่ไม่ได้** — สองอย่างนี้คือสิ่งที่ทำให้คนกลับมาใช้ ถ้าเวลาไม่พอจริงๆ เลือกตัดอย่างใดอย่างหนึ่ง
 
-**รายละเอียด** → [Phase 1 ใน `04-features.md`](./04-features.md#phase-1--first-real-users-v100)
+**รายละเอียด** → [Phase 1 — รายละเอียดทุกฟีเจอร์](./04-features/phase-1.md)
 
-ข้อ 1, 2, 13 → [Auth & Users](./04-features.md#auth--users) · ข้อ 3 → [Organization](./04-features.md#organization) · ข้อ 4 → [Project](./04-features.md#project) · ข้อ 5, 14 → [Status](./04-features.md#status-custom-per-project) · ข้อ 6, 7, 11, 12 → [Task](./04-features.md#task) · ข้อ 8, 9, 16 → [Views](./04-features.md#views) · ข้อ 10 → [Notifications](./04-features.md#notifications) · ข้อ 15 → [User States](./04-features.md#user-states--three-different-things)
+ข้อ 1, 2, 13 → [Auth & Users](./04-features/phase-1.md#auth--users) · ข้อ 3 → [Organization](./04-features/phase-1.md#organization) · ข้อ 4 → [Project](./04-features/phase-1.md#project) · ข้อ 5, 14 → [Status](./04-features/phase-1.md#status-custom-per-project) · ข้อ 6, 7, 11, 12 → [Task](./04-features/phase-1.md#task) · ข้อ 8, 9, 16 → [Views](./04-features/phase-1.md#views) · ข้อ 10 → [Notifications](./04-features/phase-1.md#notifications) · ข้อ 15 → [User States](./04-features/phase-1.md#user-states--three-different-things)
 
 </details>
 
@@ -135,9 +135,9 @@
 >
 > ข้อ 12 เลื่อนขึ้นมาจาก Phase 3 — ข้อ 1, 2 และ 8 รวมกันทำให้หลายคนแตะงานเดียวกันได้เป็นครั้งแรก คำถามว่า "ใครแก้" จึงมาถึงใน phase นี้ ไม่ใช่ phase หน้า · ต้นทุนต่ำเพราะข้อมูลครบตั้งแต่ Phase 0 แค่ query + render (feed ระดับ project กับ filter ยังอยู่ Phase 3)
 
-**รายละเอียด** → [Phase 2 ใน `04-features.md`](./04-features.md#phase-2--team--sub-task--sprint--chat-v110)
+**รายละเอียด** → [Phase 2 — รายละเอียดทุกฟีเจอร์](./04-features/phase-2.md)
 
-ข้อ 1 → [Team](./04-features.md#team) · ข้อ 2, 8 → [Assigning to a Whole Team](./04-features.md#assigning-to-a-whole-team) · ข้อ 3, 4, 9 → [Sub-task](./04-features.md#sub-task) · ข้อ 5 → [Chat — Discord](./04-features.md#chat-integration--discord) · ข้อ 6, 7 → [Sprint](./04-features.md#sprint-basics) · ข้อ 10 → [Remove From Org](./04-features.md#remove-from-org) · ข้อ 11 → [Delete Account](./04-features.md#delete-account) · ข้อ 12 → [Activity Log บนหน้า Task](./04-features.md#activity-log-บนหน้า-task)
+ข้อ 1 → [Team](./04-features/phase-2.md#team) · ข้อ 2, 8 → [Assigning to a Whole Team](./04-features/phase-2.md#assigning-to-a-whole-team) · ข้อ 3, 4, 9 → [Sub-task](./04-features/phase-2.md#sub-task) · ข้อ 5 → [Chat — Discord](./04-features/phase-2.md#chat-integration--discord) · ข้อ 6, 7 → [Sprint](./04-features/phase-2.md#sprint-basics) · ข้อ 10 → [Remove From Org](./04-features/phase-2.md#remove-from-org) · ข้อ 11 → [Delete Account](./04-features/phase-2.md#delete-account) · ข้อ 12 → [Activity Log บนหน้า Task](./04-features/phase-2.md#activity-log-บนหน้า-task)
 
 </details>
 
@@ -157,9 +157,9 @@
 | 9   | 🟢  | Activity log — feed + filter | ไล่ประวัติทั้ง project ไม่ใช่ทีละงาน · กรองตามคน/ชนิด/ช่วงเวลา (หน้า task มาแล้ว Phase 2) |
 | 10  | 🟢  | **Stale detection** ⭐    | จับงานที่ค้างผิดปกติก่อนถึง deadline โดยเทียบกับพฤติกรรมจริงของทีม     |
 
-**รายละเอียด** → [Phase 3 ใน `04-features.md`](./04-features.md#phase-3--collaboration-v120)
+**รายละเอียด** → [Phase 3 — รายละเอียดทุกฟีเจอร์](./04-features/phase-3.md)
 
-ข้อ 10 → [Stale Detection](./04-features.md#stale-detection) · ที่เหลืออยู่ในลิสต์รวมของ Phase 3
+ข้อ 10 → [Stale Detection](./04-features/phase-3.md#stale-detection) · ที่เหลืออยู่ในลิสต์รวมของ Phase 3
 
 </details>
 
@@ -178,9 +178,9 @@
 | 8   | 🟢  | Export Excel/PDF               | เอาข้อมูลออกไปทำรายงานหรือส่งให้คนนอกระบบ                                     |
 | 9   | 🟢  | Estimate + Velocity + Burndown | ประมาณขนาดงานเพื่อรู้ว่า sprint รับไหวไหม (`estimate_unit` = none เป็น default) |
 
-**รายละเอียด** → [Phase 4 ใน `04-features.md`](./04-features.md#phase-4--custom-fields-views-reports-estimates-v130)
+**รายละเอียด** → [Phase 4 — รายละเอียดทุกฟีเจอร์](./04-features/phase-4.md)
 
-ข้อ 1 → [Custom Field](./04-features.md#custom-field-project-level) · ข้อ 2, 7 → [View Config](./04-features.md#view-config) · ข้อ 3, 5, 6, 8 → [Reports](./04-features.md#reports) · ข้อ 4 → [Handover Mode](./04-features.md#handover-mode) · ข้อ 9 → [Estimate + Velocity](./04-features.md#estimate--velocity)
+ข้อ 1 → [Custom Field](./04-features/phase-4.md#custom-field-project-level) · ข้อ 2, 7 → [View Config](./04-features/phase-4.md#view-config) · ข้อ 3, 5, 6, 8 → [Reports](./04-features/phase-4.md#reports) · ข้อ 4 → [Handover Mode](./04-features/phase-4.md#handover-mode) · ข้อ 9 → [Estimate + Velocity](./04-features/phase-4.md#estimate--velocity)
 
 </details>
 
@@ -204,9 +204,9 @@
 >
 > ข้อ 9 ทำคู่กับข้อ 6 คุ้มกว่าแยกทำ — Gantt ที่ไม่มี dependency คือแผนภูมิแท่งเฉยๆ · ข้อ 10 ต้องรอ custom field กับ status จาก Phase 4 ก่อน ไม่งั้นตั้งเงื่อนไขได้ไม่กี่แบบ
 
-**รายละเอียด** → [Phase 5 ใน `04-features.md`](./04-features.md#phase-5--advanced-features--semantic-search-v200)
+**รายละเอียด** → [Phase 5 — รายละเอียดทุกฟีเจอร์](./04-features/phase-5.md)
 
-ข้อ 4 → [Semantic Search](./04-features.md#semantic-search--duplicate-detection) · ข้อ 9 → [Task Dependency](./04-features.md#task-dependency) · ข้อ 10 → [Automation](./04-features.md#automation) · ที่เหลืออยู่ในลิสต์รวมของ Phase 5
+ข้อ 4 → [Semantic Search](./04-features/phase-5.md#semantic-search--duplicate-detection) · ข้อ 9 → [Task Dependency](./04-features/phase-5.md#task-dependency) · ข้อ 10 → [Automation](./04-features/phase-5.md#automation) · ที่เหลืออยู่ในลิสต์รวมของ Phase 5
 
 </details>
 
@@ -223,7 +223,7 @@
 | 6   | 🟢  | Integration อื่น             | Google Calendar, webhook ทั่วไป                                    |
 | 7   | 🟢  | Real-time collaboration    | เห็นการแก้ไขของคนอื่นทันที                                             |
 
-**รายละเอียด** → [Phase 6 ใน `04-features.md`](./04-features.md#phase-6--polish-v210)
+**รายละเอียด** → [Phase 6 — รายละเอียดทุกฟีเจอร์](./04-features/phase-6.md)
 
 </details>
 
@@ -254,7 +254,7 @@
 
 | Feature | เงื่อนไขที่จะทำ |
 | --- | --- |
-| **Import จาก Excel/CSV** | เริ่มมีคนนอกบริษัท/ลูกค้าใช้ — ตอนนี้ทีมจดกันในแชท ไม่มีอะไรให้ import · Export อยู่ Phase 4 ข้อ 8 แล้วและ**ง่ายกว่ากันหลายเท่า** ([ทำไม](./04-features.md#import-จาก-excelcsv)) |
+| **Import จาก Excel/CSV** | เริ่มมีคนนอกบริษัท/ลูกค้าใช้ — ตอนนี้ทีมจดกันในแชท ไม่มีอะไรให้ import · Export อยู่ Phase 4 ข้อ 8 แล้วและ**ง่ายกว่ากันหลายเท่า** ([ทำไม](./04-features/on-hold.md#import-จาก-excelcsv)) |
 
 **สิ่งที่ยังไม่ commit เลย** — SaaS, billing, AI ที่ใช้ LLM และ**แบบตรวจ (Inspection)** → [`05-saas-notes.md`](./05-saas-notes.md)
 
