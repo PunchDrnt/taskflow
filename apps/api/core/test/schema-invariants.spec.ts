@@ -73,4 +73,52 @@ describe.skipIf(!hasTestDatabase)('schema invariants', () => {
       [...Object.values(SYSTEM_PERMISSIONS)].sort(),
     )
   })
+
+  /**
+   * A limited-value column that leads a unique index needs a CHECK, because a
+   * wrong value does not fail — it lands in a different bucket and the index
+   * quietly stops enforcing what it was created for.
+   *
+   * Guarded here rather than by `schema-drift.spec.ts`, which reconciles
+   * columns against entity metadata and never sees a constraint. Losing one of
+   * these is silent in both directions: no test fails, and nothing goes wrong
+   * until two rows exist that should not.
+   *
+   * `chat.*` is Phase 2 and absent for now — the loop skips what does not
+   * exist yet rather than hard-coding today's table list.
+   *
+   * See docs/02-database/README.md#check-vs-enum
+   */
+  it('constrains the limited-value columns that lead a unique index', async () => {
+    const guarded = [
+      { table: 'task.assignees', column: 'assignee_type' },
+      { table: 'chat.identities', column: 'platform' },
+      { table: 'chat.channels', column: 'platform' },
+    ]
+
+    for (const { table, column } of guarded) {
+      const [schema, name] = table.split('.')
+
+      const [existing] = (await dataSource.query(
+        `SELECT to_regclass($1) IS NOT NULL AS present`,
+        [table],
+      )) as { present: boolean }[]
+
+      if (!existing?.present) continue
+
+      const checks = (await dataSource.query(
+        `SELECT pg_get_constraintdef(c.oid) AS definition
+           FROM pg_constraint c
+           JOIN pg_class t ON t.oid = c.conrelid
+           JOIN pg_namespace n ON n.oid = t.relnamespace
+          WHERE c.contype = 'c' AND n.nspname = $1 AND t.relname = $2`,
+        [schema, name],
+      )) as { definition: string }[]
+
+      expect(
+        checks.some((check) => check.definition.includes(column)),
+        `${table}.${column} has no CHECK — the unique index it leads is not enforcing what it looks like it enforces`,
+      ).toBe(true)
+    }
+  })
 })

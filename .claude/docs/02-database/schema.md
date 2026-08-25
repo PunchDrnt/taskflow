@@ -401,18 +401,22 @@ columns
 ```
 identities
   user_id             uuid  FK
-  platform            text  'discord' | 'line' | 'teams'
+  platform            text  CHECK (platform IN ('discord','line','teams'))
   external_id         text  user id ฝั่งนั้น — เป็นข้อมูลส่วนบุคคล ต้องล้างตอน anonymize
   linked_at           timestamptz
   UNIQUE (platform, external_id)
 
 channels
   project_id          uuid  FK
-  platform            text
+  platform            text  CHECK (platform IN ('discord','line','teams'))
   external_channel_id text
   default_assignee_id uuid  null
   UNIQUE (platform, external_channel_id)   -- 1 ห้องผูกได้ org เดียว กันข้อมูลข้ามบริษัท
 ```
+
+**`platform` ทั้งสองตัวต้องมี `CHECK`** ([เกณฑ์](./README.md#check-vs-enum)) — มันเป็นคอลัมน์นำของ unique index ทั้งคู่ ค่าที่พิมพ์ผิดจึงไม่ error แต่ไปอยู่คนละ bucket
+
+ของ `channels` หนักที่สุดในระบบ เพราะ `UNIQUE (platform, external_channel_id)` **คือกลไกเดียว**ที่บังคับ 🔒 ข้างบน — `'discord'` กับ `'Discord'` เป็นคนละคีย์ แปลว่าห้องเดียวลงทะเบียนได้สอง org แล้วข้อความข้ามบริษัททันที · เพิ่มค่าใหม่ทีหลัง (Teams มา Phase 6) เป็น integration ที่มี migration ของตัวเองอยู่แล้ว `DROP CONSTRAINT` หนึ่งบรรทัดจึงไม่ใช่ต้นทุน
 
 ## Schema `automation` (Phase 5)
 

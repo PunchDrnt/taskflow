@@ -118,7 +118,14 @@ export class CreateTask1787190804974 implements MigrationInterface {
         org_id         uuid        NOT NULL,
 
         task_id        uuid        NOT NULL,
-        assignee_type  text        NOT NULL,
+        -- CHECKed, unlike most limited-value columns here: this one leads a
+        -- unique index, so a wrong value lands in a different bucket and
+        -- assignees_task_assignee_unique stops preventing the duplicate it
+        -- exists for. It is also the discriminator for a polymorphic
+        -- reference with no FK, so a wrong value resolves assignee_id against
+        -- a table the id never came from, with nothing to catch it.
+        assignee_type  text        NOT NULL
+                                   CHECK (assignee_type IN ('user', 'team')),
         -- identity.users or organization.teams depending on assignee_type,
         -- so no FK — the index below stands in for it.
         assignee_id    uuid        NOT NULL,

@@ -69,15 +69,15 @@ _ตัวอย่าง:_ `audit.logs.entity_type` · `audit.logs.action` · `
 
 _ที่ไม่เข้าเกณฑ์ ปล่อยเป็น `text` ให้ application คุม:_ `role` · `priority` · `type` ฯลฯ — เพิ่ม `CHECK` ทีหลังได้ตลอดถ้าเจอปัญหาจริง
 
-> ❓ **ยังไม่ตัดสิน — สามคอลัมน์ที่เข้าเกณฑ์แถวที่สองแต่ยังไม่มี `CHECK`**
->
-> | คอลัมน์ | unique index ที่พึ่งมัน | ค่าผิดแล้ว |
-> | --- | --- | --- |
-> | `chat.channels.platform` | `(platform, external_channel_id)` | 🔒 **"1 `external_channel_id` ผูกได้ org เดียว" ถูกข้าม** — ห้องเดียวลงทะเบียนได้สอง org = ข้อความข้ามบริษัท |
-> | `chat.identities.platform` | `(platform, external_id)` | คนเดียวผูกได้สองแถวในแพลตฟอร์มเดียวกัน |
-> | `task.assignees.assignee_type` | `(task_id, assignee_type, assignee_id)` | เป็น discriminator ของ polymorphic ที่**ไม่มี FK** — ค่าผิดแปลว่า `assignee_id` ถูกไปหาในตารางผิด (`users` แทน `teams`) |
->
-> `chat.*` ยังไม่ถูกสร้าง (Phase 2) เพิ่มได้ฟรี · `task.assignees` มีอยู่แล้วตั้งแต่ Phase 0 ต้องมี migration · ตัดสินตอนแตะตารางนั้นครั้งถัดไป
+**สามคอลัมน์ที่เข้าเกณฑ์แถวที่สอง** — เกณฑ์เดิมเขียนครอบแค่ partial index จึงมองข้ามไปทั้งสามตัว
+
+| คอลัมน์ | unique index ที่พึ่งมัน | ค่าผิดแล้ว |
+| --- | --- | --- |
+| `chat.channels.platform` | `(platform, external_channel_id)` | 🔒 **"1 `external_channel_id` ผูกได้ org เดียว" ถูกข้าม** — ห้องเดียวลงทะเบียนได้สอง org = ข้อความข้ามบริษัท |
+| `chat.identities.platform` | `(platform, external_id)` | คนเดียวผูกได้สองแถวในแพลตฟอร์มเดียวกัน |
+| `task.assignees.assignee_type` | `(task_id, assignee_type, assignee_id)` | เป็น discriminator ของ polymorphic ที่**ไม่มี FK** — ค่าผิดแปลว่า `assignee_id` ถูกไปหาในตารางผิด (`users` แทน `teams`) |
+
+> ⚠️ **`schema-drift.spec.ts` มองไม่เห็น `CHECK`** — มันเทียบคอลัมน์ ไม่ใช่ constraint · CHECK ที่หายไปจึงไม่มีอะไรฟ้อง `test/schema-invariants.spec.ts` เลยยืนยันสามตัวนี้แทน
 
 เกณฑ์ข้างบนใช้กับ `CHECK` ที่จำกัด**ชุดค่า**ของคอลัมน์เดียวเท่านั้น · `CHECK` ที่ผูกสองคอลัมน์เข้าด้วยกัน (invariant ข้ามคอลัมน์ เช่น `identity.users` ที่บังคับ `password_hash IS NULL` เมื่อ `is_system`) เป็นคนละเรื่อง ใส่ได้ตามที่จำเป็น ไม่ต้องเข้าเกณฑ์นี้
 
