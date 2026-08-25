@@ -45,6 +45,23 @@ CREATE INDEX ON discussion.comments (org_id, entity_type, entity_id, created_at)
 > การลบแบบ cascade ตอนทำงานปกติ **ต้องเขียนใน service เอง**
 > FK เหล่านี้เป็นตาข่ายนิรภัยตอน hard delete (cleanup job, ลบ org ทิ้ง)
 
+**เลือก action จากความหมายของการอ้างอิง ไม่ใช่จากรูปร่างของตาราง**
+
+| ปลายทางของ FK คืออะไร | Action |
+| --- | --- |
+| **ลูกที่ไม่มีความหมายถ้าแม่หายไป** — status ของ project, member ของ team | `CASCADE` |
+| **การอ้างอิงที่เป็นตัวเลือก** — แถวยังมีความหมายถ้าไม่มีมัน (task ไม่มี sprint = อยู่ Backlog) | `SET NULL` — คอลัมน์ต้อง nullable |
+| **การอ้างอิงที่เป็น _ประวัติ_** — ใครสร้าง ใครปิด ใครเคยเป็นสมาชิก | `RESTRICT` |
+| **ข้อมูลของผู้ใช้ที่หายเงียบไม่ได้** แม้จะดูเหมือนลูก | `RESTRICT` — ดูกับดักด้านล่าง |
+
+> **กับดัก: `task.tasks.project_id` เป็น `RESTRICT` ทั้งที่ task คือลูกของ project เต็มตัว**
+>
+> เพราะ `CASCADE` แปลว่าลบ project ทิ้งแล้ว task หายไปทั้งชุดโดยไม่มีอะไรทัดทาน · การลบ project จริงๆ เดินผ่าน [`cascade-soft-delete.ts`](../../../apps/api/core/src/shared/entity/cascade-soft-delete.ts) ที่ carry ลงไปใน transaction เดียว **`RESTRICT` คือตาข่ายที่ทำให้ลืมเขียน service แล้วพังดัง ไม่ใช่พังเงียบ**
+>
+> นี่คือเหตุผลที่ `AGGREGATE_CHILDREN` เขียนด้วยมือแทนที่จะอ่านจาก `pg_constraint` — ตาราง FK ตอบไม่ได้ว่าอะไรเป็นลูกของอะไรในความหมายที่ cascade ต้องการ
+
+**ที่มีตอนนี้** — บัญชีของจริง ไม่ใช่กติกา · FK ใหม่ตัดสินจากตารางข้างบน
+
 | FK                                                                                          | Action                    |
 | ------------------------------------------------------------------------------------------- | ------------------------- |
 | `project.statuses.project_id` · `project.members.project_id` · `project.sprints.project_id` | `CASCADE`                 |
@@ -103,29 +120,54 @@ CHECK ((deleted_at IS NULL) = (deleted_by IS NULL))   -- ตั้งพร้�
 
 **`deleted_at` กับ `deleted_by` ต้องตั้งพร้อมกัน** — แถวที่ถูกลบแล้วไม่รู้ว่าใครลบคือประวัติที่กู้ไม่ได้ · TypeORM ตั้ง `deleted_at` ให้เองผ่าน `@DeleteDateColumn` แต่ `deleted_by` ต้องตั้งเองผ่าน subscriber · CHECK นี้กันกรณีที่ subscriber ไม่ทำงาน
 
-**ข้อยกเว้น 4 กลุ่ม**
+### เลือกคอลัมน์ base — ตอบสามคำถาม
 
-| ตาราง                                                 | ไม่มี                      | เพราะ                                                                 |
-| ----------------------------------------------------- | ------------------------- | -------------------------------------------------------------------- |
-| `audit.logs`                                          | base entity ทั้งชุด          | composite PK · `occurred_at`/`actor_id` ทำหน้าที่แทน `created_at`/`created_by` |
-| `organization.organizations`                          | `org_id`                  | เท่ากับ `id` เสมอ                                                        |
-| `identity.sessions` · `identity.password_reset_tokens` · `notify.outbox` | `deleted_at`/`deleted_by` | มี `revoked_at` / `used_at` / `status` อยู่แล้ว และนโยบายคือ hard delete       |
-| **ตารางความสัมพันธ์** — `organization.members` · `organization.team_members` · `project.members` · `billing.ai_usage` · `task.assignees` · `task.dependencies` _(Phase 5)_ · `identity.role_permissions` · `identity.user_roles` | `deleted_at`/`deleted_by` — และสี่ตัวท้าย**ไม่มี `updated_at`/`updated_by` ด้วย** | ดูด้านล่าง · สี่ตัวแรกมีคอลัมน์ `role` (หรือยอดใช้งาน) ให้แก้ จึงยังแก้ได้ · สี่ตัวท้ายเป็นข้อเท็จจริงที่จริงหรือไม่จริงเท่านั้น ไม่มีสถานะกลางให้อัปเดต สองคอลัมน์นั้นจะเท่ากับคู่ `created_*` ตลอดไป |
+ตารางข้างบนคือกรณีปกติ ไม่ใช่กรณีบังคับ · ตารางใหม่ตอบสามคำถามนี้แล้วได้คำตอบเอง ไม่ต้องหาชื่อตัวเองในรายการ
 
-กลุ่มที่สามคือบั๊กแบบเดียวกับที่ `identity.users` เคยมี — **ตัวบอกการลบสองตัวในตารางเดียวย่อมขัดกันได้**
+| คำถาม | ถ้าใช่ | ถ้าไม่ |
+| --- | --- | --- |
+| **1.** แถวนี้เป็นของ org ใด org หนึ่งไหม | `org_id` | ไม่มี — [เกณฑ์เต็ม](#the-org_id-rule--one-test-not-a-list) |
+| **2.** มีคอลัมน์ไหนถูก _แก้_ หลังสร้างไหม | `updated_at` · `updated_by` | ไม่มี |
+| **3.** ลบแล้วต้อง _กู้คืน_ ได้ไหม | `deleted_at` · `deleted_by` + CHECK | ไม่มี — hard delete |
 
-**กลุ่มที่สี่ — ตารางความสัมพันธ์เป็น hard delete** เดิมเป็น soft delete เพราะเป็น default ของ `BaseEntity` ไม่ใช่เพราะถูกถามทีละตาราง · เหตุผลที่เปลี่ยน เรียงจากหนักสุด
+สามแกนนี้อิสระต่อกัน จึงมี 6 คลาสใน [`base.entity.ts`](../../../apps/api/core/src/shared/entity/base.entity.ts) ครบทุกการผสม (ที่ใช้จริง)
 
-1. **ลืม filter บนตารางพวกนี้ = ช่องโหว่สิทธิ์ ไม่ใช่บั๊กการแสดงผล** · แถว `project.members` ที่ `deleted_at` มีค่าแต่ query ลืมกรอง = คนที่ถูกถอดออกยังเข้าถึง project ได้ · hard delete แล้วแถวไม่อยู่ ไม่มีอะไรให้ลืม
-2. **เหตุผลที่คนเก็บ soft delete ไว้ ที่นี่มีของที่ดีกว่าอยู่แล้ว** — `audit.logs` partition รายเดือน ไม่เคยลบ (🔒) บันทึกว่าใครถอดใครออกเมื่อไหร่ครบกว่า `deleted_by` ตัวเดียว
-3. **ถอดคนออกไม่ใช่การทำลายข้อมูล** มันคือการเปลี่ยนความสัมพันธ์ เพิ่มกลับต้นทุนศูนย์ ไม่มีอะไรให้กู้ · soft delete ทำให้ถอด-ใส่ซ้ำสะสมแถวตาย และ upsert ต้องคิดเผื่อทุกครั้ง
-4. `billing.ai_usage` เป็นบันทึกการใช้เงิน — append-only ให้ retention ลบจริง soft delete ไม่ตรงความหมาย
+| คลาส | org_id | แก้ได้ | soft delete | ใช้กับ |
+| --- | :-: | :-: | :-: | --- |
+| `BaseEntity` | ✓ | ✓ | ✓ | ค่าปกติ — task, project, team |
+| `SoftDeletableEntity` | ✗ | ✓ | ✓ | `identity.users` · `organizations` · `billing.plans` |
+| `OrgScopedEntity` | ✓ | ✓ | ✗ | `notify.outbox` · `*.members` · `team_members` · `ai_usage` |
+| `TimestampedEntity` | ✗ | ✓ | ✗ | `sessions` · `password_reset_tokens` |
+| `CreatedEntity` | ✗ | ✗ | ✗ | `role_permissions` · `user_roles` · `oauth_accounts` _(Phase 1)_ |
+| `OrgScopedCreatedEntity` | ✓ | ✗ | ✗ | `task.assignees` · `task.dependencies` _(Phase 5)_ |
 
-**cascade ไม่ลงไปหาตารางกลุ่มนี้** โดยตั้งใจ — soft delete project แล้ว member ยังอยู่ครบ **restore แล้วได้คนเดิมกลับมา** · ตอน hard delete จริงตอน retention `ON DELETE CASCADE` ของ FK เก็บกวาดให้เอง
+#### คำถามที่ 2 ตอบยังไง — "แก้" ไม่ใช่ "เปลี่ยนสถานะ"
 
-**ในกลุ่มที่สี่ สามตารางไม่มี `updated_at`/`updated_by` ด้วย** — `identity.role_permissions` · `identity.user_roles` · `task.assignees` เพราะไม่มีคอลัมน์ไหนถูก "แก้" หลังสร้างเลย มีแต่ FK สองสามตัวที่เป็น**สิทธิ์**ตัวมันเอง (สิทธิ์นี้ผูกกับ role นี้ไหม, task นี้มอบให้คนนี้ไหม) ถอนแล้วให้ใหม่คือลบแถวสร้างใหม่ ไม่ใช่ UPDATE · ถ้าเก็บสองคอลัมน์นี้ไว้ ค่าจะเท่ากับ `created_at`/`created_by` ตลอดไป พร้อมแบก FK `ON DELETE RESTRICT` ที่ไม่เคยได้ใช้
+ถ้าคอลัมน์ที่ไม่ใช่ base มีแต่ FK กับค่าที่ตั้งครั้งเดียว **แถวนั้นไม่ถูกแก้** — มันเป็นข้อเท็จจริงที่จริงหรือไม่จริงเท่านั้น ไม่มีสถานะกลาง
 
-`organization.members` · `organization.team_members` · `project.members` · `billing.ai_usage` ยังมี `updated_at`/`updated_by` เหมือนเดิม — สามตัวแรกมีคอลัมน์ `role` ที่เปลี่ยนได้จริง (เลื่อนขั้น/ลดขั้น) ส่วน `ai_usage` ยังไม่ commit เป็น spec (§Phase 7-8) จึงไม่ตัดสินล่วงหน้าว่า token นับสะสมด้วย UPDATE หรือ insert ใหม่ทุกครั้ง
+`task.assignees` มีแค่ "task นี้มอบให้คนนี้ไหม" · `role_permissions` มีแค่ "สิทธิ์นี้ผูกกับ role นี้ไหม" · ถอนแล้วให้ใหม่คือ **ลบแถวสร้างใหม่ ไม่ใช่ UPDATE**
+
+เก็บสองคอลัมน์นั้นไว้ = ค่าจะเท่ากับ `created_at`/`created_by` ตลอดไป พร้อมแบก FK `ON DELETE RESTRICT` ที่ไม่มีวันได้ใช้
+
+ตรงข้ามกับ `organization.members` · `team_members` · `project.members` ที่มีคอลัมน์ `role` เปลี่ยนได้จริง (เลื่อนขั้น/ลดขั้น) จึงยังต้องมี · ส่วน `billing.ai_usage` ยังมีไว้เพราะ Phase 7-8 ยังไม่ commit ว่า token นับสะสมด้วย UPDATE หรือ insert ใหม่ทุกครั้ง
+
+#### คำถามที่ 3 ตอบยังไง — สี่สัญญาณว่าอย่า soft delete
+
+ตอบ **"ไม่"** ถ้าเข้าข้อใดข้อหนึ่ง เรียงจากหนักสุด
+
+1. **ลืม filter แล้วเป็นช่องโหว่สิทธิ์ ไม่ใช่บั๊กการแสดงผล** — แถว `project.members` ที่ `deleted_at` มีค่าแต่ query ลืมกรอง = คนที่ถูกถอดออกยังเข้าถึง project ได้ · `identity.oauth_accounts` หนักกว่านั้นอีก เพราะ flow ล็อกอินหาแถวด้วย `provider_user_id` ตรงๆ ลืมกรองคือคนที่ unlink แล้ว**ล็อกอินกลับเข้ามาได้** · hard delete แล้วแถวไม่อยู่ ไม่มีอะไรให้ลืม
+2. **มีคอลัมน์บอกสถานะ "ใช้ไม่ได้แล้ว" อยู่แล้ว** — `sessions.revoked_at` · `password_reset_tokens.used_at` · `outbox.status` · ตัวบอกการลบสองตัวในตารางเดียวย่อมขัดกันได้ (บั๊กแบบเดียวกับที่ `identity.users` เคยมี)
+3. **การ "ลบ" คือความสัมพันธ์เปลี่ยน ไม่ใช่ข้อมูลถูกทำลาย** — เพิ่มกลับต้นทุนศูนย์ ไม่มีอะไรให้กู้ · soft delete ทำให้ถอด-ใส่ซ้ำสะสมแถวตาย และ upsert ต้องคิดเผื่อทุกครั้ง
+4. **เป็นบันทึกแบบ append-only** เช่น `billing.ai_usage` ที่เป็นการใช้เงิน — ให้ retention ลบจริง soft delete ไม่ตรงความหมาย
+
+**และของที่คนมัก soft delete ไว้เผื่อ ที่นี่มีของที่ดีกว่าอยู่แล้ว** — `audit.logs` partition รายเดือน ไม่เคยลบ (🔒) บันทึกว่าใครถอดใครออกเมื่อไหร่ ครบกว่า `deleted_by` ตัวเดียวมาก
+
+**cascade ไม่ลงไปหาตารางที่ hard delete** โดยตั้งใจ — soft delete project แล้ว member ยังอยู่ครบ **restore แล้วได้คนเดิมกลับมา** · ตอน retention ลบจริง `ON DELETE CASCADE` ของ FK เก็บกวาดให้เอง
+
+#### `audit.logs` ไม่เข้าเกณฑ์นี้เลย
+
+ตารางเดียวที่ไม่ใช้ base entity สักคอลัมน์ — composite PK และ `occurred_at`/`actor_id` ทำหน้าที่แทน `created_at`/`created_by` อยู่แล้ว · `organization.organizations` ก็ไม่มี `org_id` เพราะมันจะเท่ากับ `id` เสมอ (คำถามที่ 1 ตอบไปแล้ว)
+
 
 > ⚠️ **ทุก field ที่เป็นวันเวลาใช้ `timestamptz` (timestamp with time zone) เท่านั้น**
 >

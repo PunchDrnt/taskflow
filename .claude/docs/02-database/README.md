@@ -53,19 +53,33 @@ TypeORM กำหนดที่ entity: `@Entity({ schema: 'task', name: 'tasks
 
 **ไม่ใช้ `enum` type ของ Postgres ที่ไหนเลย** — เพิ่มค่าใหม่ต้องแยก migration สองรอบ (ค่าที่เพิ่งเพิ่มใช้ใน transaction เดียวกันไม่ได้) ลบค่าต้องสร้าง type ใหม่ทั้งตัว · ใช้ `text` ธรรมดา แล้วใส่ `CHECK` เอาถ้าจำเป็น — แก้ทีหลังแค่ drop constraint แล้ว add ใหม่
 
-ใส่ `CHECK` เฉพาะคอลัมน์ที่**มี partial index พึ่งค่ามันอยู่** เพราะค่าที่พิมพ์ผิดจะหลุดจาก index ไปเงียบ ๆ — insert ผ่าน ไม่มี error แต่ข้อจำกัดที่ตั้งใจไว้หายไป ตอนนี้มี 3 ตัว:
+**เกณฑ์เดียว: ใส่ `CHECK` ก็ต่อเมื่อค่าที่พิมพ์ผิดทำให้ _constraint อื่น_ เงียบๆ ไม่ทำงาน**
 
-| คอลัมน์ | index ที่พึ่งมัน |
-| --- | --- |
-| `identity.users.status` | unique email `WHERE status != 'deleted'` |
-| `project.sprints.status` | unique `(project_id) WHERE status = 'active'` |
-| `notify.outbox.status` | คิวของ worker `WHERE status = 'pending'` |
+ค่าที่พิมพ์ผิดในคอลัมน์ธรรมดาคือข้อมูลผิดหนึ่งแถว — แอปเจอเองตอนอ่าน · แต่ถ้ามี index พึ่งค่านั้นอยู่ **insert จะผ่าน ไม่มี error และข้อจำกัดที่ตั้งใจไว้หายไปโดยไม่มีใครรู้** · มีสองรูปแบบ
 
-คอลัมน์ค่าจำกัดตัวอื่น (`role`, `priority`, `platform`, `assignee_type`, `type` ฯลฯ) ปล่อยเป็น `text` ให้ application คุม — เพิ่ม `CHECK` ทีหลังได้ตลอดถ้าเจอปัญหาจริง
+| รูปแบบ | ค่าผิดแล้วเกิดอะไร | ตอนนี้มี |
+| --- | --- | --- |
+| **partial index พึ่ง _ค่า_ นั้น** | แถวหลุดออกจาก index ไปเลย | `users.status` (unique email `WHERE status != 'deleted'`) · `sprints.status` (unique `(project_id) WHERE status = 'active'`) · `outbox.status` (คิว worker `WHERE status = 'pending'`) |
+| **unique index ที่มีคอลัมน์นั้นเป็นส่วนประกอบ** | ค่าผิดไปอยู่คนละ bucket — uniqueness ไม่ครอบอีกต่อไป | `oauth_accounts.provider` — `('google', sub)` กับ `('Google', sub)` เป็นคนละคีย์ **= Google account เดียวถูกอ้างโดยสอง user ได้ ซึ่งคือช่องยึดบัญชี** |
 
-หัวข้อนี้พูดถึง `CHECK` ที่จำกัด**ชุดค่า**ของคอลัมน์เดียวเท่านั้น · `CHECK` ที่ผูกสองคอลัมน์เข้าด้วยกัน (invariant ข้ามคอลัมน์ เช่น `identity.users` ที่บังคับ `password_hash IS NULL` เมื่อ `is_system`) เป็นคนละเรื่อง ใส่ได้ตามที่จำเป็น ไม่ต้องเข้าเกณฑ์ข้างบน
+**ห้ามใส่** ถ้าไม่เข้าสองแบบข้างบน **และ** การเพิ่มค่าใหม่ไม่ต้องมี migration อยู่แล้ว — `CHECK` จะเปลี่ยนงานที่ไม่ต้องแตะ DB เลยให้กลายเป็น migration แถมทุกครั้ง และถ้าคอลัมน์นั้นอยู่ใน `audit.logs` ซึ่ง partition รายเดือนและไม่เคยลบ `VALIDATE` จะแพงขึ้นเรื่อยๆ ไม่มีวันถูกลง
+_ตัวอย่าง:_ `audit.logs.entity_type` · `audit.logs.action` · `discussion.comments.entity_type` · `notify.outbox.template` · `view.columns.column_key` · `automation.rules.trigger_type` _(Phase 5)_ — ทุกตัวเพิ่มค่าใหม่ได้ด้วยการเขียนโค้ดอย่างเดียว
 
-**ห้ามใส่** `CHECK` กับคอลัมน์ที่ค่าโตตามฟีเจอร์ — `audit.logs.entity_type` / `audit.logs.action` / `discussion.comments.entity_type` / `notify.outbox.template` / `view.columns.column_key` · ทุกฟีเจอร์ใหม่จะกลายเป็น migration แถม และ `audit.logs` เป็นตาราง partition ที่ไม่เคยลบ → `VALIDATE` แพงขึ้นเรื่อย ๆ
+> **"ค่าโตตามฟีเจอร์" อย่างเดียวไม่ใช่เหตุผลห้าม** — `oauth_accounts.provider` ก็โต (`'line'` ทีหลัง) แต่การเพิ่ม provider คือการต่อ integration ใหม่ที่มี migration ของตัวเองอยู่แล้ว `DROP CONSTRAINT` หนึ่งบรรทัดจึงไม่ใช่ต้นทุน · ต่างจาก `audit.logs.action` ที่เพิ่มค่าใหม่ทุกฟีเจอร์โดยไม่ต้องแตะ DB เลย
+
+_ที่ไม่เข้าเกณฑ์ ปล่อยเป็น `text` ให้ application คุม:_ `role` · `priority` · `type` ฯลฯ — เพิ่ม `CHECK` ทีหลังได้ตลอดถ้าเจอปัญหาจริง
+
+**สามคอลัมน์ที่เข้าเกณฑ์แถวที่สอง** — เกณฑ์เดิมเขียนครอบแค่ partial index จึงมองข้ามไปทั้งสามตัว
+
+| คอลัมน์ | unique index ที่พึ่งมัน | ค่าผิดแล้ว |
+| --- | --- | --- |
+| `chat.channels.platform` | `(platform, external_channel_id)` | 🔒 **"1 `external_channel_id` ผูกได้ org เดียว" ถูกข้าม** — ห้องเดียวลงทะเบียนได้สอง org = ข้อความข้ามบริษัท |
+| `chat.identities.platform` | `(platform, external_id)` | คนเดียวผูกได้สองแถวในแพลตฟอร์มเดียวกัน |
+| `task.assignees.assignee_type` | `(task_id, assignee_type, assignee_id)` | เป็น discriminator ของ polymorphic ที่**ไม่มี FK** — ค่าผิดแปลว่า `assignee_id` ถูกไปหาในตารางผิด (`users` แทน `teams`) |
+
+> ⚠️ **`schema-drift.spec.ts` มองไม่เห็น `CHECK`** — มันเทียบคอลัมน์ ไม่ใช่ constraint · CHECK ที่หายไปจึงไม่มีอะไรฟ้อง `test/schema-invariants.spec.ts` เลยยืนยันสามตัวนี้แทน
+
+เกณฑ์ข้างบนใช้กับ `CHECK` ที่จำกัด**ชุดค่า**ของคอลัมน์เดียวเท่านั้น · `CHECK` ที่ผูกสองคอลัมน์เข้าด้วยกัน (invariant ข้ามคอลัมน์ เช่น `identity.users` ที่บังคับ `password_hash IS NULL` เมื่อ `is_system`) เป็นคนละเรื่อง ใส่ได้ตามที่จำเป็น ไม่ต้องเข้าเกณฑ์นี้
 
 > ⚠️ `CHECK` ใน DB กับ union type ใน `@repo/shared` ไม่มีอะไร sync ให้ — แก้ที่ไหนต้องแก้อีกที่ด้วย
 
