@@ -7,7 +7,7 @@ import { type MigrationInterface, type QueryRunner } from 'typeorm'
  * The first row references itself, which Postgres allows in one INSERT as long
  * as the id is a literal — the FK is checked after the row lands.
  *
- * See docs/02-database.md#schema-identity
+ * See docs/02-database/schema.md#schema-identity
  */
 
 /** Fixed, so it is recognisable in logs and identical in every environment. */

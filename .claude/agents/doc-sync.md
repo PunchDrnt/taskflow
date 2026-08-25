@@ -32,7 +32,7 @@ The map:
 | API paths, error format, status codes, pagination | `01-architecture.md#api`                  |
 | auth, sessions, tokens, password flow             | `01-architecture.md#auth`                 |
 | transactions, org scoping, soft delete, retention | `01-architecture.md#implementation-notes` |
-| tables, columns, FK behaviour                     | `.claude/docs/02-database.md`             |
+| tables, columns, FK behaviour                     | `.claude/docs/02-database/README.md`      |
 | what belongs in which phase                       | `03-roadmap.md` and `04-features.md`      |
 
 Quote both sides. A claim that the code and doc disagree is only useful with the

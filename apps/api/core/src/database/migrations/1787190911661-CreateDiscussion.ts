@@ -8,7 +8,7 @@ import { type MigrationInterface, type QueryRunner } from 'typeorm'
  * This module must not know what a task is. It sees `entity_type` and
  * `entity_id`, nothing more.
  *
- * See .claude/docs/02-database.md#schema-discussion
+ * See .claude/docs/02-database/schema.md#schema-discussion
  */
 export class CreateDiscussion1787190911661 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {

@@ -8,7 +8,7 @@ import { type MigrationInterface, type QueryRunner } from 'typeorm'
  * back to here, so deleting a definition leaves orphaned keys for the
  * application to sweep.
  *
- * See .claude/docs/02-database.md#schema-field-phase-4
+ * See .claude/docs/02-database/schema.md#schema-field-phase-4
  */
 export class CreateFieldAndView1787190913197 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {

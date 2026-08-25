@@ -17,7 +17,7 @@ import { createMigratedTestDataSource, hasTestDatabase } from './database'
  * exists. It runs against a real Postgres rather than a mock, because what is
  * being tested is the SQL that actually reaches the database.
  *
- * See .claude/docs/02-database.md#3-multi-tenancy
+ * See .claude/docs/02-database/rules.md#multi-tenancy
  */
 
 describe.skipIf(!hasTestDatabase)('cross-org isolation', () => {

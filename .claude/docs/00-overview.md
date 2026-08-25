@@ -51,7 +51,7 @@
 | ใช้ stack อะไร โครง repo เป็นยังไง         | [`01-architecture.md`](./01-architecture.md)             |
 | Module แบ่งยังไง กติกาการเรียกข้าม module    | [`01-architecture.md`](./01-architecture.md)             |
 | API path / error format / naming / auth | [`01-architecture.md`](./01-architecture.md#conventions) |
-| ตารางไหนมีฟิลด์อะไร FK ชี้ทางไหน             | [`02-database.md`](./02-database.md)                     |
+| ตารางไหนมีฟิลด์อะไร FK ชี้ทางไหน             | [`02-database/README.md`](./02-database/README.md)                     |
 | จะทำอะไรบ้าง phase ไหน อันไหนสำคัญก่อน      | [`03-roadmap.md`](./03-roadmap.md)                       |
 | รายละเอียดของ feature แต่ละอัน             | [`04-features.md`](./04-features.md)                     |
 | SaaS / billing / pricing / AI ที่ใช้ LLM   | [`05-saas-notes.md`](./05-saas-notes.md)                 |
@@ -60,10 +60,10 @@
 
 | ถ้าคุณ                     | อ่านตามลำดับนี้                                                                                             |
 | ------------------------ | ------------------------------------------------------------------------------------------------------- |
-| กำลังจะเริ่มเขียนโค้ด Phase 0 | ไฟล์นี้ → `01-architecture.md` → `02-database.md` → Phase 0 ใน `04-features.md`                            |
+| กำลังจะเริ่มเขียนโค้ด Phase 0 | ไฟล์นี้ → `01-architecture.md` → `02-database/README.md` → Phase 0 ใน `04-features.md`                            |
 | อยากรู้ภาพรวมว่าทำอะไรบ้าง   | ไฟล์นี้ → `03-roadmap.md`                                                                                  |
 | กำลังทำ phase ใดอยู่        | `03-roadmap.md` (ดู priority) → `04-features.md` (ดูรายละเอียด)                                            |
-| กำลังจะแตะ schema         | [Binding Decisions](#binding-decisions) → `02-database.md` → หัวข้อ Build From Day One ใน `03-roadmap.md` |
+| กำลังจะแตะ schema         | [Binding Decisions](#binding-decisions) → `02-database/README.md` → หัวข้อ Build From Day One ใน `03-roadmap.md` |
 | กำลังคิดเรื่องขาย            | `05-saas-notes.md`                                                                                      |
 
 ---
@@ -150,15 +150,15 @@ Schema วางครบทุก module ตั้งแต่ Phase 0 แล�
 | ข้อ                                                               | ถ้าทำผิด                                                           | อยู่ที่                                                                                            |
 | ---------------------------------------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
 | วันเวลาใช้ `timestamptz` เท่านั้น เก็บ UTC (ห้าม `timestamp`)           | ต้อง migrate ทุกตารางที่มีวันเวลา และข้อมูลเก่าตีความไม่ได้                  | [`01-architecture.md`](./01-architecture.md#data-types)                                        |
-| `org_id` ทุกตารางที่แถวเป็นของ org ใด org หนึ่ง (ยกเว้น `identity`, `billing.plans`, `organizations` ที่ไม่เป็นของ org ไหน) + ต้องมี isolation test | ข้อมูลข้ามบริษัทรั่ว — พลาดครั้งเดียวจบ                                    | [`02-database.md`](./02-database.md#3-multi-tenancy)                                           |
+| `org_id` ทุกตารางที่แถวเป็นของ org ใด org หนึ่ง (ยกเว้น `identity`, `billing.plans`, `organizations` ที่ไม่เป็นของ org ไหน) + ต้องมี isolation test | ข้อมูลข้ามบริษัทรั่ว — พลาดครั้งเดียวจบ                                    | [`02-database/rules.md`](./02-database/rules.md#multi-tenancy)                                           |
 | Unique constraint ของตาราง soft delete ต้องเป็น **partial index**  | ลบแล้วสร้างชื่อเดิมไม่ได้ตลอดไป                                         | [`01-architecture.md`](./01-architecture.md#soft-delete)                                       |
 | `created_by` / `updated_by` / `completed_by` เป็น `RESTRICT`      | ลบ user แล้วประวัติงานพัง — การลบ user คือ anonymize ไม่ใช่ hard delete | [`01-architecture.md`](./01-architecture.md#fk-on-delete)                                      |
 | `audit.logs` partition รายเดือน + `PRIMARY KEY (id, occurred_at)` | ทำทีหลังต้องย้ายข้อมูลทั้งตาราง · PK เดี่ยวสร้างไม่ผ่านตั้งแต่แรก                | [`01-architecture.md`](./01-architecture.md#retention--each-kind-of-data-has-its-own-lifetime) |
-| `audit.logs` ห้ามลบ                                               | ประวัติที่ต้องใช้ตรวจสอบสร้างใหม่ไม่ได้                                    | [`02-database.md`](./02-database.md#schema-audit)                                              |
+| `audit.logs` ห้ามลบ                                               | ประวัติที่ต้องใช้ตรวจสอบสร้างใหม่ไม่ได้                                    | [`02-database/schema.md`](./02-database/schema.md#schema-audit)                                              |
 | Audit row เขียนใน transaction เดียวกับ business logic               | log หายเงียบๆ เมื่อ listener throw — ไม่มี error บอก                  | [`01-architecture.md`](./01-architecture.md#how-the-activity-log-is-written)                   |
-| Primary key เป็น UUID                                             | เปลี่ยนทีหลังต้องแตะทุก FK ทุกตาราง                                     | [`02-database.md`](./02-database.md#base-entity--on-every-table-with-four-named-exceptions)                 |
+| Primary key เป็น UUID                                             | เปลี่ยนทีหลังต้องแตะทุก FK ทุกตาราง                                     | [`02-database/rules.md`](./02-database/rules.md#base-entity)                 |
 | `sort_order` เป็น `text COLLATE "C"` + fractional indexing        | เรียงไม่ตรงกันข้ามเครื่อง/locale และ drag & drop ต้อง update ทุกแถว      | [`01-architecture.md`](./01-architecture.md#lexorank--sort_order)                              |
-| 1 `external_channel_id` ผูกได้ org เดียว                            | ข้อความจากห้องแชทเดียวเข้าได้หลายบริษัท = ข้อมูลข้ามบริษัท                   | [`02-database.md`](./02-database.md#schema-chat-phase-2)                                       |
+| 1 `external_channel_id` ผูกได้ org เดียว                            | ข้อความจากห้องแชทเดียวเข้าได้หลายบริษัท = ข้อมูลข้ามบริษัท                   | [`02-database/schema.md`](./02-database/schema.md#schema-chat-phase-2)                                       |
 
 ### ❓ ยังไม่ตัดสิน
 
@@ -178,12 +178,13 @@ Schema วางครบทุก module ตั้งแต่ Phase 0 แล�
 2. Modular Monolith — module, กติกาการเรียกข้าม module, Query Service, การอ่าน audit log
 3. Conventions — API, naming, auth, implementation notes
 
-### [`02-database.md`](./02-database.md)
+### [`02-database/`](./02-database/README.md)
 
-1. Schema Map — ตารางไหนอยู่ schema ไหน
-2. Foreign Key Rules — ทิศทางเดียว, polymorphic
-3. Multi-tenancy — `org_id` scoping
-4. Full Schema — ทุกตารางพร้อมฟิลด์
+แยกสามไฟล์ตามวิธีที่ถูกใช้จริง — กติกาอ่านตั้งแต่ต้นจนจบ ส่วนตารางเปิดหาทีละอัน
+
+1. [`rules.md`](./02-database/rules.md) 🔒 — FK · Multi-tenancy · Base Entity · กฎ `org_id` · **อ่านก่อนเขียน migration**
+2. [`schema.md`](./02-database/schema.md) — ทุกตาราง ทุกฟิลด์ ทั้ง 12 schema
+3. [`README.md`](./02-database/README.md) — Schema Map ว่าตารางไหนอยู่ schema ไหน + Other Notes
 
 ### [`03-roadmap.md`](./03-roadmap.md)
 

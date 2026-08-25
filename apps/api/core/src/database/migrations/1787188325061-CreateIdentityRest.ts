@@ -12,7 +12,7 @@ import { type MigrationInterface, type QueryRunner } from 'typeorm'
  * Base columns are written out in full rather than shared from a constant — a
  * migration is a record, and an edited snippet would rewrite the past.
  *
- * See docs/02-database.md#schema-identity
+ * See docs/02-database/schema.md#schema-identity
  */
 export class CreateIdentityRest1787188325061 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {

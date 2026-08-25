@@ -14,7 +14,7 @@ import { type MigrationInterface, type QueryRunner } from 'typeorm'
  * the same reason migration 003 writes the system user's uuid as a literal.
  * `test/schema-invariants.spec.ts` fails if the two drift apart.
  *
- * See docs/02-database.md#rbac-ระดับระบบ--สิทธิ์ทั้งเว็บ-ไม่ใช่ระดับ-org
+ * See docs/02-database/schema.md#rbac-ระดับระบบ--สิทธิ์ทั้งเว็บ-ไม่ใช่ระดับ-org
  */
 const PERMISSIONS: [key: string, description: string][] = [
   ['org.read', 'Read any organisation, across org scope'],

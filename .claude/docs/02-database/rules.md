@@ -1,0 +1,211 @@
+# Database Rules
+
+กติกาที่ใช้กับทุกตาราง — FK · การแยกข้อมูลตาม org · คอลัมน์ที่ทุกตารางมี
+
+> [← Database](./README.md) · [ทุกตาราง](./schema.md) · เกี่ยวข้อง: [`01-architecture.md`](../01-architecture.md)
+
+---
+
+## Foreign Key Rules
+
+> 🔒 **ต้องทำ** — ตารางที่มี `org_id` **และ** มี FK ไปตารางที่ scope ด้วย org เหมือนกัน → FK นั้นต้องเป็น **composite `(fk_id, org_id)`**
+
+```sql
+-- ตารางแม่: id เป็น PK อยู่แล้วจึง unique อยู่ดี · index นี้มีไว้ให้ลูกชี้เท่านั้น
+ALTER TABLE organization.teams ADD CONSTRAINT teams_id_org_unique UNIQUE (id, org_id);
+
+-- ตารางลูก: ชี้เป็นคู่ ไม่ใช่ชี้ทีละคอลัมน์
+FOREIGN KEY (team_id, org_id) REFERENCES organization.teams (id, org_id) ON DELETE CASCADE
+```
+
+**ทำไมถึงเป็น 🔒** — `org_id` ที่ลูกถือเป็นค่า denormalize ถ้าไม่มีอะไรผูก มันขัดกับแม่ได้ แล้ว `OrgScopedRepository` ที่กรองด้วย `org_id` อย่างเดียวจะคืนแถวนั้นออกมา = **ข้อมูลข้าม org รั่ว จากคอลัมน์ที่มีไว้กันรั่วเอง**
+
+```
+team_members.org_id = Org A     แต่     teams.org_id = Org B
+ไม่มี composite FK →  INSERT ผ่าน · repository ของ Org A เห็นแถวนี้     (ทดสอบแล้ว)
+มี composite FK    →  INSERT ถูกปฏิเสธ                                 (ทดสอบแล้ว)
+```
+
+ผลข้างเคียงที่ตั้งใจ: **ย้าย team/project ข้าม org ทั้งที่ยังมีลูกอยู่ไม่ได้** ต้องย้ายลูกไปพร้อมกันใน transaction เดียว
+
+**ไม่ต้องทำ composite** ถ้า FK ชี้ตรงไป `organization.organizations(id)` (เช่น `teams.org_id`, `projects.org_id`) เพราะคอลัมน์เดียวขัดกับตัวเองไม่ได้ · และถ้าชี้ไป schema `identity` ซึ่งไม่มี org
+
+- FK ข้าม schema ได้ **ทิศทางเดียว**: `task → project → organization → identity`
+- Schema ระดับล่างห้ามมี FK ชี้ขึ้นไปหาระดับบน — `identity` ต้องไม่รู้จัก `task`
+- Schema กลาง (`audit`, `discussion`, `field`, `view`) ไม่ชี้ไปไหนเลย (polymorphic)
+- ตาราง polymorphic (`discussion.comments`, `discussion.attachments`, `audit.logs`, `field.definitions`) **ไม่มี FK** — ชดเชยด้วย index
+
+```sql
+CREATE INDEX ON discussion.comments (org_id, entity_type, entity_id, created_at);
+```
+
+### ON DELETE
+
+> ⚠️ FK cascade ทำงานกับ **hard delete เท่านั้น** — ระบบใช้ soft delete เป็นหลัก
+> การลบแบบ cascade ตอนทำงานปกติ **ต้องเขียนใน service เอง**
+> FK เหล่านี้เป็นตาข่ายนิรภัยตอน hard delete (cleanup job, ลบ org ทิ้ง)
+
+| FK                                                                                          | Action                    |
+| ------------------------------------------------------------------------------------------- | ------------------------- |
+| `project.statuses.project_id` · `project.members.project_id` · `project.sprints.project_id` | `CASCADE`                 |
+| `chat.channels.project_id` · `field.definitions.project_id` · `view.views.project_id`       | `CASCADE`                 |
+| `task.assignees.task_id` · `task.tasks.parent_task_id`                                      | `CASCADE`                 |
+| `task.dependencies.predecessor_id` · `.successor_id` _(Phase 5)_                            | `CASCADE`                 |
+| `automation.rules.project_id` _(Phase 5)_                                                   | `CASCADE`                 |
+| `organization.members.org_id` · `organization.team_members.team_id`                         | `CASCADE`                 |
+| `identity.sessions.user_id` · `password_reset_tokens.user_id`                               | `CASCADE`                 |
+| `identity.role_permissions.*` · `user_roles.role_id`                                        | `CASCADE`                 |
+| `task.tasks.sprint_id`                                                                      | `SET NULL` (ตกไป Backlog) |
+| `chat.channels.default_assignee_id` · `identity.user_roles.granted_by`                      | `SET NULL`                |
+| `task.tasks.project_id` · `task.tasks.status_id`                                            | `RESTRICT`                |
+| `organization.members.user_id` · `team_members.user_id`                                     | `RESTRICT`                |
+| `*.created_by` · `*.updated_by` · `task.tasks.completed_by`                                 | `RESTRICT`                |
+
+**`created_by` เป็น `RESTRICT` ไม่ใช่ `SET NULL`** — เพราะการลบ user คือ _anonymize_ (แถวยังอยู่) ไม่ใช่ hard delete FK จึงยังชี้ได้ ประวัติไม่พัง และคง `NOT NULL` ได้
+
+**`SET NULL` ใช้ได้เฉพาะ column ที่ nullable** — ถ้า `NOT NULL` จะ error ตอน runtime ไม่ใช่ตอนสร้าง table
+
+**`audit.logs` ไม่มี FK และห้ามลบเด็ดขาด** แม้ entity แม่หายไป
+
+## Multi-tenancy
+
+> 🔒 **ต้องทำ** — ตารางต้องมี `org_id` ถ้าแถวของมันเป็นของ org ใด org หนึ่ง · ยกเว้นแถวที่ไม่ได้เป็นของ org ไหนเลย ([เกณฑ์เต็ม + สามกรณี](#the-org_id-rule--one-test-not-a-list))
+
+- `org_id` **ทุกตาราง ทุก schema** รวมถึงตารางกลาง — **ตารางกลางยิ่งต้องมี** เพราะ composite FK คือสิ่งเดียวที่กันการผูกข้าม org ([ทำไม](#เกณฑ์นี้ไม่ใช่-หา-org-จากแม่ได้มั้ย))
+- Composite index ขึ้นต้นด้วย `org_id` เสมอ
+  ```sql
+  CREATE INDEX ON task.tasks (org_id, project_id, status_id);
+  ```
+- บังคับกรองผ่าน Guard/Interceptor ระดับ global ไม่ให้ dev จำเอง
+- **Row-Level Security เปิดทุกตาราง — ทำใน Phase 2 ไม่ใช่ Phase 0** (`CREATE POLICY` เป็นงาน additive เพิ่มทีหลังได้โดยไม่ต้อง migrate) · Phase 0 ใช้ repository base class + isolation test · ดูเหตุผลเต็มใน [`01-architecture.md`](../01-architecture.md#org_id-scoping)
+  - ⚠️ ต้องมี `FORCE ROW LEVEL SECURITY` ด้วย ไม่งั้น policy ไม่กันเจ้าของตารางและจะเงียบสนิทไม่มี error
+  - ⚠️ ใช้ `set_config('app.current_org_id', $1, true)` ไม่ใช่ `SET LOCAL` (SET LOCAL รับ parameter ไม่ได้ → เสี่ยง SQL injection)
+
+> ⚠️ พลาดครั้งเดียวตอนเป็น SaaS จริง = ข้อมูลข้ามบริษัทรั่ว — จุดนี้ต้องมี test
+
+## Base Entity
+
+> 🔒 **ต้องทำ** — primary key เป็น UUID · วันเวลาเป็น `timestamptz` ทั้งหมด
+
+```
+id           uuid          PK · gen_random_uuid()
+org_id       uuid          NOT NULL · ทุกตาราง ทุก schema
+
+created_at   timestamptz   NOT NULL · default now()
+created_by   uuid          NOT NULL · ผู้สร้าง (ระบบสร้างเอง = uuid ของ system user)
+updated_at   timestamptz   NOT NULL · default now() · อัปเดตทุกครั้งที่แก้
+updated_by   uuid          NOT NULL · คนที่แก้ล่าสุด
+deleted_at   timestamptz   null = ยังไม่ถูกลบ (soft delete)
+deleted_by   uuid          null · คนที่ลบ
+
+CHECK ((deleted_at IS NULL) = (deleted_by IS NULL))   -- ตั้งพร้อมกันเสมอ
+```
+
+**`deleted_at` กับ `deleted_by` ต้องตั้งพร้อมกัน** — แถวที่ถูกลบแล้วไม่รู้ว่าใครลบคือประวัติที่กู้ไม่ได้ · TypeORM ตั้ง `deleted_at` ให้เองผ่าน `@DeleteDateColumn` แต่ `deleted_by` ต้องตั้งเองผ่าน subscriber · CHECK นี้กันกรณีที่ subscriber ไม่ทำงาน
+
+**ข้อยกเว้น 4 กลุ่ม**
+
+| ตาราง                                                 | ไม่มี                      | เพราะ                                                                 |
+| ----------------------------------------------------- | ------------------------- | -------------------------------------------------------------------- |
+| `audit.logs`                                          | base entity ทั้งชุด          | composite PK · `occurred_at`/`actor_id` ทำหน้าที่แทน `created_at`/`created_by` |
+| `organization.organizations`                          | `org_id`                  | เท่ากับ `id` เสมอ                                                        |
+| `identity.sessions` · `identity.password_reset_tokens` · `notify.outbox` | `deleted_at`/`deleted_by` | มี `revoked_at` / `used_at` / `status` อยู่แล้ว และนโยบายคือ hard delete       |
+| **ตารางความสัมพันธ์** — `organization.members` · `organization.team_members` · `project.members` · `billing.ai_usage` · `task.assignees` · `task.dependencies` _(Phase 5)_ · `identity.role_permissions` · `identity.user_roles` | `deleted_at`/`deleted_by` — และสี่ตัวท้าย**ไม่มี `updated_at`/`updated_by` ด้วย** | ดูด้านล่าง · สี่ตัวแรกมีคอลัมน์ `role` (หรือยอดใช้งาน) ให้แก้ จึงยังแก้ได้ · สี่ตัวท้ายเป็นข้อเท็จจริงที่จริงหรือไม่จริงเท่านั้น ไม่มีสถานะกลางให้อัปเดต สองคอลัมน์นั้นจะเท่ากับคู่ `created_*` ตลอดไป |
+
+กลุ่มที่สามคือบั๊กแบบเดียวกับที่ `identity.users` เคยมี — **ตัวบอกการลบสองตัวในตารางเดียวย่อมขัดกันได้**
+
+**กลุ่มที่สี่ — ตารางความสัมพันธ์เป็น hard delete** เดิมเป็น soft delete เพราะเป็น default ของ `BaseEntity` ไม่ใช่เพราะถูกถามทีละตาราง · เหตุผลที่เปลี่ยน เรียงจากหนักสุด
+
+1. **ลืม filter บนตารางพวกนี้ = ช่องโหว่สิทธิ์ ไม่ใช่บั๊กการแสดงผล** · แถว `project.members` ที่ `deleted_at` มีค่าแต่ query ลืมกรอง = คนที่ถูกถอดออกยังเข้าถึง project ได้ · hard delete แล้วแถวไม่อยู่ ไม่มีอะไรให้ลืม
+2. **เหตุผลที่คนเก็บ soft delete ไว้ ที่นี่มีของที่ดีกว่าอยู่แล้ว** — `audit.logs` partition รายเดือน ไม่เคยลบ (🔒) บันทึกว่าใครถอดใครออกเมื่อไหร่ครบกว่า `deleted_by` ตัวเดียว
+3. **ถอดคนออกไม่ใช่การทำลายข้อมูล** มันคือการเปลี่ยนความสัมพันธ์ เพิ่มกลับต้นทุนศูนย์ ไม่มีอะไรให้กู้ · soft delete ทำให้ถอด-ใส่ซ้ำสะสมแถวตาย และ upsert ต้องคิดเผื่อทุกครั้ง
+4. `billing.ai_usage` เป็นบันทึกการใช้เงิน — append-only ให้ retention ลบจริง soft delete ไม่ตรงความหมาย
+
+**cascade ไม่ลงไปหาตารางกลุ่มนี้** โดยตั้งใจ — soft delete project แล้ว member ยังอยู่ครบ **restore แล้วได้คนเดิมกลับมา** · ตอน hard delete จริงตอน retention `ON DELETE CASCADE` ของ FK เก็บกวาดให้เอง
+
+**ในกลุ่มที่สี่ สามตารางไม่มี `updated_at`/`updated_by` ด้วย** — `identity.role_permissions` · `identity.user_roles` · `task.assignees` เพราะไม่มีคอลัมน์ไหนถูก "แก้" หลังสร้างเลย มีแต่ FK สองสามตัวที่เป็น**สิทธิ์**ตัวมันเอง (สิทธิ์นี้ผูกกับ role นี้ไหม, task นี้มอบให้คนนี้ไหม) ถอนแล้วให้ใหม่คือลบแถวสร้างใหม่ ไม่ใช่ UPDATE · ถ้าเก็บสองคอลัมน์นี้ไว้ ค่าจะเท่ากับ `created_at`/`created_by` ตลอดไป พร้อมแบก FK `ON DELETE RESTRICT` ที่ไม่เคยได้ใช้
+
+`organization.members` · `organization.team_members` · `project.members` · `billing.ai_usage` ยังมี `updated_at`/`updated_by` เหมือนเดิม — สามตัวแรกมีคอลัมน์ `role` ที่เปลี่ยนได้จริง (เลื่อนขั้น/ลดขั้น) ส่วน `ai_usage` ยังไม่ commit เป็น spec (§Phase 7-8) จึงไม่ตัดสินล่วงหน้าว่า token นับสะสมด้วย UPDATE หรือ insert ใหม่ทุกครั้ง
+
+> ⚠️ **ทุก field ที่เป็นวันเวลาใช้ `timestamptz` (timestamp with time zone) เท่านั้น**
+>
+> ห้ามใช้ `timestamp` (without time zone) เด็ดขาด — เก็บเป็น UTC ใน DB แล้วแปลงเป็น timezone ผู้ใช้ที่ frontend
+>
+> ยกเว้นฟิลด์ที่เป็น**วันที่ล้วนไม่มีเวลา** เช่น `sprints.start_date` / `end_date` ใช้ `date` ได้
+
+**TypeORM implementation**
+
+```ts
+// shared/base.entity.ts
+export abstract class BaseEntity {
+  @PrimaryGeneratedColumn('uuid') id: string
+  @Column('uuid') orgId: string
+
+  @CreateDateColumn({ type: 'timestamptz' }) createdAt: Date
+  @Column('uuid') createdBy: string
+  @UpdateDateColumn({ type: 'timestamptz' }) updatedAt: Date
+  @Column('uuid') updatedBy: string
+  @DeleteDateColumn({ type: 'timestamptz' }) deletedAt: Date | null
+  @Column('uuid', { nullable: true }) deletedBy: string | null
+}
+```
+
+- `@DeleteDateColumn` ทำให้ TypeORM กรอง `deleted_at IS NULL` ให้อัตโนมัติทุก query — ถ้าต้องการดูของที่ลบแล้วใช้ `withDeleted: true`
+- `createdBy` / `updatedBy` / `deletedBy` เติมอัตโนมัติจาก request context ผ่าน TypeORM subscriber ไม่ต้อง set เองทุกที่
+- `org_id` เติมและกรองอัตโนมัติผ่าน global interceptor เช่นกัน
+
+## The `org_id` Rule — One Test, Not a List
+
+> **ตารางต้องมี `org_id` ถ้าแถวของมันเป็นของ org ใด org หนึ่ง**
+> ข้อยกเว้นคือแถวที่ **ไม่ได้เป็นของ org ไหนเลย** — ตอนนี้มีสามกรณี และทั้งสามเป็น _ผลลัพธ์_ ของเกณฑ์นี้ ไม่ใช่รายชื่อที่ตั้งขึ้นมาแยกต่างหาก
+
+เขียนเป็นเกณฑ์เพราะตารางใหม่โผล่มาเรื่อยๆ · รายชื่อข้อยกเว้นตอบได้แค่ตารางที่มีอยู่แล้ว พอเจอตารางที่ไม่อยู่ในลิสต์ คนอ่านต้องเดาเอง แล้วเดาผิดทางไหนก็ได้
+
+**กรณีที่ 1 — schema `identity` ทั้งก้อน** ไม่มี `org_id` เพราะ:
+
+| ตาราง                                                    | เหตุผล                                          |
+| -------------------------------------------------------- | ---------------------------------------------- |
+| `users`                                                  | 1 user อยู่ได้หลาย org ผ่าน `organization.members` |
+| `sessions`, `password_reset_tokens`                      | ผูกกับ user ไม่ใช่ org                             |
+| `roles`, `permissions`, `role_permissions`, `user_roles` | สิทธิ์ระดับทั้งเว็บ อยู่**เหนือ** org                    |
+
+> **กรณีที่ 2 — `billing.plans`** เป็นแค็ตตาล็อกราคาระดับทั้งระบบ ไม่ได้เป็นของ org ใด จึงไม่มี `org_id`
+> ส่วน `billing.subscriptions`, `ai_wallet`, `ai_usage` มี `org_id` ตามปกติ
+
+> **กรณีที่ 3 — `organization.organizations`** `org_id` ของมันจะเท่ากับ `id` ตัวเองเสมอ เก็บไว้ก็คือเก็บค่าเดิมสองที่ทุกแถว
+>
+> `OrgScopedRepository` จึง scope ตารางนี้ด้วย `id` แทน — เป็นเคสพิเศษ **หนึ่งจุดที่ตั้งใจ** ในโค้ดที่เดียว ไม่ใช่คอลัมน์ซ้ำที่ทุกแถวต้องแบก
+
+### เกณฑ์นี้ไม่ใช่ "หา org จากแม่ได้มั้ย"
+
+คำถามที่มาบ่อยคือ *"ตารางกลางที่ FK ชี้ไปตารางที่มี `org_id` อยู่แล้ว จะเก็บซ้ำทำไม"* — คำตอบคือ **ตารางกลางยิ่งต้องมี ไม่ใช่ยิ่งไม่ต้อง**
+
+สมมติ `task.dependencies (predecessor_id, successor_id)` ที่ทั้งสองขาชี้ไป `task.tasks` · ถ้าไม่มี `org_id`:
+
+```sql
+INSERT INTO task.dependencies (predecessor_id, successor_id)
+VALUES ('<task ของ org A>', '<task ของ org B>');   -- ผ่าน
+```
+
+FK แต่ละขาเช็คแค่ว่า task นั้นมีจริง **ไม่มีขาไหนรู้จักอีกขา** · จะกันได้ต้องเขียน trigger หรือเช็คในโค้ด ซึ่งเป็นของที่ลืมได้
+
+พอมี `org_id` กฎ composite FK ที่ [Foreign Key Rules](#foreign-key-rules) บังคับอยู่แล้วจะปิดช่องนี้ให้เอง:
+
+```sql
+FOREIGN KEY (predecessor_id, org_id) REFERENCES task.tasks (id, org_id),
+FOREIGN KEY (successor_id,   org_id) REFERENCES task.tasks (id, org_id)
+```
+
+สองขาถูกบังคับให้แชร์ `org_id` ค่าเดียวกันของแถวนั้น → **ผูกข้าม org ไม่ได้ในระดับ database** ไม่ต้องมีโค้ดเช็ค
+
+อีกสองอย่างที่หายไปพร้อมกันถ้าไม่มีคอลัมน์นี้:
+
+| หายไป | ทำไมสำคัญ |
+| --- | --- |
+| **RLS (Phase 2)** | policy เป็นราย table · ไม่มี `org_id` ต้องเขียนเป็น subquery ไล่ทุก FK ช้ากว่าและพลาดง่ายกว่า |
+| **`queryBuilder.withOrg()`** | เป็น conditional type (`T extends { orgId } ? … : never`) — ตารางที่ไม่มีคอลัมน์นี้ **เรียกไม่ได้ตั้งแต่ compile** เหลือทางเดียวคือ `base()` ซึ่งแปลว่า "ตั้งใจข้าม org" → ทุก query บนตารางนั้นกลายเป็น query ที่ไม่ scope โดยปริยาย |
+
+ราคาของการมี: 16 ไบต์ต่อแถว กับคอลัมน์ที่ยังไงก็อยู่หัว composite index อยู่แล้ว
+
+ด้านล่างจะไม่เขียนฟิลด์ base ซ้ำ แสดงเฉพาะฟิลด์เฉพาะของแต่ละตาราง
+

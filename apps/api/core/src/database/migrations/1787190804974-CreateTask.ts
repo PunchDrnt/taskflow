@@ -10,7 +10,7 @@ import { type MigrationInterface, type QueryRunner } from 'typeorm'
  * `sprint_id` uses `ON DELETE SET NULL (sprint_id)`: without the column list
  * Postgres would null `org_id` too, and `org_id` is NOT NULL.
  *
- * See .claude/docs/02-database.md#schema-task
+ * See .claude/docs/02-database/schema.md#schema-task
  */
 export class CreateTask1787190804974 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {

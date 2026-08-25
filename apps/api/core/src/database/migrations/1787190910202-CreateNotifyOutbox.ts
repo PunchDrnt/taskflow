@@ -9,7 +9,7 @@ import { type MigrationInterface, type QueryRunner } from 'typeorm'
  * life, and the retention policy hard-deletes sent rows after 30 days. Two
  * delete markers on one table can disagree.
  *
- * See .claude/docs/02-database.md#schema-notify
+ * See .claude/docs/02-database/schema.md#schema-notify
  */
 export class CreateNotifyOutbox1787190910202 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {

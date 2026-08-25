@@ -10,7 +10,7 @@ import { type MigrationInterface, type QueryRunner } from 'typeorm'
  * OrgScopedRepository filters on org_id alone and would hand org A a row that
  * belongs to org B.
  *
- * See .claude/docs/02-database.md#schema-project
+ * See .claude/docs/02-database/schema.md#schema-project
  */
 export class CreateProject1787188376828 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {

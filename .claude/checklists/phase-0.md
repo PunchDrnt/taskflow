@@ -40,12 +40,12 @@
 - [x] `002` schema ทั้ง 11 ตัว
 - [x] 🔒 `003` `identity.users` + seed system user — `is_system` · `password_hash` NULL · trigger กันลบ
 - [x] 🔒 `004` `audit.logs` — `PARTITION BY RANGE (occurred_at)` + **`PRIMARY KEY (id, occurred_at)`** · partition ล่วงหน้า 12 เดือน + `logs_default`
-- [x] ตารางที่เหลือตาม [`02-database.md`](../docs/02-database.md#5-full-schema) ยกเว้น `chat.*` (Phase 2) และ `identity.oauth_accounts` (Phase 1 — migrate ไว้ แต่ Google login ยังไม่เปิดใช้)
+- [x] ตารางที่เหลือตาม [`02-database/README.md`](../docs/02-database/schema.md) ยกเว้น `chat.*` (Phase 2) และ `identity.oauth_accounts` (Phase 1 — migrate ไว้ แต่ Google login ยังไม่เปิดใช้)
 - [x] Test กัน entity หลุดจาก migration — [`test/schema-drift.spec.ts`](../../apps/api/core/test/schema-drift.spec.ts)
 - [x] Job สร้าง partition เดือนถัดไป — cron `audit-partitions` 03:05 เติมให้ครบ 12 เดือนล่วงหน้าทุกวัน ([`src/maintenance/`](../../apps/api/core/src/maintenance/))
 - [x] Alert เมื่อ `audit.logs_default` มีแถว — `alerts.condition()` เข้า Sentry แล้ว (§7 ทำไปแล้ว) · log บรรทัดเดิมยังอยู่
 
-> **28 ตาราง · 10 schema · 12 migration (+1 seed)** — revert ทั้งหมดแล้วเหลือ 0 ตาราง 0 schema 0 extension · run ใหม่ได้ 28 เท่าเดิม · `02-database.md` ระบุ 29 ตาราง ส่วนที่ต่างคือ `identity.oauth_accounts` ที่ตั้งใจเลื่อนไป Phase 1
+> **28 ตาราง · 10 schema · 12 migration (+1 seed)** — revert ทั้งหมดแล้วเหลือ 0 ตาราง 0 schema 0 extension · run ใหม่ได้ 28 เท่าเดิม · `02-database/README.md` ระบุ 29 ตาราง ส่วนที่ต่างคือ `identity.oauth_accounts` ที่ตั้งใจเลื่อนไป Phase 1
 
 **ตรวจก่อนปิดข้อนี้** — รันด้วย query กับ DB จริงแล้วทุกข้อ
 
@@ -54,11 +54,11 @@
 - [x] 🔒 unique constraint ของตารางที่ soft delete เป็น **partial index** — เหลือแต่ `UNIQUE (id, org_id)` ที่เป็นเป้าให้ลูกชี้
 - [x] 🔒 `created_by` / `updated_by` / `completed_by` เป็น `RESTRICT` — 55 FK ผ่านหมด
 - [x] 🔒 `sort_order` เป็น `text COLLATE "C"`
-- [x] 🔒 FK ระหว่างสองตารางที่ scope ด้วย org เป็น **composite `(fk_id, org_id)`** ([เหตุผล](../docs/02-database.md#2-foreign-key-rules))
+- [x] 🔒 FK ระหว่างสองตารางที่ scope ด้วย org เป็น **composite `(fk_id, org_id)`** ([เหตุผล](../docs/02-database/rules.md#foreign-key-rules))
 - [x] ทุกตารางที่ soft delete มี `CHECK ((deleted_at IS NULL) = (deleted_by IS NULL))`
 - [x] ไม่มีคอลัมน์ซ้ำกับ base entity — ยกเว้น `user_roles.granted_by` (SET NULL ต่างจาก `created_by` ที่เป็น RESTRICT)
 - [x] Partial unique index บังคับ "at most one" — `statuses.is_default` · `sprints.status = 'active'`
-- [x] `CHECK` บนคอลัมน์ที่ partial index อ่านค่าตรง ๆ ([เหตุผล](../docs/02-database.md#check-vs-enum)) — `users` · `sprints` · `outbox` `.status`
+- [x] `CHECK` บนคอลัมน์ที่ partial index อ่านค่าตรง ๆ ([เหตุผล](../docs/02-database/README.md#check-vs-enum)) — `users` · `sprints` · `outbox` `.status`
 - [x] ไม่มี `CREATE TYPE ... AS ENUM` ที่ไหนเลย
 - [x] Composite index ขึ้นต้นด้วย `org_id` — ยกเว้น `outbox_pending_idx` ที่ worker ตั้งใจสแกนข้าม org
 - [x] `tasks.depth` มีเพดานทั้งสองฝั่ง — CHECK ใน DB + `MAX_TASK_DEPTH` ใน `@repo/shared` · [`test/schema-invariants.spec.ts`](../../apps/api/core/test/schema-invariants.spec.ts) เช็คว่าสองฝั่งตรงกัน (เลขใน migration เขียนตรง ๆ ไม่ import — migration ที่เปลี่ยนความหมายเมื่อมีคนแก้ constant ไม่ใช่บันทึกของสิ่งที่ทำไปแล้ว)
@@ -66,7 +66,7 @@
 ## 3. Base entity + org scoping
 
 - [x] `shared/base.entity.ts` — 🔒 UUID pk, `org_id`, `created_at/by`, `updated_at/by`, `deleted_at/by`
-  - [x] 4 คลาสตามรูปทรงที่ schema ใช้จริง ([ตารางเทียบ](../docs/02-database.md#base-entity--on-every-table-with-four-named-exceptions)) — `BaseEntity` (ปกติ) · `SoftDeletableEntity` (ไม่มี org_id) · `OrgScopedEntity` (ไม่มี soft delete) · `TimestampedEntity` · `audit.logs` ประกาศเอง
+  - [x] 4 คลาสตามรูปทรงที่ schema ใช้จริง ([ตารางเทียบ](../docs/02-database/rules.md#base-entity)) — `BaseEntity` (ปกติ) · `SoftDeletableEntity` (ไม่มี org_id) · `OrgScopedEntity` (ไม่มี soft delete) · `TimestampedEntity` · `audit.logs` ประกาศเอง
 - [x] TypeORM subscriber เติม `createdBy` / `updatedBy` / `deletedBy` จาก request context
   - [x] ไม่เดาค่าเมื่อไม่มี context — migration/job ต้องบอกเองว่าทำในนามใคร (system user มีไว้เพื่อการนี้)
 - [x] `shared/request-context.ts` — `AsyncLocalStorage<{ orgId, userId }>`

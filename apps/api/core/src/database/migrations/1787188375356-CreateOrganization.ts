@@ -14,7 +14,7 @@ import { type MigrationInterface, type QueryRunner } from 'typeorm'
  * No `owner_id`: it would have meant "who created it, not authority", which is
  * `created_by`, and permission lives in `members.role`.
  *
- * See docs/02-database.md#schema-organization
+ * See docs/02-database/schema.md#schema-organization
  */
 export class CreateOrganization1787188375356 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {

@@ -26,7 +26,7 @@
 - Docker compose ครบ (api, web, postgres, postgres-test, garage, caddy) — ตอนนี้มี postgres + postgres-test + garage
 - **สร้าง schema ครบทุก module ตั้งแต่รอบนี้** — รวม `sprints` + `tasks.sprint_id` + `tasks.estimate` ด้วย (เติมทีหลังต้อง migrate `tasks` ซึ่งเป็นตารางใหญ่สุด)
   - ข้อยกเว้นเดียว: `chat.identities` / `chat.channels` สร้างตอน Phase 2 — เป็นตารางอิสระ ไม่มีใครชี้มาหา
-- Base entity — UUID, `org_id`, `created_at/by`, `updated_at/by`, `deleted_at/by` · วันเวลาใช้ `timestamptz` ทั้งหมด ([schema เต็ม](./02-database.md#base-entity--on-every-table-with-four-named-exceptions))
+- Base entity — UUID, `org_id`, `created_at/by`, `updated_at/by`, `deleted_at/by` · วันเวลาใช้ `timestamptz` ทั้งหมด ([schema เต็ม](./02-database/rules.md#base-entity))
 - `users.status` เป็น string ('active' | 'deactivated' | 'pending_deletion' | 'deleted') + unique index อีเมลแบบ partial
 - Global `org_id` scoping — **repository base class + isolation test** ([วิธี implement](./01-architecture.md#org_id-scoping)) · **RLS เลื่อนไป Phase 2** เพราะ `CREATE POLICY` เพิ่มทีหลังได้โดยไม่ต้อง migrate
 - Migration เขียนมือทั้งหมด · `synchronize: false` ถาวร — `synchronize` สร้าง partition, partial index, `COLLATE "C"` และ extension ให้ไม่ได้
@@ -158,7 +158,7 @@ project.statuses
   is_cancelled_type   -- นับเป็น "ยกเลิก" — ตัดออกจากตัวหารของ progress
 ```
 
-[ดู schema เต็ม](./02-database.md#schema-project)
+[ดู schema เต็ม](./02-database/schema.md#schema-project)
 
 #### Task
 
@@ -283,7 +283,7 @@ status = 'pending_deletion' + deletion_requested_at = now()
 
 **PDPA:** กฎหมายให้สิทธิ์ลบข้อมูลส่วนบุคคล (ชื่อ อีเมล รูป) แต่ไม่ได้บังคับให้ลบบันทึกการทำงานที่บริษัทมีสิทธิ์เก็บตามความจำเป็นทางธุรกิจ
 
-`identity.users.status` = `'active' | 'deactivated' | 'pending_deletion' | 'deleted'` — [ดู schema เต็ม](./02-database.md#schema-identity)
+`identity.users.status` = `'active' | 'deactivated' | 'pending_deletion' | 'deleted'` — [ดู schema เต็ม](./02-database/schema.md#schema-identity)
 
 #### Team
 
@@ -392,7 +392,7 @@ progress = done / (total − cancelled)
 - Query list หลักใช้ `WHERE depth = 0` (เร็วและอ่านง่ายกว่า `parent_task_id IS NULL`)
 - **แต่ My Tasks ต้องแสดง sub-task ด้วย** — คนถูก assign sub-task ต้องเห็นงานตัวเอง (จุดที่มักพลาด)
 
-ฟิลด์ที่เกี่ยวข้องใน `task.tasks` — [ดู schema เต็ม](./02-database.md#schema-task)
+ฟิลด์ที่เกี่ยวข้องใน `task.tasks` — [ดู schema เต็ม](./02-database/schema.md#schema-task)
 
 ```
 parent_task_id  uuid null
@@ -443,7 +443,7 @@ task.tasks
   sprint_id  uuid null   -- null = Backlog
 ```
 
-[ดู schema เต็ม](./02-database.md#schema-project)
+[ดู schema เต็ม](./02-database/schema.md#schema-project)
 
 #### Chat Integration — Discord
 
@@ -477,7 +477,7 @@ ChatAdapter (interface)
 
 Teams ต้องผ่าน Microsoft app approval ซึ่งใช้เวลาและเอกสารเยอะ → รอมีลูกค้าองค์กรขอ
 
-**Schema (สร้างตอน Phase 2 นี้เอง · ดูเต็มใน [`02-database.md`](./02-database.md#schema-chat-phase-2))**
+**Schema (สร้างตอน Phase 2 นี้เอง · ดูเต็มใน [`02-database/README.md`](./02-database/schema.md#schema-chat-phase-2))**
 
 สองตารางนี้เป็นตารางอิสระ ไม่มีตารางอื่นชี้มาหา จึงเป็นข้อยกเว้นเดียวของกติกา "สร้าง schema ครบทุก module ใน Phase 0" — เพิ่มตอน Phase 2 ไม่เจ็บ
 
@@ -769,7 +769,7 @@ projects.estimate_unit   -- 'none' (default) | 'point' | 'hour' | 'tshirt'
 - หา critical path ได้
 - ต่อยอด [Stale Detection](#stale-detection) — "งานนี้ไม่ขยับเพราะรออะไรอยู่"
 
-[Schema เต็ม + composite FK + recursive CTE กัน cycle](./02-database.md#schema-task) — สามอย่างที่ต้องระวัง:
+[Schema เต็ม + composite FK + recursive CTE กัน cycle](./02-database/schema.md#schema-task) — สามอย่างที่ต้องระวัง:
 
 | | |
 | --- | --- |
@@ -796,7 +796,7 @@ Trigger → Condition → Action
 
 **ต้องรอ Phase 4** — ถ้าไม่มี custom field กับ custom status ครบ เงื่อนไขที่ตั้งได้จะมีไม่กี่แบบจนไม่คุ้มทำ
 
-**Trigger มีสองชนิด** และนี่คือจุดที่พลาดง่ายที่สุด — [ตารางเต็ม](./02-database.md#schema-automation-phase-5) · ย่อ: เหตุการณ์มาจาก event emitter (`task.created` · `task.assigned` · `task.completed` มีแล้ว · `task.status_changed` ต้องเพิ่ม) ส่วนเงื่อนไขเรื่อง**เวลา**มาจาก cron ไม่ใช่ event เพราะไม่มีการกระทำของใครให้ยิง มีแต่เวลาที่เดินผ่านไป
+**Trigger มีสองชนิด** และนี่คือจุดที่พลาดง่ายที่สุด — [ตารางเต็ม](./02-database/schema.md#schema-automation-phase-5) · ย่อ: เหตุการณ์มาจาก event emitter (`task.created` · `task.assigned` · `task.completed` มีแล้ว · `task.status_changed` ต้องเพิ่ม) ส่วนเงื่อนไขเรื่อง**เวลา**มาจาก cron ไม่ใช่ event เพราะไม่มีการกระทำของใครให้ยิง มีแต่เวลาที่เดินผ่านไป
 
 > 🔒 **action ต้องเดินผ่าน outbox ไม่ใช่ listener เปล่า** — emitter ยิงหลัง commit แบบ fire-and-forget listener ที่พังทำให้งานหายเงียบ **เหตุผลเดียวกับที่ audit ห้ามใช้ emitter** · notification รอดมาได้เพราะมี outbox + retry อยู่แล้ว แต่ automation _เขียนข้อมูล_ — พังเงียบแปลว่างานไม่ถูก assign โดยไม่มีใครรู้ ต่างจากอีเมลไม่ถึงที่คนทักมาเอง
 
