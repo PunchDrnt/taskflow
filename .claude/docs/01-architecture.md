@@ -2,7 +2,7 @@
 
 Stack, การแบ่ง module, และ convention ที่ทุก module ต้องใช้เหมือนกัน
 
-> [← Overview](./00-overview.md) · เกี่ยวข้อง: [`02-database.md`](./02-database.md)
+> [← Overview](./00-overview.md) · เกี่ยวข้อง: [`02-database/README.md`](./02-database/README.md)
 
 ## Contents
 
@@ -416,7 +416,7 @@ TypeORM ต้องระบุ type ชัดเจน ไม่งั้น�
 
 #### `org_id` scoping
 
-> 🔒 **ต้องทำ** — `org_id` ทุกตารางที่แถวของมันเป็นของ org ใด org หนึ่ง · ที่ไม่มีคือที่ไม่ได้เป็นของ org ไหนเลย: schema `identity`, `billing.plans` และ `organization.organizations` (org_id เท่ากับ id ตัวเอง — [เกณฑ์เต็ม](./02-database.md#3-multi-tenancy)) · Phase 0 ต้องมี test ว่า org A มองไม่เห็นข้อมูล org B
+> 🔒 **ต้องทำ** — `org_id` ทุกตารางที่แถวของมันเป็นของ org ใด org หนึ่ง · ที่ไม่มีคือที่ไม่ได้เป็นของ org ไหนเลย: schema `identity`, `billing.plans` และ `organization.organizations` (org_id เท่ากับ id ตัวเอง — [เกณฑ์เต็ม](./02-database/rules.md#multi-tenancy)) · Phase 0 ต้องมี test ว่า org A มองไม่เห็นข้อมูล org B
 
 **ตัดสินแล้ว: Phase 0 ทำชั้น application · RLS เลื่อนไป Phase 2**
 
@@ -544,7 +544,8 @@ await this.dataSource.transaction(async (manager) => {
 ```
 TaskService
   ├─ tx: save(task) + insert(auditLog)   ← atomic
-  └─ commit → emit 'task.assigned'       ← notification เท่านั้น
+  └─ commit → emit 'task.assigned'       ← notification · Phase 5 เพิ่ม automation
+                                            ห้าม audit เด็ดขาด (ดูด้านล่าง)
 ```
 
 **Event emitter ยังใช้ต่อ** — แต่ใช้กับ notification อย่างเดียว ซึ่ง at-most-once รับได้ (และมี `notify.outbox` รองรับอีกชั้น)
@@ -605,7 +606,7 @@ UNIQUE (project_id, name)
 
 **Soft delete แบบ cascade ต้องทำในโค้ด ไม่ใช่ DB** — `ON DELETE CASCADE` ทำงานกับ hard delete เท่านั้น
 
-อยู่ที่ [`shared/cascade-soft-delete.ts`](../../apps/api/core/src/shared/cascade-soft-delete.ts) — เดินลงตาม `AGGREGATE_CHILDREN` ใน transaction เดียว
+อยู่ที่ [`shared/entity/cascade-soft-delete.ts`](../../apps/api/core/src/shared/entity/cascade-soft-delete.ts) — เดินลงตาม `AGGREGATE_CHILDREN` ใน transaction เดียว
 
 - **แผนที่ "อะไรเป็นของอะไร" เขียนมือ ไม่ได้อ่านจาก DB** ต่างจาก retention ที่อ่านจาก `pg_constraint` ได้ · เพราะ DB ตอบคำถามนี้ไม่ได้: `tasks.project_id` เป็น RESTRICT ตั้งใจ (จะลบ project ต้องเคลียร์ task ก่อน) ซึ่งไม่ได้แปลว่า task ไม่ใช่ของ project · `NOT NULL` ก็ตอบไม่ได้: `tasks.status_id` เป็น NOT NULL แต่ลบ status ต้องย้าย task ไม่ใช่ลบ
 - **มี test บังคับว่าทุกตารางที่ soft delete ได้ ต้องอยู่ใน `AGGREGATE_CHILDREN` หรือ `ROOTS`** — ตารางใหม่ที่ลืมใส่จะ fail ทันที ไม่ใช่ปล่อยให้แถวอยู่ค้างเกินพ่อแม่มันไป
@@ -659,7 +660,7 @@ CREATE TABLE audit.logs_2026_08 PARTITION OF audit.logs
 
 > ⚠️ **ตารางที่ partition ต้องมี partition key อยู่ใน unique/primary key ทุกตัว** — Postgres บังคับ ดังนั้น `PRIMARY KEY (id)` เฉยๆ จะสร้างไม่ผ่าน ต้องเป็น `PRIMARY KEY (id, occurred_at)`
 >
-> ฝั่ง TypeORM entity ก็ต้องประกาศเป็น composite (`@PrimaryColumn()` สองตัว) ไม่ใช่ `@PrimaryGeneratedColumn('uuid')` ตัวเดียว — `audit.logs` จึงเป็นตารางเดียวที่**ไม่ใช้ base entity เลยสักคอลัมน์** (อีกสองข้อยกเว้นใช้บางส่วน ดู [ตารางเทียบ](./02-database.md#base-entity--on-every-table-with-four-named-exceptions))
+> ฝั่ง TypeORM entity ก็ต้องประกาศเป็น composite (`@PrimaryColumn()` สองตัว) ไม่ใช่ `@PrimaryGeneratedColumn('uuid')` ตัวเดียว — `audit.logs` จึงเป็นตารางเดียวที่**ไม่ใช้ base entity เลยสักคอลัมน์** (อีกสองข้อยกเว้นใช้บางส่วน ดู [ตารางเทียบ](./02-database/rules.md#base-entity))
 
 #### Where the retention jobs live
 
@@ -672,7 +673,7 @@ CREATE TABLE audit.logs_2026_08 PARTITION OF audit.logs
 
 - **ลำดับการลบเป็นเรื่องจริง ไม่ใช่รายละเอียด** — `tasks.project_id` เป็น RESTRICT ลบ project ก่อน task ไม่ได้ · ลำดับจึงอ่านจาก `pg_constraint` ตอนรันแล้ว topological sort ไม่ใช่ลิสต์ที่เขียนมือ ตารางใหม่ที่ลืมใส่ในลิสต์คือแถวที่ไม่มีวันถูกลบ และไม่มีอะไรฟ้อง
 - **`identity.users` ไม่เคย hard delete** — anonymize อย่างเดียว เพราะ `created_by` ของทุกตารางชี้มาที่นี่แบบ RESTRICT · ถ้า sweep ลบได้จริงมันจะลบได้เฉพาะคนที่ยังไม่ทันสร้างอะไร ซึ่งแปลว่าพฤติกรรมขึ้นกับว่าคนนั้นทำงานไปมากแค่ไหนก่อนลาออก
-- **นับ 30 วันของ `pending_deletion` จาก `deletion_requested_at`** ไม่ใช่ `deleted_at` (นั่นคือปลายทาง คือวันที่ anonymize เสร็จ) และไม่ใช่ `updated_at` (แตะแถวทีนึงนับใหม่ทุกที) — [เหตุผลเต็ม](./02-database.md#schema-identity)
+- **นับ 30 วันของ `pending_deletion` จาก `deletion_requested_at`** ไม่ใช่ `deleted_at` (นั่นคือปลายทาง คือวันที่ anonymize เสร็จ) และไม่ใช่ `updated_at` (แตะแถวทีนึงนับใหม่ทุกที) — [เหตุผลเต็ม](./02-database/schema.md#schema-identity)
 - **`pg_try_advisory_lock`** กันสอง instance ยิง cron พร้อมกัน · ตัวที่สอง**ข้าม**ไม่ใช่ต่อคิว — กว่าจะได้ lock งานก็เสร็จไปแล้ว
 - **`JOBS_ENABLED=false`** ปิด job ทั้งสองในโปรเซสนั้น (default `true`) — มีไว้สำหรับเครื่อง dev ที่ต่อ DB ร่วมกัน
 - ตารางที่ลบไม่ผ่าน (เช่น project ที่ soft delete แล้วแต่ task ยังไม่ถูกลบตาม) จะ log แล้วข้าม ไม่ล้มทั้ง sweep · แต่ตารางนั้นค้างจนกว่าจะแก้ต้นเหตุ เพราะ batch เดียวคือ statement เดียว
@@ -786,7 +787,7 @@ email_verified = false → ปฏิเสธทันที (ไม่ link ไ
 ทุกกรณีที่ link สำเร็จ → audit.logs + ส่งเมลแจ้งเจ้าตัว
 ```
 
-`pending_deletion` ปลดล็อกได้เพราะ login ด้วย Google ก็คือการพิสูจน์ตัวตนแบบหนึ่ง ตรงกับที่ [Delete Account](./04-features.md#delete-account) เขียนไว้ว่า login ภายใน 30 วันกู้บัญชีคืน — ไม่ใช่กฎใหม่
+`pending_deletion` ปลดล็อกได้เพราะ login ด้วย Google ก็คือการพิสูจน์ตัวตนแบบหนึ่ง ตรงกับที่ [Delete Account](./04-features/phase-2.md#delete-account) เขียนไว้ว่า login ภายใน 30 วันกู้บัญชีคืน — ไม่ใช่กฎใหม่
 
 **prompt ถามก่อน link เป็น UX ไม่ใช่ security** — คนที่เห็นหน้าจอนั้นคือคนที่เพิ่งพิสูจน์ว่าคุมอีเมลนั้นได้ ถ้าเป็นคนร้ายก็กด "ใช่" เหมือนกัน · ที่กันจริงคือ `email_verified`
 

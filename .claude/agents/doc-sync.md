@@ -26,14 +26,14 @@ git diff main...HEAD --stat
 For each area the change touches, find what the docs claim about it and compare.
 The map:
 
-| Change touches                                    | Read                                      |
-| ------------------------------------------------- | ----------------------------------------- |
-| module layout, cross-module calls, Query Service  | `.claude/docs/01-architecture.md`         |
-| API paths, error format, status codes, pagination | `01-architecture.md#api`                  |
-| auth, sessions, tokens, password flow             | `01-architecture.md#auth`                 |
-| transactions, org scoping, soft delete, retention | `01-architecture.md#implementation-notes` |
-| tables, columns, FK behaviour                     | `.claude/docs/02-database.md`             |
-| what belongs in which phase                       | `03-roadmap.md` and `04-features.md`      |
+| Change touches                                    | Read                                        |
+| ------------------------------------------------- | ------------------------------------------- |
+| module layout, cross-module calls, Query Service  | `.claude/docs/01-architecture.md`           |
+| API paths, error format, status codes, pagination | `01-architecture.md#api`                    |
+| auth, sessions, tokens, password flow             | `01-architecture.md#auth`                   |
+| transactions, org scoping, soft delete, retention | `01-architecture.md#implementation-notes`   |
+| tables, columns, FK behaviour                     | `.claude/docs/02-database/README.md`        |
+| what belongs in which phase                       | `03-roadmap.md` and `04-features/README.md` |
 
 Quote both sides. A claim that the code and doc disagree is only useful with the
 doc line and the code line side by side.

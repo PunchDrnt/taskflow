@@ -5,7 +5,7 @@ import { FEATURES, FeatureService, type Feature } from './feature.service'
 describe('FeatureService', () => {
   const service = new FeatureService()
 
-  // docs/04-features.md says /register is gated by this flag "which returns
+  // docs/04-features/README.md says /register is gated by this flag "which returns
   // false from the first line". The code returned true, so building the
   // endpoint to spec would have shipped public registration open in a phase
   // with one org. Asserted rather than commented, because a comment is what

@@ -10,7 +10,7 @@ import {
  * The columns every table carries, in the six shapes the schema uses.
  * `org_id`, soft delete, and whether a row is ever edited after it is created
  * are three independent axes; which table takes which is in
- * docs/02-database.md#base-entity--on-every-table-with-four-named-exceptions.
+ * docs/02-database/rules.md#base-entity.
  *
  * | Class                    | org_id | soft delete | updatable | Used by                            |
  * | ------------------------ | ------ | ----------- | --------- | ----------------------------------- |

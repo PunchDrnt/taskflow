@@ -7,7 +7,7 @@ import { type MigrationInterface, type QueryRunner } from 'typeorm'
  * `public` is absent on purpose: it holds citext and TypeORM's `migrations`
  * table, and no module table belongs there.
  *
- * See docs/02-database.md#1-schema-map
+ * See docs/02-database/README.md#schema-map
  */
 const SCHEMAS = [
   'identity', // users, sessions, password resets, system-level RBAC

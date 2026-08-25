@@ -13,7 +13,7 @@ import { type MigrationInterface, type QueryRunner } from 'typeorm'
  * No foreign keys at all, `actor_id` included: the log outlives what it
  * describes, and indexes carry the lookup weight instead.
  *
- * See docs/02-database.md#schema-audit
+ * See docs/02-database/schema.md#schema-audit
  */
 
 /** Partitions created ahead of time, so a stalled job has a year of slack. */

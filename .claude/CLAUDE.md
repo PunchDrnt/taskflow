@@ -6,14 +6,14 @@ Taskflow is an internal task-tracking system for a ~100-person Thai company (~20
 
 ## The specification
 
-| Want to know                                             | Open                                                   |
-| -------------------------------------------------------- | ------------------------------------------------------ |
-| Problem, glossary, decision principles, what's binding   | [`docs/00-overview.md`](./docs/00-overview.md)         |
-| Stack, module boundaries, API/naming/auth conventions    | [`docs/01-architecture.md`](./docs/01-architecture.md) |
-| Every table and field, FK rules, `org_id` scoping        | [`docs/02-database.md`](./docs/02-database.md)         |
-| What ships in which phase, feature priorities            | [`docs/03-roadmap.md`](./docs/03-roadmap.md)           |
-| Detailed spec for each feature                           | [`docs/04-features.md`](./docs/04-features.md)         |
-| SaaS, billing, pricing, LLM features — **not committed** | [`docs/05-saas-notes.md`](./docs/05-saas-notes.md)     |
+| Want to know                                             | Open                                                                                                                                                                                       |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Problem, glossary, decision principles, what's binding   | [`docs/00-overview.md`](./docs/00-overview.md)                                                                                                                                             |
+| Stack, module boundaries, API/naming/auth conventions    | [`docs/01-architecture.md`](./docs/01-architecture.md)                                                                                                                                     |
+| Every table and field, FK rules, `org_id` scoping        | [`docs/02-database/`](./docs/02-database/README.md) — [`rules.md`](./docs/02-database/rules.md) before writing a migration, [`schema.md`](./docs/02-database/schema.md) to look a table up |
+| What ships in which phase, feature priorities            | [`docs/03-roadmap.md`](./docs/03-roadmap.md)                                                                                                                                               |
+| Detailed spec for each feature                           | [`docs/04-features/`](./docs/04-features/README.md) — one file per phase                                                                                                                   |
+| SaaS, billing, pricing, LLM features — **not committed** | [`docs/05-saas-notes.md`](./docs/05-saas-notes.md)                                                                                                                                         |
 
 Working checklists live in [`.claude/checklists/`](./checklists/) — [`phase-0.md`](./checklists/phase-0.md) tracks the current phase in dependency order, and [`definition-of-done.md`](./checklists/definition-of-done.md) is the per-change gate. They are scratch state, not spec: when a checklist and the docs disagree, the docs win.
 
@@ -155,7 +155,7 @@ yarn workspace @api/core migration:show
 
 **`entity/`** — the shape every table has, and the code that maintains it.
 
-- `base.entity.ts` — six classes, because `org_id`, soft delete, and whether a row is ever edited after creation are three independent axes. The third one is narrow: `role_permissions`, `user_roles` and `task.assignees` are grants and assignments that only ever get created or removed, never updated in place, so `updatedAt`/`updatedBy` would sit there forever equal to the created pair. See the exception table in `docs/02-database.md`.
+- `base.entity.ts` — six classes, because `org_id`, soft delete, and whether a row is ever edited after creation are three independent axes. The third one is narrow: `role_permissions`, `user_roles` and `task.assignees` are grants and assignments that only ever get created or removed, never updated in place, so `updatedAt`/`updatedBy` would sit there forever equal to the created pair. See the exception table in `docs/02-database/rules.md`.
 - `audit-columns.subscriber.ts` — fills `createdBy`/`updatedBy`/`deletedBy`. Registered in the DataSource's `subscribers`, not as a Nest provider, so it applies under the CLI and in tests too.
 - `cascade-soft-delete.ts` — `softDelete(table, id)` carries an aggregate down in one transaction, because `ON DELETE CASCADE` only fires on a hard delete. Its `AGGREGATE_CHILDREN` map is hand-written, unlike retention's purge order, because the database cannot answer what belongs to what: `tasks.project_id` is RESTRICT and `tasks.status_id` is NOT NULL, and neither means what the cascade needs. A test requires every soft-deletable table to be in the map or in `ROOTS`.
 
