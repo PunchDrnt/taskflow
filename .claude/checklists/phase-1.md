@@ -18,20 +18,20 @@
 - [ ] **Branch protection บน `main`** — บังคับ PR + CI เขียว ห้าม push ตรง
       · ไม่ใช่เรื่องความเรียบร้อย: `deploy.yml` ไม่รัน test เลย มันเชื่อว่า gate รันบน `main` ไปแล้ว
       · push ตรงเข้า main ได้ = ของที่ไม่เคยผ่านอะไรขึ้น production ได้ ([ผัง](../docs/01-architecture.md#branching))
-- [ ] ❓ **CI trigger `push: [main]`** — ตอนนี้ปิดอยู่ · PR ได้ CI จาก `pull_request:` ครบแล้ว
-      ช่องที่เหลือคือ merge commit ที่ต่างจาก PR head · เปิด branch protection แบบ require up-to-date แทนก็ได้ เลือกอย่างใดอย่างหนึ่ง
+- [ ] **CI trigger `push: [main]`** — comment ไว้ใน `ci.yml` พร้อมเงื่อนไขปลดล็อกว่า _"Put this back once work arrives through pull requests"_ · **เงื่อนไขนั้นสำเร็จไปแล้ว** (Phase 0 จบ งานเข้าทาง PR ตั้งแต่ #2) เหลือแค่กด
+      ช่องที่มันปิดคือ merge commit ที่ต่างจาก PR head · เปิด branch protection แบบ require up-to-date แทนก็ได้ เลือกอย่างใดอย่างหนึ่ง ไม่ต้องทำทั้งคู่
 - [ ] 🔒 **Test invariant ที่ DB บังคับเองไม่ได้** — Phase 0 เลื่อนมาเพราะยังไม่มี service ให้บังคับ **Phase 1 มีแล้ว หมดข้ออ้าง**
   - [ ] org ต้องมี `role='owner'` ≥1 แถวเสมอ (ห้ามลบ/ลดสิทธิ์คนสุดท้าย)
   - [ ] project ต้องมี `is_done_type` ≥1 อัน
   - [ ] `completed_at`/`completed_by` มีค่า **ก็ต่อเมื่อ** status ของ task นั้น `is_done_type` — คุมสองทาง ดู §6
-- [x] 🔒 **`FeatureService.isEnabled()` return `true` เสมอ — "ดักด้วย feature flag" ตอนนี้แปลว่า "เปิดอยู่"**
-      · [`04-features/README.md:57`](../docs/04-features/README.md) เขียนว่า `/register` ดักด้วย `isEnabled(org, 'public_registration')` "ซึ่ง return `false` ตั้งแต่บรรทัดแรก" — **โค้ดจริง `return true`**
+- [x] 🔒 **`FeatureService.isEnabled()` เคย return `true` เสมอ — "ดักด้วย feature flag" จึงแปลว่า "เปิดอยู่"**
+      · [`04-features/phase-1.md`](../docs/04-features/phase-1.md#auth--users) เขียนว่า `/register` ดักด้วย `isEnabled(org, 'public_registration')` "ซึ่ง return `false` ตั้งแต่บรรทัดแรก" — โค้ดตอนนั้น `return true`
       · ใครสร้าง `/register` ตามสเปกโดยไม่เปิดไฟล์ดู จะได้ public registration ที่เปิดอยู่ ใน phase ที่มี org เดียว = ใครรู้ URL ก็เข้าถึงข้อมูลบริษัท
       · **ตัดสินแล้ว: allow-list ว่าง ปิดหมดเป็น default** — `ENABLED_FEATURES` เป็น `Set` เปล่า ชื่อที่ไม่ได้อยู่ในนั้นคือปิด · การเพิ่มชื่อเข้า `FEATURES` จึงเป็นการ**ดัก** feature ไม่ใช่การเปิด
-      · `04-features/README.md` ไม่ต้องแก้ — โค้ดขยับมาตรงกับ doc · ที่แก้คือ [`02-database/README.md`](../docs/02-database/schema.md#schema-identity) กับ [`03-roadmap.md`](../docs/03-roadmap.md) ที่ยังเขียนว่า `return true`
+      · doc ไม่ต้องแก้ — **โค้ดขยับมาตรงกับ doc** ไม่ใช่ทางกลับกัน
       · test ครอบว่าไม่มี feature ไหนเปิดอยู่จริง และชื่อที่ยังไม่มีใครเปิด return `false` — ไม่ใช่เชื่อคอมเมนต์
 - [ ] **`identity.oauth_accounts` — migrate ไว้ แต่ feature ปิด ยังไม่ใช้** (ตัดสินแล้ว)
-      · ตารางลงตาม schema ใน [`02-database/README.md`](../docs/02-database/schema.md#schema-identity) · เป็นแพทเทิร์นเดียวกับ `identity.roles`/`permissions` ที่ migrate ตั้งแต่ Phase 0 แล้วไม่มีใครอ่านจนถึง Phase 7
+      · ตารางลงตาม schema ใน [`02-database/schema.md`](../docs/02-database/schema.md#schema-identity) · เป็นแพทเทิร์นเดียวกับ `identity.roles`/`permissions` ที่ migrate ตั้งแต่ Phase 0 แล้วไม่มีใครอ่านจนถึง Phase 7
       · **Google login ยังไม่เปิดใช้** — ปิดด้วยกลไกที่ปิดได้จริง ดูข้อบน ไม่ใช่ `FeatureService` ตามสภาพปัจจุบัน
       · **hard delete** (`CreatedEntity`) ตามสามคำถามใน [`02-database/rules.md`](../docs/02-database/rules.md#base-entity) — ลืม `deleted_at IS NULL` ใน flow ล็อกอินคือช่องให้คนที่ unlink แล้วเข้ากลับมาได้ · จึงไม่ต้องแตะ `AGGREGATE_CHILDREN`/`ROOTS` เลย และ index เป็น `UNIQUE` ธรรมดาไม่ใช่ partial
       · 🔒 **anonymise ต้อง `DELETE` แถว oauth เอง** — `ON DELETE CASCADE` บน `user_id` ไม่ยิง เพราะ `identity.users` อยู่ใน `NEVER_PURGED` และ anonymise เป็น `UPDATE` · ไม่ลบ = แถวค้างให้ล็อกอินกลับเข้ามาได้
@@ -123,7 +123,7 @@
 
 - [ ] สร้าง / แก้ไข / ลบ project (soft delete)
 - [ ] Project member อิสระจากทีม (แบบ Slack channel) — role `admin` / `member`
-- [ ] ลบ project → ลูกทั้งต้นไปด้วย ผ่าน `cascadeSoftDelete` ที่มีอยู่แล้ว
+- [ ] ลบ project → ลูกทั้งต้นไปด้วย ผ่าน `CascadeSoftDelete` (inject เป็น service) ที่มีอยู่แล้ว
       · ถ้าเพิ่มตารางใหม่ใน phase นี้ **ต้องใส่ใน `AGGREGATE_CHILDREN` หรือ `ROOTS`** ไม่งั้น test ฟ้อง
 
 ---
@@ -166,7 +166,9 @@
       · service throw ให้เองถ้าไม่มี transaction เปิดอยู่ — เป็นการบังคับด้วยรูปทรง ไม่ใช่ความจำ
       · event listener ทำแทนไม่ได้ มันรันหลัง commit
 - [ ] เขียน log ตอน: สร้าง/แก้/ลบ task · เปลี่ยน status · assign · เปลี่ยน role · login ล้มเหลว
-- [ ] Assignee picker ข้อ "คนที่เพิ่ง assign ล่าสุด" อ่านจาก log นี้ — ออกแบบ `metadata` ให้ query ได้ตั้งแต่แรก
+- [ ] Assignee picker ข้อ "คนที่เพิ่ง assign ล่าสุด" อ่านจาก log นี้
+      · index ที่ต้องใช้ `logs_actor_idx (org_id, actor_id, action, occurred_at DESC)` **มีตั้งแต่ Phase 0 แล้ว** ไม่ต้องเพิ่ม
+      · ที่ต้องตัดสินคือ **เก็บ id ของคนที่ถูก assign ไว้ตรงไหนใน `changes_json`** — `entity_id` คือ task ไม่ใช่คน และ `audit.logs` ไม่มีคอลัมน์อื่นให้ใส่ ([ทุกคอลัมน์](../docs/02-database/schema.md#schema-audit))
 
 ---
 
@@ -200,6 +202,10 @@
 ## 10. API surface
 
 - [ ] `/api/v1/*` · path nested ชั้นเดียว · resource พหูพจน์ · แก้ไขใช้ `PATCH`
+- [ ] ⚠️ **`setGlobalPrefix('v1')` ไม่ใช่ `'api/v1'` · และต้อง `exclude` health** — บรรทัดเดียวที่ทำ deploy พังได้โดย dev ไม่มีทางเจอ
+      · `/api/v1/*` คือ path ที่ **browser** เห็น · Caddy `handle_path /api/*` [ตัด `/api` ทิ้งก่อนถึง Nest](../docs/01-architecture.md#path-ownership) แล้ว ใส่ `'api/v1'` จะได้ `/api/api/v1/...`
+      · healthcheck ของ service `api` ยิง `127.0.0.1:3001/health/live` **ตรง ไม่ผ่าน Caddy** — ไม่ exclude แล้ว path กลายเป็น `/v1/health/live` → container unhealthy → `depends_on: service_healthy` บล็อก `web` กับ `caddy` ทั้งกอง
+      · dev ไม่เจอเพราะไม่มี Caddy ในเครื่อง · ตอนนี้ `main.ts` ยังไม่มี `setGlobalPrefix` เลย บรรทัดนี้คือของใหม่ที่ phase นี้เพิ่ม
 - [ ] Error shape ตาม [`01-architecture.md`](../docs/01-architecture.md#api) — `code` เป็น string คงที่ให้ frontend เช็ค, `message` ภาษาไทยแสดงผู้ใช้ได้เลย
 - [ ] Swagger ครบทุก endpoint — `/docs` เป็นของที่คนอื่นในทีมใช้จริงแล้ว phase นี้
 - [ ] zod schema ที่ใช้ร่วมสองฝั่งอยู่ใน `@repo/shared` — อย่า duplicate ฝั่ง web
@@ -227,9 +233,10 @@
 | `save()` ที่มี `id` | เช็คก่อนว่า org นี้เป็นเจ้าของ ถ้าไม่ใช่ throw · เจอตอนเขียน update endpoint แน่ |
 | `updateById` | ไม่โหลด entity → subscriber ไม่ทำงาน · มันเขียน `updatedBy` ให้เองแล้ว อย่าเขียนซ้ำ |
 | Audit ต้องอยู่ใน transaction | `AuditService.record` throw ถ้าไม่มี · ไม่ใช่ความจำ เป็นรูปทรง |
+| `setGlobalPrefix` | `'v1'` ไม่ใช่ `'api/v1'` (Caddy ตัด `/api` ไปแล้ว) · ต้อง `exclude` health ไม่งั้น healthcheck ที่ยิงตรงพัง แล้ว compose ไม่ยอมขึ้นทั้ง stack — ดู §10 |
 | Cookie `SameSite=Lax` | พอได้เพราะ Caddy รับ origin เดียว · **ห้ามยุบเป็น `api.domain.com`** ไม่งั้นต้องมี CSRF token ทั้งระบบ |
 | Email `citext` | unique index ต้องเป็น partial (`WHERE status != 'deleted'`) ไม่งั้นลบ user แล้วอีเมลนั้นสมัครใหม่ไม่ได้ตลอดกาล |
 | ชื่อเล่น | ค้นต้องครอบทั้งชื่อจริง ชื่อเล่น อีเมล · ทำ index ตั้งแต่แรก บริษัท 100 คน `ILIKE '%x%'` ยังไหว แต่ 1000 ไม่ไหว |
 | LexoRank | แทรกกลางได้ = offset pagination พัง · และ `text COLLATE "C"` เท่านั้น ถ้าใช้ collation อื่นลำดับจะเพี้ยน |
 | `is_done_type` แก้ทีหลัง | ทาง B ใน §6 — ลืมแล้วจะมี task ที่ `completed_at` มีค่าแต่ status ไม่ใช่ done โดยไม่มีอะไรฟ้อง |
-| Estimate | roadmap เขียน ~6 สัปดาห์ · Auth (§1) กินเวลามากกว่าที่คิดเสมอ ถ้าจะตัดให้ตัด §9 filter ย่อย อย่าตัด test ใน §0 |
+| Estimate | roadmap ให้ phase นี้ **~4 สัปดาห์** (6 สัปดาห์คือเป้าหมายรวม Phase 0+1) · Auth (§1) กินเวลามากกว่าที่คิดเสมอ ถ้าจะตัดให้ตัด §9 filter ย่อย อย่าตัด test ใน §0 |

@@ -75,6 +75,9 @@ sessions                                 -- 1 แถว = 1 การ login จ�
 
   CREATE INDEX ON identity.sessions (current_token_hash) WHERE revoked_at IS NULL;
   CREATE INDEX ON identity.sessions (user_id, revoked_at);
+  -- ตัวจับ token reuse: หา session จาก token ที่ถูก rotate ไปแล้ว
+  CREATE INDEX ON identity.sessions (previous_token_hash)
+    WHERE previous_token_hash IS NOT NULL;
 
   -- rotation ไม่สร้างแถวใหม่ — แถวเดียวอยู่ตลอด 15 วัน แค่เปลี่ยน token hash
   -- 1 session มี refresh token ที่ใช้ได้ 1 อันเสมอ
@@ -128,14 +131,17 @@ index จึงเป็น `UNIQUE` ธรรมดา ไม่ใช่ parti
 
 ```
 roles                            -- 'support' | 'engineer' | 'admin'
-  name                text  unique
+  name                text
   description         text
+  -- partial ทั้งคู่: สองตารางนี้ soft delete ได้ (🔒)
+  CREATE UNIQUE INDEX ON identity.roles (name) WHERE deleted_at IS NULL;
 
 permissions                      -- seed จาก migration ตาม key ที่นิยามในโค้ด
-  key                 text  unique   'org.read' | 'org.suspend'
-                                     | 'user.impersonate' | 'billing.refund'
-                                     | 'log.read' | 'role.manage'
+  key                 text        'org.read' | 'org.suspend'
+                                  | 'user.impersonate' | 'billing.refund'
+                                  | 'log.read' | 'role.manage'
   description         text
+  CREATE UNIQUE INDEX ON identity.permissions (key) WHERE deleted_at IS NULL;
 
 role_permissions
   role_id             uuid  FK
@@ -166,7 +172,8 @@ user_roles
 ```
 organizations                            -- ไม่มี org_id (เท่ากับ id เสมอ) · ไม่มี owner_id (คือ created_by)
   name                text
-  slug                text     unique
+  slug                text
+  CREATE UNIQUE INDEX ON organization.organizations (slug) WHERE deleted_at IS NULL;
 
 members                                  -- สมาชิกของ org
   user_id             uuid  FK → identity.users
@@ -178,6 +185,7 @@ members                                  -- สมาชิกของ org
 teams
   name                text
   description         text  null
+  CREATE UNIQUE INDEX ON organization.teams (org_id, name) WHERE deleted_at IS NULL;
 
 team_members
   team_id             uuid  FK
@@ -197,6 +205,7 @@ projects
   auto_complete_parent    boolean  default false
   sprint_enabled          boolean  default false
   estimate_unit           text     'none' (default) | 'point' | 'hour' | 'tshirt'  (Phase 4)
+  CREATE UNIQUE INDEX ON project.projects (org_id, name) WHERE deleted_at IS NULL;
 
 members                                  -- สมาชิกของ project
   project_id          uuid  FK
@@ -214,7 +223,11 @@ statuses
   is_cancelled_type   boolean  นับเป็น "ยกเลิก" — ตัดออกจากตัวหารของ progress
   -- is_done_type กับ is_cancelled_type เป็น true พร้อมกันไม่ได้
 
-  CREATE UNIQUE INDEX ON project.statuses (project_id) WHERE is_default = true;
+  -- partial ทั้งสองเงื่อนไข: ตารางนี้ soft delete จึงต้องมี deleted_at ด้วย (🔒)
+  CREATE UNIQUE INDEX ON project.statuses (project_id)
+    WHERE is_default AND deleted_at IS NULL;
+  CREATE UNIQUE INDEX ON project.statuses (project_id, name)
+    WHERE deleted_at IS NULL;
 
 sprints                                          (Phase 2)
   project_id          uuid  FK
@@ -226,7 +239,9 @@ sprints                                          (Phase 2)
   sort_order          text COLLATE "C"
 
   CHECK (status IN ('planned', 'active', 'completed'))
-  CREATE UNIQUE INDEX ON project.sprints (project_id) WHERE status = 'active';
+  CHECK (end_date >= start_date)
+  CREATE UNIQUE INDEX ON project.sprints (project_id)
+    WHERE status = 'active' AND deleted_at IS NULL;
 ```
 
 ## Schema `task`
@@ -381,6 +396,7 @@ views
   name                text
   type                text  'table' | 'board' | 'calendar'
   owner_id            uuid  null = view กลางของ project · มีค่า = view ส่วนตัว
+                            FK → identity.users · ON DELETE CASCADE (ดูด้านล่าง)
   filter_json         jsonb
   sort_json           jsonb
   group_by            text  null
@@ -393,6 +409,12 @@ columns
   width               int   null
   is_visible          boolean
 ```
+
+> ⚠️ **`views.owner_id` เป็น `CASCADE` ที่ไม่มีวันทำงาน — กับดักตัวเดียวกับ [`oauth_accounts.user_id`](#schema-identity)**
+>
+> `identity.users` อยู่ใน [`NEVER_PURGED`](../../../apps/api/core/src/maintenance/retention.policy.ts) และการ anonymise เป็น `UPDATE` ไม่ใช่ `DELETE` · view ส่วนตัวของคนที่ลาออกจึงค้างอยู่ ต้องลบเองตอน anonymise
+>
+> ต่างจาก `oauth_accounts` ตรงที่นี่ไม่ใช่ช่องโหว่สิทธิ์ — เป็นแค่แถวที่ไม่มีเจ้าของ แต่ต้องรู้ว่า FK ไม่ได้เก็บกวาดให้
 
 ## Schema `chat` (Phase 2)
 
