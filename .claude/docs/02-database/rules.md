@@ -32,8 +32,9 @@ team_members.org_id = Org A     แต่     teams.org_id = Org B
 
 - FK ข้าม schema ได้ **ทิศทางเดียว**: `task → project → organization → identity`
 - Schema ระดับล่างห้ามมี FK ชี้ขึ้นไปหาระดับบน — `identity` ต้องไม่รู้จัก `task`
-- Schema กลาง (`audit`, `discussion`, `field`, `view`) ไม่ชี้ไปไหนเลย (polymorphic)
-- ตาราง polymorphic (`discussion.comments`, `discussion.attachments`, `audit.logs`, `field.definitions`) **ไม่มี FK** — ชดเชยด้วย index
+- **คอลัมน์ polymorphic ไม่มี FK** — `entity_id` ของ `discussion.comments` · `discussion.attachments` · `audit.logs` ชี้ไปตารางไหนก็ได้ตาม `entity_type` จึงผูก FK ไม่ได้ ชดเชยด้วย index ที่ขึ้นต้นด้วย `(org_id, entity_type, entity_id)`
+- **แต่คอลัมน์อื่นในตารางเดียวกันยังมี FK ตามปกติ** — `discussion.*` ผูก `org_id` กับ `created_by` ไว้ครบ และ comment ผูก `parent_comment_id` เป็น composite ไปหาตัวเอง · `field.definitions` กับ `view.views` ไม่ใช่ polymorphic เลย ทั้งคู่มี composite FK ไป `project.projects` (ดูตาราง ON DELETE ด้านล่าง)
+- **`audit.logs` เป็นตารางเดียวที่ไม่มี FK สักเส้น** — รวมถึง `org_id` และ `actor_id` เพราะ log ต้องอยู่ได้นานกว่าสิ่งที่มันบันทึก
 
 ```sql
 CREATE INDEX ON discussion.comments (org_id, entity_type, entity_id, created_at);
@@ -74,6 +75,7 @@ CREATE INDEX ON discussion.comments (org_id, entity_type, entity_id, created_at)
 | `identity.role_permissions.*` · `user_roles.role_id`                                        | `CASCADE`                 |
 | `task.tasks.sprint_id`                                                                      | `SET NULL` (ตกไป Backlog) |
 | `chat.channels.default_assignee_id` · `identity.user_roles.granted_by`                      | `SET NULL`                |
+| `view.views.owner_id` — ⚠️ CASCADE ที่ไม่มีวันทำงาน ([ทำไม](./schema.md#schema-view-phase-4)) | `CASCADE`                 |
 | `task.tasks.project_id` · `task.tasks.status_id`                                            | `RESTRICT`                |
 | `organization.members.user_id` · `team_members.user_id`                                     | `RESTRICT`                |
 | `*.created_by` · `*.updated_by` · `task.tasks.completed_by`                                 | `RESTRICT`                |
@@ -88,12 +90,12 @@ CREATE INDEX ON discussion.comments (org_id, entity_type, entity_id, created_at)
 
 > 🔒 **ต้องทำ** — ตารางต้องมี `org_id` ถ้าแถวของมันเป็นของ org ใด org หนึ่ง · ยกเว้นแถวที่ไม่ได้เป็นของ org ไหนเลย ([เกณฑ์เต็ม + สามกรณี](#the-org_id-rule--one-test-not-a-list))
 
-- `org_id` **ทุกตาราง ทุก schema** รวมถึงตารางกลาง — **ตารางกลางยิ่งต้องมี** เพราะ composite FK คือสิ่งเดียวที่กันการผูกข้าม org ([ทำไม](#เกณฑ์นี้ไม่ใช่-หา-org-จากแม่ได้มั้ย))
+- `org_id` **ทุกตารางที่แถวเป็นของ org ใด org หนึ่ง** — ไม่ใช่ทุกตารางในระบบ ([เกณฑ์ + สามข้อยกเว้น](#the-org_id-rule--one-test-not-a-list)) · **ตารางกลางยิ่งต้องมี ไม่ใช่ยิ่งไม่ต้อง** เพราะ composite FK คือสิ่งเดียวที่กันการผูกข้าม org ([ทำไม](#เกณฑ์นี้ไม่ใช่-หา-org-จากแม่ได้มั้ย))
 - Composite index ขึ้นต้นด้วย `org_id` เสมอ
   ```sql
   CREATE INDEX ON task.tasks (org_id, project_id, status_id);
   ```
-- บังคับกรองผ่าน Guard/Interceptor ระดับ global ไม่ให้ dev จำเอง
+- บังคับกรองที่ [`OrgScopedRepository`](../../../apps/api/core/src/shared/org-scope/org-scoped.repository.ts) ไม่ให้ dev จำเอง — service inject ผ่าน `provideOrgRepository(Entity)` เท่านั้น และมี ESLint rule ห้าม inject `Repository<T>` ดิบใต้ `src/modules/**`
 - **Row-Level Security เปิดทุกตาราง — ทำใน Phase 2 ไม่ใช่ Phase 0** (`CREATE POLICY` เป็นงาน additive เพิ่มทีหลังได้โดยไม่ต้อง migrate) · Phase 0 ใช้ repository base class + isolation test · ดูเหตุผลเต็มใน [`01-architecture.md`](../01-architecture.md#org_id-scoping)
   - ⚠️ ต้องมี `FORCE ROW LEVEL SECURITY` ด้วย ไม่งั้น policy ไม่กันเจ้าของตารางและจะเงียบสนิทไม่มี error
   - ⚠️ ใช้ `set_config('app.current_org_id', $1, true)` ไม่ใช่ `SET LOCAL` (SET LOCAL รับ parameter ไม่ได้ → เสี่ยง SQL injection)
@@ -106,7 +108,7 @@ CREATE INDEX ON discussion.comments (org_id, entity_type, entity_id, created_at)
 
 ```
 id           uuid          PK · gen_random_uuid()
-org_id       uuid          NOT NULL · ทุกตาราง ทุก schema
+org_id       uuid          NOT NULL · ถ้าแถวเป็นของ org ใด org หนึ่ง (คำถามที่ 1)
 
 created_at   timestamptz   NOT NULL · default now()
 created_by   uuid          NOT NULL · ผู้สร้าง (ระบบสร้างเอง = uuid ของ system user)
@@ -193,8 +195,8 @@ export abstract class BaseEntity {
 ```
 
 - `@DeleteDateColumn` ทำให้ TypeORM กรอง `deleted_at IS NULL` ให้อัตโนมัติทุก query — ถ้าต้องการดูของที่ลบแล้วใช้ `withDeleted: true`
-- `createdBy` / `updatedBy` / `deletedBy` เติมอัตโนมัติจาก request context ผ่าน TypeORM subscriber ไม่ต้อง set เองทุกที่
-- `org_id` เติมและกรองอัตโนมัติผ่าน global interceptor เช่นกัน
+- `createdBy` / `updatedBy` / `deletedBy` เติมอัตโนมัติจาก request context ผ่าน [`AuditColumnsSubscriber`](../../../apps/api/core/src/shared/entity/audit-columns.subscriber.ts) ไม่ต้อง set เองทุกที่
+- `org_id` เติมและกรองที่ `OrgScopedRepository` ไม่ใช่ที่ subscriber — **ไม่มี interceptor ในระบบนี้** · การกรองต้องอยู่ในตัวที่สร้าง query ไม่ใช่ตัวที่เห็น request เพราะ job กับ seed ไม่ได้มาทาง HTTP
 
 ## The `org_id` Rule — One Test, Not a List
 

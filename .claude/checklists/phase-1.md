@@ -24,14 +24,14 @@
   - [ ] org ต้องมี `role='owner'` ≥1 แถวเสมอ (ห้ามลบ/ลดสิทธิ์คนสุดท้าย)
   - [ ] project ต้องมี `is_done_type` ≥1 อัน
   - [ ] `completed_at`/`completed_by` มีค่า **ก็ต่อเมื่อ** status ของ task นั้น `is_done_type` — คุมสองทาง ดู §6
-- [x] 🔒 **`FeatureService.isEnabled()` return `true` เสมอ — "ดักด้วย feature flag" ตอนนี้แปลว่า "เปิดอยู่"**
-      · [`04-features/README.md:57`](../docs/04-features/README.md) เขียนว่า `/register` ดักด้วย `isEnabled(org, 'public_registration')` "ซึ่ง return `false` ตั้งแต่บรรทัดแรก" — **โค้ดจริง `return true`**
+- [x] 🔒 **`FeatureService.isEnabled()` เคย return `true` เสมอ — "ดักด้วย feature flag" จึงแปลว่า "เปิดอยู่"**
+      · [`04-features/phase-1.md`](../docs/04-features/phase-1.md#auth--users) เขียนว่า `/register` ดักด้วย `isEnabled(org, 'public_registration')` "ซึ่ง return `false` ตั้งแต่บรรทัดแรก" — โค้ดตอนนั้น `return true`
       · ใครสร้าง `/register` ตามสเปกโดยไม่เปิดไฟล์ดู จะได้ public registration ที่เปิดอยู่ ใน phase ที่มี org เดียว = ใครรู้ URL ก็เข้าถึงข้อมูลบริษัท
       · **ตัดสินแล้ว: allow-list ว่าง ปิดหมดเป็น default** — `ENABLED_FEATURES` เป็น `Set` เปล่า ชื่อที่ไม่ได้อยู่ในนั้นคือปิด · การเพิ่มชื่อเข้า `FEATURES` จึงเป็นการ**ดัก** feature ไม่ใช่การเปิด
-      · `04-features/README.md` ไม่ต้องแก้ — โค้ดขยับมาตรงกับ doc · ที่แก้คือ [`02-database/README.md`](../docs/02-database/schema.md#schema-identity) กับ [`03-roadmap.md`](../docs/03-roadmap.md) ที่ยังเขียนว่า `return true`
+      · doc ไม่ต้องแก้ — **โค้ดขยับมาตรงกับ doc** ไม่ใช่ทางกลับกัน
       · test ครอบว่าไม่มี feature ไหนเปิดอยู่จริง และชื่อที่ยังไม่มีใครเปิด return `false` — ไม่ใช่เชื่อคอมเมนต์
 - [ ] **`identity.oauth_accounts` — migrate ไว้ แต่ feature ปิด ยังไม่ใช้** (ตัดสินแล้ว)
-      · ตารางลงตาม schema ใน [`02-database/README.md`](../docs/02-database/schema.md#schema-identity) · เป็นแพทเทิร์นเดียวกับ `identity.roles`/`permissions` ที่ migrate ตั้งแต่ Phase 0 แล้วไม่มีใครอ่านจนถึง Phase 7
+      · ตารางลงตาม schema ใน [`02-database/schema.md`](../docs/02-database/schema.md#schema-identity) · เป็นแพทเทิร์นเดียวกับ `identity.roles`/`permissions` ที่ migrate ตั้งแต่ Phase 0 แล้วไม่มีใครอ่านจนถึง Phase 7
       · **Google login ยังไม่เปิดใช้** — ปิดด้วยกลไกที่ปิดได้จริง ดูข้อบน ไม่ใช่ `FeatureService` ตามสภาพปัจจุบัน
       · **hard delete** (`CreatedEntity`) ตามสามคำถามใน [`02-database/rules.md`](../docs/02-database/rules.md#base-entity) — ลืม `deleted_at IS NULL` ใน flow ล็อกอินคือช่องให้คนที่ unlink แล้วเข้ากลับมาได้ · จึงไม่ต้องแตะ `AGGREGATE_CHILDREN`/`ROOTS` เลย และ index เป็น `UNIQUE` ธรรมดาไม่ใช่ partial
       · 🔒 **anonymise ต้อง `DELETE` แถว oauth เอง** — `ON DELETE CASCADE` บน `user_id` ไม่ยิง เพราะ `identity.users` อยู่ใน `NEVER_PURGED` และ anonymise เป็น `UPDATE` · ไม่ลบ = แถวค้างให้ล็อกอินกลับเข้ามาได้

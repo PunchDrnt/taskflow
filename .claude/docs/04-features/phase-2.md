@@ -256,7 +256,7 @@ ChatAdapter (interface)
 
 Teams ต้องผ่าน Microsoft app approval ซึ่งใช้เวลาและเอกสารเยอะ → รอมีลูกค้าองค์กรขอ
 
-**Schema (สร้างตอน Phase 2 นี้เอง · ดูเต็มใน [`02-database/README.md`](../02-database/schema.md#schema-chat-phase-2))**
+**Schema (สร้างตอน Phase 2 นี้เอง · ดูเต็มใน [`02-database/schema.md`](../02-database/schema.md#schema-chat-phase-2))**
 
 สองตารางนี้เป็นตารางอิสระ ไม่มีตารางอื่นชี้มาหา จึงเป็นข้อยกเว้นเดียวของกติกา "สร้าง schema ครบทุก module ใน Phase 0" — เพิ่มตอน Phase 2 ไม่เจ็บ
 

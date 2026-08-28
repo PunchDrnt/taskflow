@@ -426,17 +426,16 @@ Phase 0 จึงลงแรงกับ **repository base class + isolation te
 
 **ชั้นที่ 1: AsyncLocalStorage เก็บ context** _(Phase 0)_
 
-```ts
-// shared/request-context.ts
-export const requestContext = new AsyncLocalStorage<{
-  orgId: string
-  userId: string
-}>()
-```
+[`shared/org-scope/request-context.ts`](../../apps/api/core/src/shared/org-scope/request-context.ts) ถือ `AsyncLocalStorage<{ orgId, userId }>` ไว้ตัวเดียว แล้วเปิดทางเข้าสองทาง — เข้าถึงได้ทุกที่โดยไม่ต้องส่ง parameter ผ่านทุกชั้น
 
-**Middleware** ใส่ค่าตอนต้น request → เข้าถึงได้ทุกที่โดยไม่ต้องส่ง parameter ผ่านทุกชั้น
+| เปิด context ด้วย | ใช้ตอน |
+| --- | --- |
+| `enterRequestContext` (`enterWith`) | HTTP request — `AuthGuard` เรียกตอน Phase 1 |
+| `runWithRequestContext` (`run`) | background job · seed · test |
 
-> ⚠️ **ใช้ guard ไม่ได้** — guard คืน `boolean` แปลว่า scope ของ `AsyncLocalStorage.run()` ปิดตั้งแต่ก่อน handler จะรัน handler เลยอยู่นอก context (ทดสอบแล้ว: `getStore()` เป็น `undefined`) · middleware เรียก `next()` จากในนั้นได้ scope จึงครอบทั้ง request
+ตอนนี้ยังไม่มี auth จึงเป็น `RequestContextMiddleware` ที่เปิดให้ชั่วคราวด้วย `run` — [ตารางใน Auth](#auth) บอกว่ามันถูกถอดเมื่อไหร่
+
+> **ทำไมเป็นสองตัว ไม่ใช่ตัวเดียว** — `run` ปิด scope ตัวเองตอน callback คืนค่า ซึ่งใช้ใน guard ไม่ได้เพราะ `canActivate` คืน `boolean` · เหตุผลเต็มพร้อมผลวัดอยู่ที่ [Auth](#auth) ซึ่งเป็นที่ที่ guard ถูกเขียน
 
 **ชั้นที่ 2: Repository wrapper** _(Phase 0)_
 

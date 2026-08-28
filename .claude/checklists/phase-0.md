@@ -40,7 +40,7 @@
 - [x] `002` schema ทั้ง 11 ตัว
 - [x] 🔒 `003` `identity.users` + seed system user — `is_system` · `password_hash` NULL · trigger กันลบ
 - [x] 🔒 `004` `audit.logs` — `PARTITION BY RANGE (occurred_at)` + **`PRIMARY KEY (id, occurred_at)`** · partition ล่วงหน้า 12 เดือน + `logs_default`
-- [x] ตารางที่เหลือตาม [`02-database/README.md`](../docs/02-database/schema.md) ยกเว้น `chat.*` (Phase 2) และ `identity.oauth_accounts` (Phase 1 — migrate ไว้ แต่ Google login ยังไม่เปิดใช้)
+- [x] ตารางที่เหลือตาม [`02-database/schema.md`](../docs/02-database/schema.md) ยกเว้น `chat.*` (Phase 2) และ `identity.oauth_accounts` (Phase 1 — migrate ไว้ แต่ Google login ยังไม่เปิดใช้)
 - [x] Test กัน entity หลุดจาก migration — [`test/schema-drift.spec.ts`](../../apps/api/core/test/schema-drift.spec.ts)
 - [x] Job สร้าง partition เดือนถัดไป — cron `audit-partitions` 03:05 เติมให้ครบ 12 เดือนล่วงหน้าทุกวัน ([`src/maintenance/`](../../apps/api/core/src/maintenance/))
 - [x] Alert เมื่อ `audit.logs_default` มีแถว — `alerts.condition()` เข้า Sentry แล้ว (§7 ทำไปแล้ว) · log บรรทัดเดิมยังอยู่
