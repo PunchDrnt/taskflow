@@ -132,16 +132,22 @@ CHECK ((deleted_at IS NULL) = (deleted_by IS NULL))   -- ตั้งพร้�
 | **2.** มีคอลัมน์ไหนถูก _แก้_ หลังสร้างไหม | `updated_at` · `updated_by` | ไม่มี |
 | **3.** ลบแล้วต้อง _กู้คืน_ ได้ไหม | `deleted_at` · `deleted_by` + CHECK | ไม่มี — hard delete |
 
-สามแกนนี้อิสระต่อกัน จึงมี 6 คลาสใน [`base.entity.ts`](../../../apps/api/core/src/shared/entity/base.entity.ts) ครบทุกการผสม (ที่ใช้จริง)
+สามแกนนี้อิสระต่อกัน จึงมี 7 คลาสใน [`base.entity.ts`](../../../apps/api/core/src/shared/entity/base.entity.ts) ครบทุกการผสม (ที่ใช้จริง)
 
 | คลาส | org_id | แก้ได้ | soft delete | ใช้กับ |
 | --- | :-: | :-: | :-: | --- |
-| `BaseEntity` | ✓ | ✓ | ✓ | ค่าปกติ — task, project, team |
+| `BaseEntity` | ✓ | ✓ | ✓ | ค่าปกติ — task, project, team · `discussion.comments` _(Phase 3)_ |
 | `SoftDeletableEntity` | ✗ | ✓ | ✓ | `identity.users` · `organizations` · `billing.plans` |
-| `OrgScopedEntity` | ✓ | ✓ | ✗ | `notify.outbox` · `*.members` · `team_members` · `ai_usage` |
+| `OrgScopedEntity` | ✓ | ✓ | ✗ | `notify.outbox` · `*.members` · `team_members` · `ai_usage` · `organization.invitations` · `notify.notifications` _(Phase 3)_ |
 | `TimestampedEntity` | ✗ | ✓ | ✗ | `sessions` · `password_reset_tokens` |
 | `CreatedEntity` | ✗ | ✗ | ✗ | `role_permissions` · `user_roles` · `oauth_accounts` _(Phase 1)_ |
 | `OrgScopedCreatedEntity` | ✓ | ✗ | ✗ | `task.assignees` · `task.dependencies` _(Phase 5)_ |
+| `OrgScopedCreatedSoftDeletableEntity` | ✓ | ✗ | ✓ | `discussion.attachments` _(Phase 3)_ |
+
+> **คลาสสุดท้ายมีตารางเดียว และมีเหตุผล** — ไฟล์แนบไม่มีคอลัมน์ให้แก้ (เปลี่ยนไฟล์คือแนบใหม่
+> แล้วลบอันเก่า) แต่ต้องหายไปพร้อม task ที่ถูก soft delete และกลับมาพร้อมกันตอนกู้
+> · ใช้ `BaseEntity` แล้วปล่อย `updated_*` ว่างไม่ได้ ด้วยเหตุผลเดียวกับที่
+> [คำถามที่ 2](#คำถามที่-2-ตอบยังไง--แก้-ไม่ใช่-เปลี่ยนสถานะ) ให้ตัดสองคอลัมน์นั้นทิ้งจาก `task.assignees`
 
 #### คำถามที่ 2 ตอบยังไง — "แก้" ไม่ใช่ "เปลี่ยนสถานะ"
 

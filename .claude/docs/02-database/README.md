@@ -11,7 +11,7 @@
 | ไฟล์ | มีอะไร | เปิดเมื่อ |
 | --- | --- | --- |
 | **[`rules.md`](./rules.md)** 🔒 | [Foreign Key Rules](./rules.md#foreign-key-rules) · [Multi-tenancy](./rules.md#multi-tenancy) · [Base Entity](./rules.md#base-entity) · [กฎ `org_id`](./rules.md#the-org_id-rule--one-test-not-a-list) | กำลังจะเขียน migration หรือ entity ใหม่ |
-| **[`schema.md`](./schema.md)** | ทุกตาราง ทุกฟิลด์ ทั้ง 12 schema | อยากรู้ว่าตารางไหนมีคอลัมน์อะไร |
+| **[`schema.md`](./schema.md)** | ทุกตาราง ทุกฟิลด์ ทุก schema | อยากรู้ว่าตารางไหนมีคอลัมน์อะไร |
 | ที่นี่ | [Schema Map](#schema-map) · [Other Notes](#other-notes) | อยากรู้ว่าตารางไหนอยู่ schema ไหน |
 
 ---
@@ -21,16 +21,16 @@
 | Schema         | ตาราง                                                                                    | Module          |
 | -------------- | ---------------------------------------------------------------------------------------- | --------------- |
 | `identity`     | users, sessions, password_reset_tokens, roles, permissions, role_permissions, user_roles · oauth_accounts _(ยังไม่สร้าง)_ | `identity/`     |
-| `organization` | organizations, members, teams, team_members                                              | `organization/` |
+| `organization` | organizations, members, invitations, teams, team_members                                 | `organization/` |
 | `project`      | projects, members, statuses, sprints                                                     | `project/`      |
-| `task`         | tasks, assignees · dependencies _(Phase 5)_                                              | `task/`         |
+| `task`         | tasks, assignees · dependencies, task_embeddings _(Phase 5)_                             | `task/`         |
 | `audit`        | logs                                                                                     | `audit/`        |
 | `discussion`   | comments, attachments _(Phase 3)_                                                        | `discussion/`   |
 | `field`        | definitions _(Phase 4)_                                                                  | `field/`        |
 | `view`         | views, columns _(Phase 4)_                                                               | `view/`         |
-| `chat`         | identities, channels _(Phase 2)_                                                         | `chat/`         |
-| `automation`   | rules _(Phase 5)_                                                                        | `automation/`   |
-| `notify`       | outbox                                                                                   | `notify/`       |
+| `chat`         | identities, channels _(Phase 4)_                                                         | `chat/`         |
+| `automation`   | rules _(Phase 5)_ · ⚠️ **`CreateSchemas` ยังไม่ได้สร้าง schema นี้**                          | `automation/`   |
+| `notify`       | notifications _(Phase 3)_, outbox                                                        | `notify/`       |
 | `billing`      | plans, subscriptions, ai_wallet, ai_usage _(ตารางว่าง เผื่ออนาคต)_                          | —               |
 | `public`       | extension + `migrations` (สมุดบันทึกของ TypeORM CLI) เท่านั้น — ห้ามมีตารางของ module            | —               |
 
@@ -79,7 +79,13 @@ _ที่ไม่เข้าเกณฑ์ ปล่อยเป็น `text
 
 > ⚠️ **`schema-drift.spec.ts` มองไม่เห็น `CHECK`** — มันเทียบคอลัมน์ ไม่ใช่ constraint · CHECK ที่หายไปจึงไม่มีอะไรฟ้อง `test/schema-invariants.spec.ts` เลยยืนยันสามตัวนี้แทน
 
-เกณฑ์ข้างบนใช้กับ `CHECK` ที่จำกัด**ชุดค่า**ของคอลัมน์เดียวเท่านั้น · `CHECK` ที่ผูกสองคอลัมน์เข้าด้วยกัน (invariant ข้ามคอลัมน์ เช่น `identity.users` ที่บังคับ `password_hash IS NULL` เมื่อ `is_system`) เป็นคนละเรื่อง ใส่ได้ตามที่จำเป็น ไม่ต้องเข้าเกณฑ์นี้
+เกณฑ์ข้างบนใช้กับ `CHECK` ที่จำกัด**ชุดค่า**ของคอลัมน์เดียวเท่านั้น · อีกสองชนิดเป็นคนละเรื่อง ใส่ได้ตามที่จำเป็น ไม่ต้องเข้าเกณฑ์นี้:
+
+- **invariant ข้ามคอลัมน์** เช่น `identity.users` ที่บังคับ `password_hash IS NULL` เมื่อ `is_system`
+  · หรือ `deleted_at`/`deleted_by` ที่ต้องตั้งพร้อมกัน
+- **รูปแบบของค่า** ไม่ใช่ชุดของค่า เช่น `project.projects.key_prefix ~ '^[A-Z][A-Z0-9]{1,5}$'`
+  — ค่าที่ผิดรูปไม่ได้ทำให้ index ไหนเงียบ แต่ไปโผล่บนหน้าจอผู้ใช้เป็น task key ที่อ่านแล้วงง
+  (`dev-87` ปนกับ `DEV-87`) และไม่มีทางแก้ย้อนหลังโดยไม่เปลี่ยน key ของงานเก่า
 
 > ⚠️ `CHECK` ใน DB กับ union type ใน `@repo/shared` ไม่มีอะไร sync ให้ — แก้ที่ไหนต้องแก้อีกที่ด้วย
 

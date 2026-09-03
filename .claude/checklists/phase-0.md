@@ -40,7 +40,7 @@
 - [x] `002` schema ทั้ง 11 ตัว
 - [x] 🔒 `003` `identity.users` + seed system user — `is_system` · `password_hash` NULL · trigger กันลบ
 - [x] 🔒 `004` `audit.logs` — `PARTITION BY RANGE (occurred_at)` + **`PRIMARY KEY (id, occurred_at)`** · partition ล่วงหน้า 12 เดือน + `logs_default`
-- [x] ตารางที่เหลือตาม [`02-database/schema.md`](../docs/02-database/schema.md) ยกเว้น `chat.*` (Phase 2) และ `identity.oauth_accounts` (Phase 1 — migrate ไว้ แต่ Google login ยังไม่เปิดใช้)
+- [x] ตารางที่เหลือตาม [`02-database/schema.md`](../docs/02-database/schema.md) ยกเว้น `chat.*` (ตอนนั้นวางไว้ Phase 2 · ย้ายไป Phase 4 แล้ว) และ `identity.oauth_accounts` (Phase 1 — migrate ไว้ แต่ Google login ยังไม่เปิดใช้)
 - [x] Test กัน entity หลุดจาก migration — [`test/schema-drift.spec.ts`](../../apps/api/core/test/schema-drift.spec.ts)
 - [x] Job สร้าง partition เดือนถัดไป — cron `audit-partitions` 03:05 เติมให้ครบ 12 เดือนล่วงหน้าทุกวัน ([`src/maintenance/`](../../apps/api/core/src/maintenance/))
 - [x] Alert เมื่อ `audit.logs_default` มีแถว — `alerts.condition()` เข้า Sentry แล้ว (§7 ทำไปแล้ว) · log บรรทัดเดิมยังอยู่
@@ -84,7 +84,7 @@
 - [x] `@SkipOrgScope()` decorator สำหรับ endpoint ที่ต้องข้ามจริงๆ
 - [x] 🔒 **Integration test: query จาก org A ต้องมองไม่เห็นข้อมูล org B** — [`test/org-isolation.spec.ts`](../../apps/api/core/test/org-isolation.spec.ts)
   - [x] โครง integration test — [`test/database.ts`](../../apps/api/core/test/database.ts) reset DB แล้วรัน migration ให้เองทุกครั้ง
-- [x] Entity ครบทั้ง 28 ตาราง (ยกเว้น `chat.*` = Phase 2 และ `identity.oauth_accounts` = Phase 1) — drift test คุมทั้ง schema แล้ว
+- [x] Entity ครบทั้ง 28 ตาราง (ยกเว้น `chat.*` = Phase 4 และ `identity.oauth_accounts` = Phase 1) — drift test คุมทั้ง schema แล้ว
   - เจอ 10 จุดตอนใส่ครบ **ไม่มีข้อไหนเป็นชื่อหรือ type ผิดเลย** ทั้งหมดเป็นเรื่อง `DEFAULT` ที่ entity ไม่ได้ประกาศให้ตรง
   - `jsonb` ใช้ `{ default: {} }` ไม่ใช่ `() => "'{}'::jsonb"` · คอลัมน์ที่ DB มี default ต้องประกาศฝั่ง entity ด้วย
   - `audit.logs.id` ต้องเป็น `@PrimaryGeneratedColumn('uuid')` คู่กับ `@PrimaryColumn` ของ `occurred_at` — ถ้าใส่ `@PrimaryColumn` + default เอง schema builder จะเสนอ drop-then-set วนไม่จบ
@@ -174,7 +174,7 @@
 
 ## 8. ปิด Phase 0
 
-- [x] Seed script สำหรับ dev/demo — `yarn workspace @api/core db:seed` ([`src/database/seed.ts`](../../apps/api/core/src/database/seed.ts))
+- [x] Seed script สำหรับ dev/demo — `yarn workspace @api/core db:seed` ([`src/database/seed/demo.ts`](../../apps/api/core/src/database/seed/demo.ts))
       1 org · 4 คน (owner/admin/member×2) · team · project ที่มี status ครบชุด + sprint active · task 3 + sub-task 2
       รันซ้ำได้ (ลบของเดิมก่อน) · `NODE_ENV=production` แล้วปฏิเสธ exit 1
 - [x] Seed permission key ของ RBAC ระดับระบบ (**ไม่มีโค้ดอ่าน** — back-office มา Phase 7)

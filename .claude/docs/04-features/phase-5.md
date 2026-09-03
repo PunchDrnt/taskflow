@@ -65,15 +65,12 @@ Trigger → Condition → Action
 
 - Embedding model ตัวเล็กที่รองรับไทย (เช่น multilingual-e5-small, BGE-M3) — **รันบน CPU ได้ ไม่ต้องมี GPU**
 - เก็บ vector ลง **pgvector** บน Postgres ที่มีอยู่แล้ว
-- ตารางแยก ไม่ต้อง migrate `tasks`
+- ตารางแยก `task.task_embeddings` ไม่ต้อง migrate `tasks` — [ดู schema เต็ม](../02-database/schema.md#schema-task)
 
-```
-task.task_embeddings (
-  task_id, org_id,
-  embedding  vector,
-  updated_at
-)
-```
+> ⚠️ **pgvector เป็นงานฝั่ง deploy ไม่ใช่แค่ migration** — image `postgres:18-alpine`
+> ที่ใช้อยู่ไม่มีไฟล์ของ extension นี้ติดมา `CREATE EXTENSION vector` จึงล้มทันทีไม่ว่า
+> จะเป็น role ไหน · ต้องเปลี่ยน image หรือ build เอง แล้วทดสอบว่า backup/restore
+> ยังทำงานได้ · **ประเมินเวลาข้อนี้ให้รวมงานนั้นด้วย**
 
 - Embed ตอนสร้าง/แก้ title + description (ผ่าน event เหมือน activity log ไม่บล็อก request)
 - ตรวจงานซ้ำ: cosine similarity ในขอบเขต project เดียวกัน + เตือนเฉยๆ ไม่บล็อกการสร้าง

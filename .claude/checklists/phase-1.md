@@ -1,4 +1,4 @@
-# Phase 1 — First Real Users `v1.0.0`
+# Phase 1 — แกนหลัก `v1.0.0`
 
 ไล่ตามลำดับที่ทำได้จริง (ไม่ใช่ลำดับ priority ใน [`03-roadmap.md`](../docs/03-roadmap.md)) — ข้อล่างพึ่งข้อบน
 
@@ -7,7 +7,9 @@
 > 🔒 = [binding decision](../docs/00-overview.md#binding-decisions) ผิดแล้วแก้ย้อนหลังไม่ได้
 > ❓ = ยังไม่ตัดสิน ต้องเลือกก่อนถึงจะทำข้อนั้นได้
 
-**Phase 1 คือครั้งแรกที่มีคนอื่นนอกจากเราใช้** — ของที่ Phase 0 ปล่อยผ่านได้เพราะ "ยังไม่มีใครใช้" หมดข้ออ้างตรงนี้
+**Phase 1 คือแกนที่ทุก phase ถัดไปต่อยอด** — ตัวตน · องค์กร · โปรเจกต์ · งาน
+· เส้นที่ปล่อยให้คนใช้จริงอยู่ท้าย [Phase 3](../docs/04-features/phase-3.md) ไม่ใช่ตรงนี้
+แต่ของที่ผิดตรงนี้จะแพงที่สุดเพราะทุกอย่างวางทับมันหมด
 
 ---
 
@@ -26,7 +28,7 @@
   - [ ] `completed_at`/`completed_by` มีค่า **ก็ต่อเมื่อ** status ของ task นั้น `is_done_type` — คุมสองทาง ดู §6
 - [x] 🔒 **`FeatureService.isEnabled()` เคย return `true` เสมอ — "ดักด้วย feature flag" จึงแปลว่า "เปิดอยู่"**
       · [`04-features/phase-1.md`](../docs/04-features/phase-1.md#auth--users) เขียนว่า `/register` ดักด้วย `isEnabled(org, 'public_registration')` "ซึ่ง return `false` ตั้งแต่บรรทัดแรก" — โค้ดตอนนั้น `return true`
-      · ใครสร้าง `/register` ตามสเปกโดยไม่เปิดไฟล์ดู จะได้ public registration ที่เปิดอยู่ ใน phase ที่มี org เดียว = ใครรู้ URL ก็เข้าถึงข้อมูลบริษัท
+      · ใครสร้าง `/register` ตามสเปกโดยไม่เปิดไฟล์ดู จะได้ public registration ที่เปิดอยู่ = ใครรู้ URL ก็สมัครเข้ามาแล้วรอให้ใครสักคนเผลอเพิ่มเข้า org
       · **ตัดสินแล้ว: allow-list ว่าง ปิดหมดเป็น default** — `ENABLED_FEATURES` เป็น `Set` เปล่า ชื่อที่ไม่ได้อยู่ในนั้นคือปิด · การเพิ่มชื่อเข้า `FEATURES` จึงเป็นการ**ดัก** feature ไม่ใช่การเปิด
       · doc ไม่ต้องแก้ — **โค้ดขยับมาตรงกับ doc** ไม่ใช่ทางกลับกัน
       · test ครอบว่าไม่มี feature ไหนเปิดอยู่จริง และชื่อที่ยังไม่มีใครเปิด return `false` — ไม่ใช่เชื่อคอมเมนต์
@@ -49,7 +51,8 @@
       · วัดไว้แล้วใน Phase 0 ว่า `enterWith` รอดข้าม `await` และ 20 request ซ้อนกันไม่รั่วข้าม org
       · **ห้ามเปลี่ยนโครงตรงนี้โดยไม่รันเทสซ้ำ** — ถ้ารั่วคือ cross-org leak ทันที ไม่ใช่บั๊กธรรมดา
 - [ ] Guard อ่าน `@Public()` ผ่าน `Reflector` — decorator มีอยู่แล้วใน `shared/http/route-metadata.ts` **ยังไม่มีใครอ่าน**
-- [ ] `@SkipOrgScope()` — endpoint ที่ล็อกอินแล้วแต่ยังไม่ผูก org (เช่น เลือก org)
+- [ ] `@SkipOrgScope()` — endpoint ที่ล็อกอินแล้วแต่ยังไม่ผูก org · **Phase 1 มีผู้ใช้จริงสองกลุ่ม**:
+      หน้า Home ที่รวมงานข้าม org และคนที่ยังไม่ได้อยู่ org ไหนเลย
 - [ ] เลิกใช้ `RequestContextMiddleware` เมื่อ guard มาแล้ว — อย่าปล่อยให้ทั้งสองตัวเซ็ต context พร้อมกัน
 - [ ] Login / Logout / Refresh rotation — refresh 1 อันใช้ได้ครั้งเดียว หมุนแล้ว**ไม่สร้างแถวใหม่** แค่เปลี่ยน token hash
       · เก็บ chain ทุก generation ไม่คุ้ม — `previous_token_hash` + `rotated_at` ครอบ reuse detection กับ grace window ไว้แล้ว ที่ chain ซื้อเพิ่มคือจับ replay ของ token เก่ามากๆ ซึ่งไม่ได้เกิดบ่อยขึ้นตามจำนวนคน แต่จำนวนแถวโตตามคนเต็มๆ
@@ -67,17 +70,28 @@
       · อ่านก่อนแล้วค่อยเขียนจะทับกันเงียบ ๆ ตอนเปิดสองแท็บแล้ว access token หมดอายุพร้อมกัน
       · **บทเรียนเดียวกับ `OutboxWorker.claim()`** — ตอนนั้น `SELECT ... FOR UPDATE` แล้วค่อย update ทำให้ worker สองตัวส่งอีเมล 23 ฉบับจาก 12 แถว เพราะ `dataSource.query()` รันทีละ statement ใน transaction ของตัวเอง lock เลยหลุดก่อนอ่าน
 
-- [ ] ❓ **`last_used_at` เขียนตอนไหน** — spec ยังไม่ได้บอก และเป็นช่องที่กัดก่อนเพื่อนตอนคนเยอะ
+- [ ] **`last_used_at` เขียนแบบ lazy — เฉพาะตอนค่าเก่าเกิน 5 นาที** (ปิด ❓ แล้ว)
       · เขียนทุก request = **1 write ต่อ request** ไม่ใช่ 1 ต่อ 15 นาที · write amplification สูงกว่าเรื่องหมุน token หลายอันดับ และเป็นตัวที่ทำให้ `sessions` กลายเป็นตารางร้อน
-      · ทางเลือก: เขียนแบบ lazy (อัปเดตเมื่อค่าเก่าเกิน N นาที) หรือปล่อยไว้ในชั้น cache ไม่ลง DB ทุกครั้ง
 - [ ] เช็ค session ทุก request (cache 30 วิ) — `revoked_at IS NULL` · `expires_at > now` · `user.status='active'`
       · นี่คือสิ่งที่ทำให้ deactivate/logout มีผลเกือบทันที ไม่ต้องรอ token หมดอายุ
       · ชั้นนี้คือจุดที่จะกลายเป็นคอขวดก่อนใครถ้าคนเยอะขึ้นมาก — ไม่ใช่จำนวนแถว · [เงื่อนไขที่จะเอา Redis เข้ามา](../docs/01-architecture.md#redis--queue--ยังไม่มี-และเงื่อนไขที่จะมี) ระบุ "session revocation cache ที่เช็คทุก request" ไว้เป็นหนึ่งในสามข้ออยู่แล้ว
 - [ ] 🔒 **Cookie attributes อยู่ที่เดียว** — `httpOnly · Secure · SameSite=Lax` · refresh ตั้ง `path=/api/v1/auth`
       · กระจายไปหลายที่เมื่อไหร่ จะมีตัวใดตัวหนึ่งตกหล่นแบบไม่มีใครเห็น
-- [ ] Access token payload มีแค่ `sub` `org` `sid` `exp` — **ไม่ใส่ role** ไม่งั้นถอดสิทธิ์แล้วต้องรอ 15 นาที
+- [ ] Access token payload มีแค่ `sub` `sid` `exp` — **ไม่ใส่ role และไม่ใส่ org**
+      · เหตุผลเดียวกันทั้งคู่: ถอดสิทธิ์/ถอดคนออกจาก org แล้วต้องรอ 15 นาที
+      · และตั้งแต่หนึ่งคนอยู่ได้หลาย org ค่าเดียวใน token ก็ตอบไม่ได้อยู่ดี ([ทั้งหมด](../docs/01-architecture.md#org-ไหนของ-request-นี้))
+- [ ] **org ของ request มาจาก cookie `active_org` ที่ตรวจกับ membership ทุกครั้ง**
+      · cookie เป็น*ตัวเลือก* ไม่ใช่*สิทธิ์* — แก้ cookie แล้วได้ 403 ไม่ใช่ข้อมูล org อื่น
+      · ไม่ได้อยู่ org ไหนเลย → `orgId` เป็น `null` แต่ login ผ่าน · route ที่ต้องใช้ org ตอบ 403 `NO_ORGANIZATION`
+      · อยู่หลาย org แต่ยังไม่ได้เลือก → 403 `ORG_NOT_SELECTED` **คนละ code กัน** เพราะต้องการคนละหน้าจอ
+      · cookie ที่ชี้ org ที่ไม่ได้เป็นสมาชิก → 403 แล้ว**ลบ cookie ทิ้ง** ไม่ใช่แค่ปฏิเสธ
+      · ⚠️ `RequestContext.orgId` วันนี้เป็น `string` ไม่ใช่ `string | null` — ต้องแก้ type แล้วไล่ call site (compiler หาให้เอง)
 - [ ] `GET /api/v1/me` — ชื่อ อีเมล role ดึงจากตรงนี้
-- [ ] ลืมรหัสผ่าน (ลิงก์อีเมลอายุ 10 นาที ใช้ได้ครั้งเดียว) / เปลี่ยนรหัสผ่าน (ต้องใส่รหัสเดิม)
+- [ ] ลืมรหัสผ่าน (ลิงก์อีเมล **อายุ 30 นาที เก็บเป็น env var** ใช้ได้ครั้งเดียว) / เปลี่ยนรหัสผ่าน (ต้องใส่รหัสเดิม)
+- [ ] **Remember me** — เป็นค่าของ `sessions.expires_at` ไม่ใช่กลไกใหม่
+- [ ] **ล็อกบัญชีเมื่อ login ผิดหลายครั้ง** — `identity.users.failed_login_attempts` + `locked_until`
+      · เก็บใน DB ไม่ใช่ memory · ลองผิดระหว่างล็อกไม่ต่อเวลา · อีเมลที่ไม่มีในระบบไม่นับอะไรเลย
+      · **สองคอลัมน์นี้ยังไม่มี** — แก้ `CreateIdentityUsers` เดิม ไม่ใช่ `ALTER TABLE` แล้ว `db:reset`
 - [ ] `/register` มีอยู่แต่ดักด้วย `FeatureService.isEnabled(org, 'public_registration')` → `false`
       · **การใช้งานจริงครั้งแรกของ `FeatureService`** ที่เขียนรอไว้ตั้งแต่ Phase 0
 
@@ -116,13 +130,23 @@
 - [ ] 🔒 ห้ามลบหรือลดสิทธิ์ owner คนสุดท้าย — ดู §0 เรื่อง test
 - [ ] `PermissionService.assert` ต่อเข้ากับ guard ตัวที่สอง — `can()` เขียนไว้แล้วตั้งแต่ Phase 0 ยังไม่มีใครเรียก
       · อย่าลืมว่า `can` บังคับส่ง resource · เวอร์ชันไม่ส่ง resource คือ `isEverAllowedTo()` ใช้ตอนวาดปุ่มเท่านั้น
+- [ ] **หนึ่งคนอยู่ได้หลาย org** — org switcher บนสุดของ sidebar · หน้า Home เป็นปลายทางหลัง login
+      ไม่ใช่ project ใด project หนึ่ง · คนที่ยังไม่อยู่ org ไหนเห็นหน้าที่บอกให้ติดต่อ admin
+- [ ] **สร้าง org มี API ยังไม่มีหน้าจอ** — Phase 1-3 สร้างผ่าน API เท่านั้น
+- [ ] **ตาราง `organization.invitations` ลงตอนนี้ แต่ยังไม่มีใครอ่าน** — API + หน้าจอมา Phase 2
+      · Phase 1 เพิ่มคนเข้า org ด้วย seed script · แก้ `CreateOrganization` เดิมแล้ว `db:reset`
 
 ---
 
 ## 4. Project
 
 - [ ] สร้าง / แก้ไข / ลบ project (soft delete)
+- [ ] **`key_prefix` บังคับกรอกตอนสร้าง** · uppercase `^[A-Z][A-Z0-9]{1,5}$` · ซ้ำกันได้ในหนึ่ง org
+- [ ] `color` เป็น token จาก palette 8 สี (ไม่ใช่ hex) — **คอลัมน์ `icon` เดิมเอาออก ไม่มีใครใช้**
 - [ ] Project member อิสระจากทีม (แบบ Slack channel) — role `admin` / `member`
+- [ ] 🔒 **กั้นสิทธิ์ระดับ project จริงตั้งแต่ phase นี้ ไม่ใช่แค่ซ่อนใน sidebar**
+      · member เห็นเฉพาะ project ที่ตัวเองเป็นสมาชิก · org owner/admin เห็นทุก project ใน org ตัวเอง
+      · กั้นแค่ที่ UI = คนที่รู้ URL ก็ยังเปิดเข้าไปได้
 - [ ] ลบ project → ลูกทั้งต้นไปด้วย ผ่าน `CascadeSoftDelete` (inject เป็น service) ที่มีอยู่แล้ว
       · ถ้าเพิ่มตารางใหม่ใน phase นี้ **ต้องใส่ใน `AGGREGATE_CHILDREN` หรือ `ROOTS`** ไม่งั้น test ฟ้อง
 
@@ -131,7 +155,12 @@
 ## 5. Status (custom ต่อ project)
 
 - [ ] สีเก็บเป็น **token จาก palette 8 สี ไม่ใช่ hex** (`gray` `red` `orange` `yellow` `green` `blue` `purple` `pink`)
-- [ ] Default ตอนสร้าง project ใหม่: To do (gray, `is_default`) · In progress (blue) · Done (green, `is_done_type`)
+- [ ] Default ตอนสร้าง project ใหม่ **4 อัน**: To do (gray, `is_default`) · In progress (blue) ·
+      Done (green, `is_done_type`) · **Cancelled (gray, `is_cancelled_type`)**
+      · Cancelled ต้องมาตั้งแต่ตอนสร้าง เพราะ progress ของ sub-task (Phase 2) ตัดงานยกเลิกออกจากตัวหาร
+      ถ้าไม่มี status ที่แปลว่ายกเลิก คนจะเอา Done ไปใช้แทนแล้วตัวเลขเพี้ยนย้อนหลังทั้งหมด
+- [ ] **หน้าจอแก้ status ต่อ project** — เพิ่ม/ลบ/เปลี่ยนชื่อ/เปลี่ยนสี/จัดลำดับ
+      · กติกาข้างล่างไม่มีที่ให้กดถ้าไม่มีหน้านี้
 - [ ] `sort_order` เป็น LexoRank เหมือน task
 - [ ] Partial unique index คุม "อย่างมากหนึ่ง" มีตั้งแต่ Phase 0 แล้ว — `is_default` ต่อ project
 - [ ] ห้ามลบ status ที่มี task ใช้อยู่ / ห้ามลบอันสุดท้าย
@@ -143,9 +172,14 @@
 ## 6. Task
 
 - [ ] CRUD — Title · Description · Due date · Priority
-- [ ] **Quick add** — พิมพ์ชื่อ + Enter จบ ไม่บังคับ field อื่น
-      · ในหน้า My Tasks มี dropdown เลือก project ข้างช่องพิมพ์ · default = project ที่เพิ่งสร้าง task ล่าสุด (เก็บใน user preference)
+- [ ] **Quick add — เฉพาะในหน้า project** พิมพ์ชื่อ + Enter จบ ไม่บังคับ field อื่น
+      · My Tasks ไม่มี quick add · ถ้าเพิ่มทีหลังใช้ `localStorage` จำ project ล่าสุด **ไม่ต้องมีตาราง user preference**
       · 🟡 ใน roadmap แต่**ตัดไม่ได้** — quick add คือสิ่งที่ทำให้คนกลับมาใช้
+- [ ] 🔒 **Task number + key** — `tasks.number` แจกจาก `projects.next_task_number` ที่เดินหน้าอย่างเดียว
+      · **ห้ามใช้ `MAX(number)+1`** — ลบงานบนสุดแล้วเลขถูกแจกซ้ำทันที
+      · unique `(project_id, number)` เป็น **index เต็ม ไม่ใช่ partial** — ข้อยกเว้นเดียวของกฎ soft delete
+      · key ประกอบตอนแสดงผล (`key_prefix` + `number`) ไม่เก็บสตริงสำเร็จรูป · sub-task มีเลขของตัวเอง
+      · แก้ `CreateProject` + `CreateTask` เดิมแล้ว `db:reset`
 - [ ] Assign ได้หลายคน (เฉพาะ user — ทีมอยู่ Phase 2)
 - [ ] จัดลำดับเอง (LexoRank)
 - [ ] 🔒 **`completed_at` / `completed_by` สอดคล้องกับ `is_done_type` เสมอ — คุมสองทาง**
@@ -153,7 +187,9 @@
   - [ ] ทาง B: **มีคนแก้ `is_done_type` ของ status ที่มี task ใช้อยู่แล้ว** ← ทางนี้ลืมง่ายกว่ามาก เพราะคนแก้กำลังมองหน้าจอตั้งค่า project ไม่ได้มองงานสักใบ
   - [ ] `CHECK` ทำแทนไม่ได้ เงื่อนไขข้ามตาราง (`tasks` ↔ `statuses`)
 - [ ] **Assignee picker** — type-ahead ค้นได้ทั้งชื่อจริง / ชื่อเล่น / อีเมล ไม่ใช่ dropdown รายชื่อยาว
-      · เรียง: คนใน project → คนที่เพิ่ง assign ล่าสุด (จาก activity log) → ที่เหลือทั้ง org
+      · เรียงสองชั้นพอ: **คนใน project → ที่เหลือทั้ง org** · ชั้น "คนที่เพิ่ง assign ล่าสุด"
+        ที่สเปกเดิมมี **ตัดออกแล้ว** — เป็น query ที่แพงที่สุดในหน้าจอที่เปิดบ่อยที่สุด
+        เพื่อจัดลำดับที่ชั้นแรกตอบได้อยู่แล้วเกือบทุกครั้ง
       · เลือกคนนอก project → ถามว่าเพิ่มเข้า project เลยไหม
       · แสดง avatar + ชื่อ + ชื่อเล่นทุกแถว (กันเลือกผิดคน — บริษัท 100 คนมีชื่อซ้ำแน่)
       · 🟡 แต่ตัดไม่ได้เหมือน quick add
@@ -166,9 +202,10 @@
       · service throw ให้เองถ้าไม่มี transaction เปิดอยู่ — เป็นการบังคับด้วยรูปทรง ไม่ใช่ความจำ
       · event listener ทำแทนไม่ได้ มันรันหลัง commit
 - [ ] เขียน log ตอน: สร้าง/แก้/ลบ task · เปลี่ยน status · assign · เปลี่ยน role · login ล้มเหลว
-- [ ] Assignee picker ข้อ "คนที่เพิ่ง assign ล่าสุด" อ่านจาก log นี้
-      · index ที่ต้องใช้ `logs_actor_idx (org_id, actor_id, action, occurred_at DESC)` **มีตั้งแต่ Phase 0 แล้ว** ไม่ต้องเพิ่ม
-      · ที่ต้องตัดสินคือ **เก็บ id ของคนที่ถูก assign ไว้ตรงไหนใน `changes_json`** — `entity_id` คือ task ไม่ใช่คน และ `audit.logs` ไม่มีคอลัมน์อื่นให้ใส่ ([ทุกคอลัมน์](../docs/02-database/schema.md#schema-audit))
+- [ ] เก็บ id ของคนที่ถูก assign ไว้ใน `changes_json` — `entity_id` คือ task ไม่ใช่คน
+      และ `audit.logs` ไม่มีคอลัมน์อื่นให้ใส่ ([ทุกคอลัมน์](../docs/02-database/schema.md#schema-audit))
+      · index `logs_actor_idx (org_id, actor_id, action, occurred_at DESC)` มีตั้งแต่ Phase 0 แล้ว
+        แต่ **ผู้ใช้เดิมของมันคือ assignee picker ชั้นที่สองซึ่งถูกตัดไปแล้ว** — index ยังอยู่ ไม่ต้องลบ
 
 ---
 
@@ -188,10 +225,11 @@
 
 - [ ] **List view รับ config คอลัมน์เป็น array จากที่เดียว** (hard-code ไว้ก่อนได้)
       · ห้ามเขียน `<th>` ตายตัวใน JSX — Phase 4 ต่อ `view.columns` จะได้แก้จุดเดียว
-- [ ] Filter: คน · status · priority · วันที่ · **งานของคนที่ inactive**
-      · ข้อสุดท้ายไม่ใช่ของแถม ถ้าไม่มี งานจะค้างอยู่กับคนที่เข้าระบบไม่ได้แล้วโดยไม่มีใครเห็น
-- [ ] Search พื้นฐาน
-- [ ] **My Tasks** — Phase 1 มีแค่งานที่ assign ให้ตัวเอง
+- [ ] Filter · sort · group · search — **เก็บสถานะใน URL ไม่ save เป็น view** (view ที่ตั้งชื่อได้อยู่ Phase 4)
+      · filter ตาม: คน · status · priority · วันที่
+      · filter "งานของคนที่ inactive" **ตัดออกแล้ว** — ถามด้วย filter assignee ธรรมดาได้อยู่แล้ว
+        และงานของคนที่ถูก deactivate คาไว้ที่เดิม ไม่ได้หายไปไหน
+- [ ] **My Tasks** — Phase 1 มีแค่งานที่ assign ให้ตัวเองโดยตรง · **default ซ่อน done/cancelled**
 - [ ] 🔒 **Pagination เป็น cursor ไม่ใช่ offset**
       · `OrgScopedRepository` ตัด `skip` ออกจาก type แล้ว (`ScopedFindManyOptions`) — เขียน offset ไม่ผ่าน compile
       · เหตุผล: `sort_order` เป็น LexoRank แทรกกลางได้ → page ถัดไปซ้ำแถวเดิมหรือข้ามแถว
@@ -217,7 +255,8 @@
 - [ ] `yarn build` / `lint` / `check-types` / `test` เขียวหมด
 - [ ] 🔒 `org-isolation.spec.ts` ยังไม่มีข้อยกเว้น และครอบ endpoint ใหม่ทั้งหมด
 - [ ] `schema-drift.spec.ts` เขียว (ถ้ามี migration ใหม่)
-- [ ] Deploy ขึ้น Bangmod แล้วมีคนจริงล็อกอินได้
+- [ ] Deploy ขึ้น Bangmod แล้วล็อกอินได้จริง — **ยังไม่ใช่การเปิดให้ทั้งบริษัทใช้**
+      เส้นนั้นอยู่ท้าย Phase 3
 - [ ] Tag `v1.0.0`
 
 ---
@@ -239,4 +278,4 @@
 | ชื่อเล่น | ค้นต้องครอบทั้งชื่อจริง ชื่อเล่น อีเมล · ทำ index ตั้งแต่แรก บริษัท 100 คน `ILIKE '%x%'` ยังไหว แต่ 1000 ไม่ไหว |
 | LexoRank | แทรกกลางได้ = offset pagination พัง · และ `text COLLATE "C"` เท่านั้น ถ้าใช้ collation อื่นลำดับจะเพี้ยน |
 | `is_done_type` แก้ทีหลัง | ทาง B ใน §6 — ลืมแล้วจะมี task ที่ `completed_at` มีค่าแต่ status ไม่ใช่ done โดยไม่มีอะไรฟ้อง |
-| Estimate | roadmap ให้ phase นี้ **~4 สัปดาห์** (6 สัปดาห์คือเป้าหมายรวม Phase 0+1) · Auth (§1) กินเวลามากกว่าที่คิดเสมอ ถ้าจะตัดให้ตัด §9 filter ย่อย อย่าตัด test ใน §0 |
+| Estimate | roadmap ให้ phase นี้ **~4 สัปดาห์** · เป้าหมายรวมคือ **~14 สัปดาห์ถึงจบ Phase 3** ซึ่งเป็นเส้นที่ปล่อยให้คนใช้จริง · Auth (§1) กินเวลามากกว่าที่คิดเสมอ ถ้าจะตัดให้ตัด §9 filter ย่อย อย่าตัด test ใน §0 |

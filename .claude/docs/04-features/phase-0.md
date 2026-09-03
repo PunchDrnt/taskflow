@@ -8,8 +8,12 @@
 
 - Setup monorepo (Yarn 4 Berry + Turborepo)
 - Docker compose ครบ (api, web, postgres, postgres-test, garage, caddy) — ตอนนี้มี postgres + postgres-test + garage
-- **สร้าง schema ครบทุก module ตั้งแต่รอบนี้** — รวม `sprints` + `tasks.sprint_id` + `tasks.estimate` ด้วย (เติมทีหลังต้อง migrate `tasks` ซึ่งเป็นตารางใหญ่สุด)
-  - ข้อยกเว้นเดียว: `chat.identities` / `chat.channels` สร้างตอน Phase 2 — เป็นตารางอิสระ ไม่มีใครชี้มาหา
+- **คอลัมน์ครบตั้งแต่รอบนี้** — รวม `sprints` + `tasks.sprint_id` + `tasks.estimate` ด้วย
+  · หลักคือ **การเพิ่มตารางใหม่ราคาถูก การแก้ตารางเดิมราคาแพง** จึงต้องเผื่อ *คอลัมน์* ให้ครบ
+  ส่วน *ตาราง* ของเฟสหลังๆ ค่อยสร้างตอนถึงคิวได้
+  - ตารางที่ตั้งใจไม่สร้างในรอบนี้: `chat.identities` / `chat.channels` (Phase 4)
+    · `notify.notifications` (Phase 3) · `discussion.*` (Phase 3) · `field.*` / `view.*` (Phase 4)
+    · `task.dependencies` / `task.task_embeddings` + `automation.*` (Phase 5)
 - Base entity — UUID, `org_id`, `created_at/by`, `updated_at/by`, `deleted_at/by` · วันเวลาใช้ `timestamptz` ทั้งหมด ([schema เต็ม](../02-database/rules.md#base-entity))
 - `users.status` เป็น string ('active' | 'deactivated' | 'pending_deletion' | 'deleted') + unique index อีเมลแบบ partial
 - Global `org_id` scoping — **repository base class + isolation test** ([วิธี implement](../01-architecture.md#org_id-scoping)) · **RLS เลื่อนไป Phase 2** เพราะ `CREATE POLICY` เพิ่มทีหลังได้โดยไม่ต้อง migrate

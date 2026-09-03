@@ -1,4 +1,4 @@
-# Phase 4 — Custom Fields, Views, Reports, Estimates `v1.3.0`
+# Phase 4 — Custom Field, View, รายงาน, Chat `v1.3.0`
 
 > [← Feature Specifications](./README.md) · [ลำดับและ priority](../03-roadmap.md)
 
@@ -62,7 +62,7 @@ field.definitions (
 view.views (
   id, org_id, project_id,
   name,              -- "งานของฝ่ายตรวจ"
-  type,              -- 'table' | 'board' | 'calendar'
+  type,              -- 'list' | 'board' | 'calendar'
   owner_id,          -- null = view กลางของ project / มีค่า = view ส่วนตัว
   filter_json, sort_json, group_by
 )
@@ -124,5 +124,84 @@ projects.estimate_unit   -- 'none' (default) | 'point' | 'hour' | 'tshirt'
 > เหตุผลไม่ใช่แค่เรื่องอุดมคติ — leaderboard รายคนทำให้คนประมาณเผื่อ แตก task ย่อยๆ ให้นับได้เยอะ หรือเลี่ยงงานที่ estimate น้อยแต่ใช้เวลานาน พอข้อมูลเพี้ยน **capacity planning ซึ่งเป็นเป้าหมายหลักจะพังตามไปด้วย** เพราะใช้ข้อมูลชุดเดียวกัน
 
 **บริษัทที่ต้องใช้ KPI** → export ออก Excel แล้วไปทำเอง ระบบไม่ตอกย้ำพฤติกรรมนั้นในตัว product · ถ้าลูกค้า SaaS ขอจริงจังค่อยทำเป็น report เสริมใน Phase 7
+
+## Chat Integration — Discord + Line
+
+**อยู่ช่วงหลังของ Phase 4 โดยตั้งใจ** — เดิมอยู่ Phase 2 (Discord) และ Phase 3 (Line)
+ย้ายลงมาทั้งคู่เมื่อ 2026-09-02 เพื่อให้แกนหลักถึงมือคนใช้ก่อน · ลดจาก 🔴 เป็น 🟡
+เพราะตัดออกแล้ว Phase 4 ยังใช้งานได้ · Teams ยังอยู่ [Phase 6](./phase-6.md) ตามเดิม
+
+> **สิ่งที่แลกไป: ของที่ปล่อยจบ Phase 3 เป็น task tracker มาตรฐาน ยังไม่มีตัวต่าง**
+> — เป็นการเลือกส่งแกนหลักให้เสร็จก่อน ไม่ใช่การมองข้าม · P4 เป็นเฟสที่ใหญ่ที่สุด
+> ของที่อยู่ท้ายสุดจึงเป็นของที่เลื่อนไป P5 ได้โดยไม่พังอะไร ซึ่งเป็นเหตุผลที่วางตรงนี้
+
+**ฟีเจอร์ดาวเด่น** — อย่าลากคนออกจากแชทเข้าเว็บ ให้ระบบไปหาเขาแทน
+
+- Forward/พิมพ์ข้อความในห้อง → กลายเป็น task
+- กดปุ่มในแชทเพื่อเปลี่ยนสถานะ/ปิดงาน โดยไม่ต้องเปิดเว็บ
+- สรุปงานค้างส่งเข้าห้องทุกเช้า
+- แจ้งเตือนเมื่อถูก assign ส่งเข้าแชทแทน/เพิ่มจากอีเมล
+
+> แก้ปัญหาที่ระบบ task ภายในมักตายเพราะคนไม่เข้ามาอัปเดต — และเจ้าใหญ่ทำ Line ไม่ดีเพราะไม่ใช่ตลาดของเขา นี่คือจุดที่ลอกยากกว่าราคา
+
+**เริ่มที่ Discord ก่อน** ไม่ใช่เพราะคนใช้เยอะสุด แต่เพราะทำเสร็จเร็วสุด (webhook ง่าย, button/modal/slash command ดีที่สุด) ได้พิสูจน์ว่าแนวคิดใช้ได้จริงก่อนลงแรงกับ Line ที่ตลาดใหญ่กว่า
+
+**ออกแบบเป็น adapter ตั้งแต่แรก**
+
+```
+ChatAdapter (interface)
+├─ DiscordAdapter   Phase 4
+├─ LineAdapter      Phase 4 (ต่อจาก Discord)
+└─ TeamsAdapter     Phase 6
+```
+
+ทุกเจ้ามีสามอย่างเหมือนกัน — รับข้อความเข้า (webhook), ส่งออก, ปุ่มโต้ตอบ ต่างกันแค่ payload
+
+|         | Webhook       | ส่งออก   | ปุ่ม                           | ความยาก |
+| ------- | ------------- | ------- | ---------------------------- | ------- |
+| Discord | ง่ายมาก        | ง่าย     | button, modal, slash command | ⭐      |
+| Line    | ปานกลาง       | ง่าย     | Flex Message + quick reply   | ⭐⭐    |
+| Teams   | ยุ่งกับ Azure AD | ปานกลาง | Adaptive Cards               | ⭐⭐⭐  |
+
+Teams ต้องผ่าน Microsoft app approval ซึ่งใช้เวลาและเอกสารเยอะ → รอมีลูกค้าองค์กรขอ
+
+**Schema (สร้างตอน Phase 4 นี้เอง · ดูเต็มใน [`02-database/schema.md`](../02-database/schema.md#schema-chat-phase-4))**
+
+สองตารางนี้เป็นตารางอิสระ ไม่มีตารางอื่นชี้มาหา จึงเป็นข้อยกเว้นเดียวของกติกา "สร้าง schema ครบทุก module ใน Phase 0" — **การเพิ่มตารางใหม่บนฐานข้อมูลที่มีข้อมูลแล้วราคาถูก ที่แพงคือการแก้ตารางเดิม** · schema `chat` ที่ `CreateSchemas` สร้างไว้แล้วปล่อยว่างไว้จนถึงตอนนั้น
+
+```
+chat.identities (
+  id, org_id, user_id,
+  platform,              -- 'discord' | 'line' | 'teams'
+  external_id,           -- user id ฝั่งนั้น
+  linked_at
+)
+
+chat.channels (
+  id, org_id, project_id,
+  platform, external_channel_id,
+  default_assignee_id    -- nullable
+)
+```
+
+- ผูกตัวตนครั้งแรกด้วยโค้ดยืนยัน ทำครั้งเดียวจบ
+- ผูกห้องกับ project — ข้อความจากห้องไหนเข้า project ไหน
+- ใช้ event ที่มีอยู่แล้ว (`task.created`, `task.assigned`, `task.completed`) ไม่ต้องแก้ core
+
+> ⚠️ **ตอนสร้างตารางนี้ต้องกลับไปแก้ retention job ด้วย** — [anonymize บัญชี](./phase-2.md#delete-account)
+> ต้องล้าง `chat.identities` ไปพร้อมกัน เพราะ `external_id` ของ Discord/Line
+> เป็นข้อมูลส่วนบุคคลเหมือนกัน · ข้อนี้เขียนไว้ตั้งแต่ตอนที่ chat ยังอยู่ Phase 2
+> ต้องทำตอนสร้างตาราง ไม่ใช่ตอนนึกออก
+
+**เคสที่ต้องตัดสินตอนทำจริง**
+
+> ❓ **ยังไม่ตัดสิน** — ตารางนี้เป็นข้อเสนอเบื้องต้น ยังไม่ผูกมัด · ตัดสินตอนลงมือทำ
+
+| เคส                           | แนวทาง                                                                       |
+| ----------------------------- | ---------------------------------------------------------------------------- |
+| คนพิมพ์แต่ยังไม่ link identity     | บอตตอบในห้องพร้อมลิงก์ผูกบัญชี — ผูกครั้งเดียวจบ                                        |
+| ห้องยังไม่ผูก project             | บอตถามว่าจะผูกกับ project ไหน (เฉพาะคนที่มีสิทธิ์)                                    |
+| link แล้วแต่ไม่ใช่ project member | สร้างได้ แล้วถาม project admin ว่าจะเพิ่มเข้า project ไหม                           |
+| Server เดียวผูกหลาย org         | 🔒 **ห้าม** — 1 `external_channel_id` ผูกได้ org เดียว (unique index) กันข้อมูลข้ามบริษัท |
 
 ---
