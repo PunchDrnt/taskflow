@@ -103,9 +103,9 @@ export class CreateIdentityRest1787188325061 implements MigrationInterface {
         ON identity.roles (name) WHERE deleted_at IS NULL
     `)
 
-    // Keys are defined in code (SYSTEM_PERMISSIONS) for type safety and seeded
-    // from a migration; the role → permission mapping lives here so it can
-    // change without a deploy.
+    // Keys are defined in code (SYSTEM_PERMISSIONS) for type safety and
+    // inserted by database/seed/required.ts, which runs on every deploy; the
+    // role → permission mapping lives here so it can change without one.
     await queryRunner.query(`
       CREATE TABLE identity.permissions (
         id           uuid        PRIMARY KEY DEFAULT gen_random_uuid(),

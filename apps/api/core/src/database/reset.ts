@@ -2,6 +2,7 @@ import { DataSource } from 'typeorm'
 
 import { validateDatabaseUrl } from '../config/env'
 import { buildDataSourceOptions } from './data-source.options'
+import { seedRequired } from './seed/required'
 
 /**
  * Drops every schema the migrations create, then reapplies them from empty.
@@ -28,6 +29,7 @@ const SCHEMAS = [
   'field',
   'view',
   'chat',
+  'automation',
   'notify',
   'billing',
 ]
@@ -49,7 +51,13 @@ async function main(): Promise<void> {
     await dataSource.query(`DROP EXTENSION IF EXISTS citext CASCADE`)
 
     const applied = await dataSource.runMigrations({ transaction: 'all' })
-    console.log(`reset and reapplied ${applied.length} migrations`)
+    // The permission keys live in the required seed rather than in a
+    // migration, so a reset that stopped here would leave them missing.
+    const written = await seedRequired(dataSource)
+    console.log(
+      `reset and reapplied ${applied.length} migrations, ` +
+        `seeded ${written} permission(s)`,
+    )
   } finally {
     await dataSource.destroy()
   }

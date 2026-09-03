@@ -2,8 +2,8 @@ import { DataSource } from 'typeorm'
 
 import { SYSTEM_USER_ID } from '#shared/system-user'
 
-import { validateDatabaseUrl } from '../config/env'
-import { buildDataSourceOptions } from './data-source.options'
+import { validateDatabaseUrl } from '../../config/env'
+import { buildDataSourceOptions } from '../data-source.options'
 
 /**
  * A development and demo dataset: one organisation with people in it, a team,
@@ -179,8 +179,10 @@ async function seed(dataSource: DataSource): Promise<void> {
 
     await manager.query(
       `INSERT INTO project.projects
-         (id, org_id, name, description, sprint_enabled, created_by, updated_by)
-       VALUES ($1, $2, 'Website revamp', 'The demo project', true, $3, $3)`,
+         (id, org_id, name, description, color, key_prefix, next_task_number,
+          sprint_enabled, created_by, updated_by)
+       VALUES ($1, $2, 'Website revamp', 'The demo project', 'blue', 'WEB', 6,
+               true, $3, $3)`,
       [PROJECT_ID, ORG_ID, OWNER],
     )
     for (const [userId, role] of [
@@ -262,9 +264,9 @@ async function seed(dataSource: DataSource): Promise<void> {
       const done = statusId === DONE
       await manager.query(
         `INSERT INTO task.tasks
-           (id, org_id, project_id, title, status_id, priority, sort_order, depth,
-            sprint_id, completed_at, completed_by, created_by, updated_by)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, 0, $8, $9, $10, $11, $11)`,
+           (id, org_id, project_id, title, number, status_id, priority, sort_order,
+            depth, sprint_id, completed_at, completed_by, created_by, updated_by)
+         VALUES ($1, $2, $3, $4, $12, $5, $6, $7, 0, $8, $9, $10, $11, $11)`,
         [
           id,
           ORG_ID,
@@ -279,6 +281,9 @@ async function seed(dataSource: DataSource): Promise<void> {
           done ? new Date() : null,
           done ? DEV : null,
           OWNER,
+          // Numbers are per project and never reused; next_task_number above
+          // is set past the last one handed out here.
+          parents.findIndex(([p]) => p === id) + 1,
         ],
       )
       await manager.query(
@@ -305,12 +310,27 @@ async function seed(dataSource: DataSource): Promise<void> {
       ],
     ] as const
 
-    for (const [id, parentId, title, statusId, order] of subtasks) {
+    for (const [
+      index,
+      [id, parentId, title, statusId, order],
+    ] of subtasks.entries()) {
       await manager.query(
         `INSERT INTO task.tasks
-           (id, org_id, project_id, title, status_id, sort_order, depth, parent_task_id, created_by, updated_by)
-         VALUES ($1, $2, $3, $4, $5, $6, 1, $7, $8, $8)`,
-        [id, ORG_ID, PROJECT_ID, title, statusId, order, parentId, OWNER],
+           (id, org_id, project_id, title, number, status_id, sort_order, depth,
+            parent_task_id, created_by, updated_by)
+         VALUES ($1, $2, $3, $4, $9, $5, $6, 1, $7, $8, $8)`,
+        [
+          id,
+          ORG_ID,
+          PROJECT_ID,
+          title,
+          statusId,
+          order,
+          parentId,
+          OWNER,
+          // A sub-task carries a number of its own, not 1.1.
+          parents.length + index + 1,
+        ],
       )
     }
   })
