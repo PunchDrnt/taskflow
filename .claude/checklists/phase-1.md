@@ -13,6 +13,17 @@
 
 ---
 
+## Schema ลงแล้ว
+
+ทุกคอลัมน์และทุกตารางที่ Phase 1-3 ต้องใช้ **ลงครบแล้ว** ในรอบเดียว ไม่ต้องแตะ migration อีก
+จนกว่าจะถึง RLS ของ Phase 2 — lockout · `invitations` · `notifications` · `color` ·
+`key_prefix` · `next_task_number` · `archived_at` · `stale_after_days` · `tasks.number` +
+unique เต็ม · `views.sort_order` / `is_default`
+
+ข้อที่เหลือข้างล่างจึงเป็น **โค้ดกับหน้าจอล้วน** ยกเว้นที่เขียนกำกับไว้เป็นอย่างอื่น
+
+---
+
 ## 0. ยกมาจาก Phase 0
 
 ของที่รู้ตัวแล้วว่าค้าง ไม่ใช่ของที่เพิ่งคิดได้
@@ -43,7 +54,8 @@
 
 ## 1. Auth — ทุกอย่างข้างล่างพึ่งข้อนี้
 
-ตารางมีครบแล้วตั้งแต่ Phase 0 (`identity.sessions`, `password_reset_tokens`) · ที่ต้องเขียนคือโค้ด
+ตารางมีครบแล้ว (`identity.sessions` · `password_reset_tokens` ตั้งแต่ Phase 0 ·
+`failed_login_attempts` / `locked_until` ลงแล้วใน [schema batch](#schema-ลงแล้ว)) · ที่เหลือคือโค้ดล้วน
 
 - [ ] `@nestjs/jwt` + guard เขียนเอง — **ไม่ใช้ `@nestjs/passport`** ([เหตุผล](../docs/01-architecture.md#auth))
 - [ ] 🔒 **`AuthGuard` เป็น `APP_GUARD` และใช้ `enterWith` ไม่ใช่ `run`**
@@ -91,7 +103,7 @@
 - [ ] **Remember me** — เป็นค่าของ `sessions.expires_at` ไม่ใช่กลไกใหม่
 - [ ] **ล็อกบัญชีเมื่อ login ผิดหลายครั้ง** — `identity.users.failed_login_attempts` + `locked_until`
       · เก็บใน DB ไม่ใช่ memory · ลองผิดระหว่างล็อกไม่ต่อเวลา · อีเมลที่ไม่มีในระบบไม่นับอะไรเลย
-      · **สองคอลัมน์นี้ยังไม่มี** — แก้ `CreateIdentityUsers` เดิม ไม่ใช่ `ALTER TABLE` แล้ว `db:reset`
+      · ✅ สองคอลัมน์ลงแล้ว เหลือ `LOGIN_MAX_ATTEMPTS` / `LOGIN_LOCK_MINUTES` ใน `env.ts` กับตัวโค้ด
 - [ ] `/register` มีอยู่แต่ดักด้วย `FeatureService.isEnabled(org, 'public_registration')` → `false`
       · **การใช้งานจริงครั้งแรกของ `FeatureService`** ที่เขียนรอไว้ตั้งแต่ Phase 0
 
@@ -133,8 +145,8 @@
 - [ ] **หนึ่งคนอยู่ได้หลาย org** — org switcher บนสุดของ sidebar · หน้า Home เป็นปลายทางหลัง login
       ไม่ใช่ project ใด project หนึ่ง · คนที่ยังไม่อยู่ org ไหนเห็นหน้าที่บอกให้ติดต่อ admin
 - [ ] **สร้าง org มี API ยังไม่มีหน้าจอ** — Phase 1-3 สร้างผ่าน API เท่านั้น
-- [ ] **ตาราง `organization.invitations` ลงตอนนี้ แต่ยังไม่มีใครอ่าน** — API + หน้าจอมา Phase 2
-      · Phase 1 เพิ่มคนเข้า org ด้วย seed script · แก้ `CreateOrganization` เดิมแล้ว `db:reset`
+- [x] **ตาราง `organization.invitations`** — ลงแล้ว ยังไม่มีใครอ่าน API + หน้าจอมา Phase 2
+      · Phase 1 เพิ่มคนเข้า org ด้วย seed script
 
 ---
 
@@ -142,7 +154,9 @@
 
 - [ ] สร้าง / แก้ไข / ลบ project (soft delete)
 - [ ] **`key_prefix` บังคับกรอกตอนสร้าง** · uppercase `^[A-Z][A-Z0-9]{1,5}$` · ซ้ำกันได้ในหนึ่ง org
-- [ ] `color` เป็น token จาก palette 8 สี (ไม่ใช่ hex) — **คอลัมน์ `icon` เดิมเอาออก ไม่มีใครใช้**
+      · คอลัมน์ + CHECK ลงแล้ว เหลือฟอร์มกับ validation ฝั่ง API/web · **regex ตาม docs ไม่ใช่ตาม prototype**
+        (prototype ยอมให้ `12` ผ่าน ซึ่งตัวแรกต้องเป็นตัวอักษร)
+- [ ] `color` เป็น token จาก palette 8 สี (ไม่ใช่ hex) — คอลัมน์ลงแล้ว `icon` เอาออกแล้ว
 - [ ] Project member อิสระจากทีม (แบบ Slack channel) — role `admin` / `member`
 - [ ] 🔒 **กั้นสิทธิ์ระดับ project จริงตั้งแต่ phase นี้ ไม่ใช่แค่ซ่อนใน sidebar**
       · member เห็นเฉพาะ project ที่ตัวเองเป็นสมาชิก · org owner/admin เห็นทุก project ใน org ตัวเอง
@@ -156,7 +170,7 @@
 
 - [ ] สีเก็บเป็น **token จาก palette 8 สี ไม่ใช่ hex** (`gray` `red` `orange` `yellow` `green` `blue` `purple` `pink`)
 - [ ] Default ตอนสร้าง project ใหม่ **4 อัน**: To do (gray, `is_default`) · In progress (blue) ·
-      Done (green, `is_done_type`) · **Cancelled (gray, `is_cancelled_type`)**
+      Done (green, `is_done_type`) · **Cancelled (pink, `is_cancelled_type`)**
       · Cancelled ต้องมาตั้งแต่ตอนสร้าง เพราะ progress ของ sub-task (Phase 2) ตัดงานยกเลิกออกจากตัวหาร
       ถ้าไม่มี status ที่แปลว่ายกเลิก คนจะเอา Done ไปใช้แทนแล้วตัวเลขเพี้ยนย้อนหลังทั้งหมด
 - [ ] **หน้าจอแก้ status ต่อ project** — เพิ่ม/ลบ/เปลี่ยนชื่อ/เปลี่ยนสี/จัดลำดับ
@@ -172,6 +186,8 @@
 ## 6. Task
 
 - [ ] CRUD — Title · Description · Due date · Priority
+      · priority สี่ระดับจาก `TASK_PRIORITIES` ใน `@repo/shared` · **ไม่มี CHECK ใน DB**
+        ไม่มี index ไหนอ่านค่านี้ zod เป็นคนกัน
 - [ ] **Quick add — เฉพาะในหน้า project** พิมพ์ชื่อ + Enter จบ ไม่บังคับ field อื่น
       · My Tasks ไม่มี quick add · ถ้าเพิ่มทีหลังใช้ `localStorage` จำ project ล่าสุด **ไม่ต้องมีตาราง user preference**
       · 🟡 ใน roadmap แต่**ตัดไม่ได้** — quick add คือสิ่งที่ทำให้คนกลับมาใช้
@@ -179,7 +195,7 @@
       · **ห้ามใช้ `MAX(number)+1`** — ลบงานบนสุดแล้วเลขถูกแจกซ้ำทันที
       · unique `(project_id, number)` เป็น **index เต็ม ไม่ใช่ partial** — ข้อยกเว้นเดียวของกฎ soft delete
       · key ประกอบตอนแสดงผล (`key_prefix` + `number`) ไม่เก็บสตริงสำเร็จรูป · sub-task มีเลขของตัวเอง
-      · แก้ `CreateProject` + `CreateTask` เดิมแล้ว `db:reset`
+      · ✅ คอลัมน์ + index ลงแล้ว เหลือตัวแจกเลขในทรานแซกชันเดียวกับการสร้าง task
 - [ ] Assign ได้หลายคน (เฉพาะ user — ทีมอยู่ Phase 2)
 - [ ] จัดลำดับเอง (LexoRank)
 - [ ] 🔒 **`completed_at` / `completed_by` สอดคล้องกับ `is_done_type` เสมอ — คุมสองทาง**
