@@ -91,14 +91,9 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://${APP_DB_USER}:${APP_DB_PASSWORD}@postgres:5432/${POSTGRES_DB}
-    command:
-      [
-        'node',
-        '../../../node_modules/typeorm/cli.js',
-        'migration:run',
-        '-d',
-        'dist/database/data-source.js',
-      ]
+    # One entrypoint: migrations, then the required seed. Compose's command is
+    # an exec array with no shell, and the ordering belongs in code anyway.
+    command: ['node', 'dist/database/migrate.js']
     restart: on-failure
 
   api:

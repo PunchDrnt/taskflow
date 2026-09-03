@@ -29,6 +29,11 @@ Stack, การแบ่ง module, และ convention ที่ทุก mod
 | Deploy         | Docker + Caddy บน Bangmod                                         |
 | Error tracking | Sentry                                                            |
 
+**ORM ไม่เปลี่ยน** — ประเมิน Prisma / Kysely / ts-rest แล้วเมื่อ 2026-08-30 และ **ไม่เอา**
+· TypeORM ถือ decorator metadata ที่ทั้ง DI ของ Nest และ entity อาศัยอยู่ และ migration
+ทุกไฟล์เป็น SQL เขียนมือซึ่งย้าย ORM แล้วก็ยังเป็นแบบเดิม — สิ่งที่ได้จึงไม่คุ้มกับการรื้อ
+`OrgScopedRepository` ทั้งชั้น · อย่าเสนอซ้ำโดยไม่มีข้อมูลใหม่
+
 ### Repo Layout
 
 ```
@@ -603,6 +608,14 @@ CREATE UNIQUE INDEX ON project.statuses (project_id, name) WHERE deleted_at IS N
 UNIQUE (project_id, name)
 ```
 
+> 🔒 **ข้อยกเว้นเดียวที่ตั้งใจแหก: `UNIQUE (project_id, number)` ของ `task.tasks` เป็น index เต็ม**
+>
+> เหตุผลกลับด้านกับกฎข้างบนพอดี — partial มีไว้ให้**ใช้ชื่อเดิมซ้ำได้**หลังลบ
+> แต่**เลขงานต้องไม่ถูกแจกซ้ำ** คนแปะ `DEV-87` ไว้ในแชทแล้ววันหนึ่งเลขนั้นไปโผล่บนงานคนละใบ
+> คือความเสียหายที่ย้อนไม่ได้ ([รายละเอียด](./02-database/schema.md#schema-task))
+>
+> ข้อยกเว้นถัดไปต้องเถียงจากหลักเดียวกันนี้ ไม่ใช่อ้างว่ามีข้อยกเว้นอยู่แล้ว
+
 **Soft delete แบบ cascade ต้องทำในโค้ด ไม่ใช่ DB** — `ON DELETE CASCADE` ทำงานกับ hard delete เท่านั้น
 
 อยู่ที่ [`shared/entity/cascade-soft-delete.ts`](../../apps/api/core/src/shared/entity/cascade-soft-delete.ts) — เดินลงตาม `AGGREGATE_CHILDREN` ใน transaction เดียว
@@ -641,7 +654,15 @@ FK cascade เป็น**ตาข่ายนิรภัยตอน hard dele
 | `users` (`pending_deletion`)         | anonymize หลัง **30 วัน**    | ให้เวลากู้บัญชีคืน                   |
 | `notify.outbox` (`sent`)             | ลบหลัง **30 วัน**            | ส่งไปแล้วไม่มีประโยชน์              |
 | `identity.sessions` (หมดอายุ/revoked) | ลบหลัง **7 วัน**             | โตเร็วมาก ไม่มีค่าเก็บ              |
-| `password_reset_tokens`              | ลบหลัง **1 วัน**             | อายุแค่ 10 นาที                   |
+| `password_reset_tokens`              | ลบหลัง **1 วัน**             | อายุแค่ 30 นาที เก็บไว้ตอบ ticket    |
+| `organization.invitations` (จบแล้ว)    | ลบหลัง **90 วัน**            | ใครเชิญ/ยกเลิก อยู่ใน `audit.logs`  |
+| `notify.notifications` (อ่านแล้ว)      | ลบหลัง **90 วัน**            | กล่องขาเข้า ไม่ใช่ประวัติ             |
+
+> ⚠️ **สองแถวล่างยังไม่มีโค้ดกวาด** — `resolvePurgeOrder` หาตารางจาก catalog โดยดูว่ามี
+> `deleted_at` ไหม ทั้งสองตารางไม่มี (จบชีวิตด้วย `accepted_at`/`revoked_at` และ `read_at`)
+> จึงหลุดรอบกวาดไปเงียบๆ · ต้องเขียน sweep ของตัวเองตอนฟีเจอร์มาถึง —
+> invitations ที่ **Phase 2** คู่กับ API · notifications ที่ **Phase 3**
+> · ไฟล์แนบก็เหมือนกัน: ลบแถวแล้ว object ใน storage ยังอยู่ ([Phase 3](./04-features/phase-3.md#ไฟล์แนบ))
 
 **`audit.logs` โตเร็วที่สุดในระบบ** — ทำ **partition รายเดือน** ตั้งแต่แรก เพราะทำทีหลังต้องย้ายข้อมูลทั้งตาราง
 
@@ -705,12 +726,55 @@ Cookie flags: `httpOnly · Secure · SameSite=Lax`
 **Access token payload — เอาแค่ที่จำเป็น**
 
 ```json
-{ "sub": "<userId>", "org": "<orgId>", "sid": "<sessionId>", "exp": 1234567890 }
+{ "sub": "<userId>", "sid": "<sessionId>", "exp": 1234567890 }
 ```
 
-ไม่มี role ไม่มีชื่อ ไม่มีอีเมล — ดึงจาก `GET /api/v1/me`
+ไม่มี role ไม่มีชื่อ ไม่มีอีเมล ไม่มี org — ดึงจาก `GET /api/v1/me`
 
 > เหตุผล: ถ้าใส่ role ใน token แล้ว admin ถอดสิทธิ์ ต้องรอ 15 นาทีถึงมีผล
+
+**`org` เคยอยู่ใน payload นี้ — เอาออกแล้ว** เหตุผลเดียวกับ role ทุกตัวอักษร: ถอดคนออกจาก org
+แล้วต้องรอ 15 นาทีถึงมีผล · และตั้งแต่ [หนึ่งคนอยู่ได้หลาย org](./04-features/phase-1.md#หนึ่งคนอยู่ได้หลาย-org-ตั้งแต่-phase-1)
+ค่าเดียวใน token ก็ตอบไม่ได้อยู่ดีว่าคนนี้กำลังทำงานให้ org ไหน · ต้นทุนเป็นศูนย์
+เพราะ guard query session อยู่แล้วทุก request
+
+#### org ไหนของ request นี้
+
+**สองคำถามที่ปนกันง่ายที่สุดในระบบนี้**
+
+| คำถาม | คำตอบเป็น | อยู่ที่ไหน |
+| --- | --- | --- |
+| คนนี้ใช้ org ไหนได้บ้าง | **ลิสต์** | `organization.members` · ตอบผ่าน `GET /api/v1/me` |
+| **request นี้**ทำงานให้ org ไหน | **หนึ่งเดียวเสมอ** | `RequestContext.orgId` |
+
+ข้อที่สองเป็นข้อบังคับ ไม่ใช่ทางเลือก — `org_id` เป็น `NOT NULL` ทุกตาราง ตอน `create()`
+จึงต้องมีค่าเดียวให้ประทับลงแถว `org_id IN (…)` ไม่มีอะไรให้เขียน · ฝั่ง read ก็พังเงียบกว่า
+คือข้อมูลสองบริษัทปนกันในหน้าเดียว และ policy ของ RLS ก็ต้องเขียนตามนั้นด้วย
+
+**client บอกว่า org ไหนผ่าน cookie `active_org` ที่ตั้งด้วย `POST /api/v1/me/active-org`**
+
+- httpOnly · same-origin อยู่แล้ว ([CSRF](#csrf)) จึงไม่ต้องมี token อะไรเพิ่ม
+- **guard ตรวจกับ membership ทุก request** — cookie ที่ถูกแก้ไม่ได้ทำให้เข้า org อื่นได้
+  แค่ได้ 403 · cookie เป็น *ตัวเลือก* ไม่ใช่ *สิทธิ์*
+- ไม่มี cookie แต่มี org เดียว → ใช้ org นั้น · มีหลาย org → ต้องเลือกก่อน
+- ไม่ได้อยู่ org ไหนเลย → `orgId` เป็น `null` แต่ **login ผ่าน** ([ทำไม](./04-features/phase-1.md#หนึ่งคนอยู่ได้หลาย-org-ตั้งแต่-phase-1))
+  · ส่วนหน้า Home ที่ข้าม org ใช้ `@SkipOrgScope()`
+- **cookie ที่ชี้ org ที่ไม่ได้เป็นสมาชิก (หรือถูกถอดออกไปแล้ว) → 403 แล้ว _ลบ cookie ทิ้ง_**
+  ไม่ใช่แค่ปฏิเสธ · ตัวเลือกที่ค้างอยู่จะทำให้เขาติด 403 ทุก request จนกว่าจะล้าง browser
+
+**สอง error code ไม่ใช่อันเดียว** — `orgId` เป็น `null` ได้จากสองสาเหตุที่ต้องการคนละหน้าจอ
+
+| สถานการณ์ | code | หน้าที่ควรเห็น |
+| --- | --- | --- |
+| อยู่หลาย org แต่ยังไม่ได้เลือก | `ORG_NOT_SELECTED` | ตัวเลือก org |
+| ไม่ได้อยู่ org ไหนเลย | `NO_ORGANIZATION` | Home · สร้าง org แรก |
+
+code เดียวสำหรับทั้งสองจะพาคนที่อยู่สามบริษัทไปหน้า "สร้าง org แรกของคุณ"
+
+> **เก็บใน cookie ไม่ใช่ `sessions.active_org_id`** — [กติกาทิศทาง FK](./02-database/rules.md#foreign-key-rules)
+> ให้ชี้ทางเดียว `task → project → organization → identity` · FK จาก `identity.sessions`
+> ขึ้นไปหา `organization.organizations` เดินย้อนทาง และ `uuid` เปล่าที่ไม่มี FK
+> แย่กว่าไม่มีคอลัมน์ เพราะไม่มีอะไรกันไม่ให้มันชี้ไป org ที่ถูกลบไปแล้ว
 
 **ตรวจทุก request**
 
@@ -719,11 +783,14 @@ Cookie flags: `httpOnly · Secure · SameSite=Lax`
 2. เช็ค session จาก sid (cache 30 วินาที)
    ├─ session.revoked_at IS NULL
    ├─ session.expires_at > now
-   └─ user.status = 'active'
-3. ผ่าน → ใส่ { userId, orgId } ลง request context
+   ├─ user.status = 'active'
+   └─ โหลด membership ของ user มาพร้อมกันใน fill เดียว
+3. หา org ของ request จาก cookie active_org × membership  → orgId | null
+4. ผ่าน → ใส่ { userId, orgId } ลง request context
 ```
 
 ข้อ 2 ทำให้ deactivate / logout / ลบ account **มีผลเกือบทันที** ไม่ต้องรอ token หมดอายุ
+· ข้อ 3 ทำให้ **ถอดคนออกจาก org มีผลใน 30 วินาที** ด้วยเหตุผลเดียวกัน ไม่ต้องออก token ใหม่
 
 ต้นทุนต่ำเพราะไม่ได้ใส่ role ใน token อยู่แล้ว — ยังไงก็ต้องดึงข้อมูล user
 
@@ -748,7 +815,7 @@ Auth ทั้งก้อนอยู่ใน guard ที่เดียว �
 
 | ชั้น                        | หน้าที่                                                                |
 | -------------------------- | -------------------------------------------------------------------- |
-| `AuthGuard` (`APP_GUARD`)  | verify JWT → เช็ค session → `enterWith({ userId, orgId })` → allow/deny |
+| `AuthGuard` (`APP_GUARD`)  | verify JWT → เช็ค session + membership → หา org ของ request → `enterWith({ userId, orgId })` → allow/deny |
 | Guard ตัวถัดไป                | `PermissionService.assert` — ใช้ context ที่ตัวแรกเปิดไว้ได้เลย              |
 | `RequestContextMiddleware` | เลิกใช้เมื่อ `AuthGuard` มาแล้ว — ตอนนี้ยังอยู่เพราะยังไม่มี auth                |
 
@@ -839,7 +906,7 @@ POST /auth/forgot-password { email }
 POST /auth/reset-password { code, newPassword, confirmNewPassword }
 ```
 
-- Token อายุ **10 นาที** ใช้ได้ครั้งเดียว
+- Token อายุ **30 นาที** (env var ไม่ hardcode) ใช้ได้ครั้งเดียว — [ทำไมไม่ใช่ 10](./04-features/phase-1.md#auth--users)
 - ขอใหม่ → invalidate อันเก่า
 - Rate limit 3 ครั้ง/ชั่วโมง/อีเมล
 
@@ -847,7 +914,8 @@ POST /auth/reset-password { code, newPassword, confirmNewPassword }
 
 - ขั้นต่ำ 8 ตัว
 - Hash ด้วย **argon2id** (หรือ bcrypt cost 12 ถ้าไม่อยากเพิ่ม dependency)
-- Login: 5 ครั้ง/15 นาที/อีเมล
+- Login ผิดหลายครั้ง → **ล็อกบัญชี ไม่ใช่นับใน memory** — `identity.users.failed_login_attempts`
+  + `locked_until` · จำนวนครั้งกับระยะเวลาเป็น env var ([กติกาเต็ม](./04-features/phase-1.md#auth--users))
 
 ### CSRF
 

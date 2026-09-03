@@ -6,9 +6,9 @@
  * database so it can change without a deploy. Nothing reads these until
  * Phase 7 brings the back-office; Phase 0 only seeds them.
  *
- * Adding one means a migration too — `identity.permissions` is seeded from a
- * literal list, not from this object, so an old migration keeps doing what it
- * did. `test/schema-invariants.spec.ts` holds the two together.
+ * `database/seed/required.ts` inserts exactly these keys and runs on every
+ * deploy, so adding one here is the whole change — no migration, and nothing
+ * to keep in step.
  */
 export const SYSTEM_PERMISSIONS = {
   ORG_READ: 'org.read',

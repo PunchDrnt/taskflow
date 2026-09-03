@@ -37,6 +37,12 @@ export class CreateIdentityUsers1787186718550 implements MigrationInterface {
         -- query during exactly the month it has to stay findable.
         deletion_requested_at     timestamptz,
 
+        -- Login lockout. In the database rather than in memory: a counter a
+        -- crash resets is a counter an attacker can reset, and it has to hold
+        -- across instances. No CHECK on either — nothing else reads them.
+        failed_login_attempts     integer     NOT NULL DEFAULT 0,
+        locked_until              timestamptz,
+
         created_at                timestamptz NOT NULL DEFAULT now(),
         created_by                uuid        NOT NULL,
         updated_at                timestamptz NOT NULL DEFAULT now(),

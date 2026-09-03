@@ -71,8 +71,10 @@ export class CreateDiscussion1787190911661 implements MigrationInterface {
 
         created_at   timestamptz NOT NULL DEFAULT now(),
         created_by   uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
-        updated_at   timestamptz NOT NULL DEFAULT now(),
-        updated_by   uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
+        -- No updated_at/updated_by: a file is uploaded and later removed,
+        -- never edited, so the pair would sit forever equal to the created
+        -- one while carrying a RESTRICT foreign key that never earns its keep.
+        -- It still soft-deletes, because it rides along when its task does.
         deleted_at   timestamptz,
         deleted_by   uuid        REFERENCES identity.users(id) ON DELETE RESTRICT,
 

@@ -60,8 +60,14 @@ export class CreateFieldAndView1787190913197 implements MigrationInterface {
         -- that person's private view.
         owner_id     uuid        REFERENCES identity.users(id) ON DELETE CASCADE,
         filter_json  jsonb       NOT NULL DEFAULT '{}'::jsonb,
-        sort_json    jsonb       NOT NULL DEFAULT '{}'::jsonb,
+        -- An array, not an object: sorting is ordered, and JSON object key
+        -- order is not something to lean on.
+        sort_json    jsonb       NOT NULL DEFAULT '[]'::jsonb,
         group_by     text,
+        -- The order of the view tabs.
+        sort_order   text        COLLATE "C" NOT NULL,
+        -- The view a project opens on.
+        is_default   boolean     NOT NULL DEFAULT false,
 
         created_at   timestamptz NOT NULL DEFAULT now(),
         created_by   uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
@@ -83,6 +89,17 @@ export class CreateFieldAndView1787190913197 implements MigrationInterface {
     `)
     await queryRunner.query(`
       CREATE INDEX views_project_idx ON view.views (org_id, project_id)
+    `)
+    // owner_id IS NULL is part of it: the default is the project's shared
+    // view, and everyone's private views are beside the point.
+    await queryRunner.query(`
+      CREATE UNIQUE INDEX views_single_default_unique
+        ON view.views (project_id)
+        WHERE is_default AND owner_id IS NULL AND deleted_at IS NULL
+    `)
+    await queryRunner.query(`
+      CREATE INDEX views_project_order_idx
+        ON view.views (org_id, project_id, sort_order)
     `)
 
     await queryRunner.query(`

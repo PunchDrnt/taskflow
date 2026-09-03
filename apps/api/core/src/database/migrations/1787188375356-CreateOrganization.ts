@@ -128,9 +128,62 @@ export class CreateOrganization1787188375356 implements MigrationInterface {
       CREATE INDEX team_members_org_team_idx
         ON organization.team_members (org_id, team_id)
     `)
+    // And the reverse, which My Tasks asks on every load from Phase 2 on:
+    // which teams is this person in, so which teams' work is theirs. The two
+    // sibling membership tables both carry this; this one was the odd one out.
+    await queryRunner.query(`
+      CREATE INDEX team_members_org_user_idx
+        ON organization.team_members (org_id, user_id)
+    `)
+
+    // The table ships in Phase 1; the API and the screens are Phase 2. Until
+    // then an admin adds people to an org directly and nothing writes here.
+    //
+    // No soft delete: revoked_at ends an invitation's life the way
+    // password_reset_tokens.used_at ends a token's, and a second delete marker
+    // would be one more thing to keep in sync.
+    await queryRunner.query(`
+      CREATE TABLE organization.invitations (
+        id           uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+        org_id       uuid        NOT NULL REFERENCES organization.organizations(id) ON DELETE CASCADE,
+
+        -- citext, so an invitation matches the address however it is typed —
+        -- the same folding identity.users.email relies on.
+        email        citext      NOT NULL,
+        role         text        NOT NULL,
+        -- Hashed, never stored plain: the link in the mail is the only copy.
+        token_hash   text        NOT NULL,
+        expires_at   timestamptz NOT NULL,
+        accepted_at  timestamptz,
+        accepted_by  uuid        REFERENCES identity.users(id) ON DELETE RESTRICT,
+        revoked_at   timestamptz,
+
+        -- Inviting an owner is not a thing: ownership is granted from inside.
+        CONSTRAINT invitations_role_check
+          CHECK (role IN ('admin', 'member')),
+
+        created_at   timestamptz NOT NULL DEFAULT now(),
+        created_by   uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
+        updated_at   timestamptz NOT NULL DEFAULT now(),
+        updated_by   uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT
+      )
+    `)
+    // One live invitation per address per org. Partial on both end states, so
+    // inviting again after it expired or was revoked is allowed.
+    await queryRunner.query(`
+      CREATE UNIQUE INDEX invitations_org_email_unique
+        ON organization.invitations (org_id, email)
+        WHERE accepted_at IS NULL AND revoked_at IS NULL
+    `)
+    // The lookup the accept link makes, before any org is known.
+    await queryRunner.query(`
+      CREATE INDEX invitations_token_idx
+        ON organization.invitations (token_hash) WHERE accepted_at IS NULL
+    `)
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`DROP TABLE IF EXISTS organization.invitations`)
     await queryRunner.query(`DROP TABLE IF EXISTS organization.team_members`)
     await queryRunner.query(`DROP TABLE IF EXISTS organization.teams`)
     await queryRunner.query(`DROP TABLE IF EXISTS organization.members`)

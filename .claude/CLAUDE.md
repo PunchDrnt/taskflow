@@ -33,7 +33,7 @@ The full list with rationale is in [`docs/00-overview.md`](./docs/00-overview.md
 
 - Date-times are `timestamptz`, stored UTC — never `timestamp`
 - `org_id` on every table whose rows belong to one org — exempt only where a row belongs to no single org, which today means schema `identity`, `billing.plans` and `organization.organizations` (whose `org_id` would always equal its `id`). It is a test to apply, not a list to memorise, and a join table needs the column _most_: with both FKs composite on `(id, org_id)`, linking two orgs' rows becomes impossible in the database rather than merely discouraged. The cross-org isolation test must exist
-- Unique constraints on soft-deleted tables must be **partial** indexes (`WHERE deleted_at IS NULL`)
+- Unique constraints on soft-deleted tables must be **partial** indexes (`WHERE deleted_at IS NULL`) — with one deliberate exception, `task.tasks (project_id, number)`, which is a full index because a task number must never be reissued
 - `created_by` / `updated_by` / `completed_by` are `RESTRICT` — deleting a user is anonymisation, not a hard delete
 - `deleted_at` and `deleted_by` are set together, enforced by a CHECK on every soft-deleted table. Tables that already carry a state column meaning "no longer usable" (`sessions.revoked_at`, `password_reset_tokens.used_at`, `outbox.status`) have neither: a second delete marker is one more thing to keep in sync, and the retention policy hard-deletes them anyway
 - `audit.logs` is partitioned monthly with `PRIMARY KEY (id, occurred_at)`, and is never deleted
@@ -41,22 +41,22 @@ The full list with rationale is in [`docs/00-overview.md`](./docs/00-overview.md
 - Primary keys are UUIDs; `sort_order` is `text COLLATE "C"` with fractional indexing
 - One `external_channel_id` maps to exactly one org
 
-Also settled, and easy to get wrong: DB is `snake_case` while TypeScript is `camelCase` (handled once by TypeORM's naming strategy, not per-column); writes get transactions, reads don't; RLS is deliberately deferred to Phase 2; and each web app proxies its own `/api/*` to the one Nest, so every browser request is same-origin and `SameSite=Lax` needs no CSRF token and no CORS — never collapse that into a shared `api.domain.com`. Note that SameSite compares _site_, not origin: `www.x.com` → `api.x.com` still sends a Lax cookie, only a different registrable domain does not (measured; table in docs/01-architecture.md#csrf). Back-office is a separate app on a separate registrable domain so the cookie jars are split by the browser rather than by a guard. Keep the cookie attributes in one place when auth is written.
+Also settled, and easy to get wrong: DB is `snake_case` while TypeScript is `camelCase` (handled once by TypeORM's naming strategy, not per-column); writes get transactions, reads don't; RLS is deferred to Phase 2 and cannot slip further, since one person belongs to several orgs from Phase 1 and application-level `org_id` scoping is the only layer until it lands; and each web app proxies its own `/api/*` to the one Nest, so every browser request is same-origin and `SameSite=Lax` needs no CSRF token and no CORS — never collapse that into a shared `api.domain.com`. Note that SameSite compares _site_, not origin: `www.x.com` → `api.x.com` still sends a Lax cookie, only a different registrable domain does not (measured; table in docs/01-architecture.md#csrf). Back-office is a separate app on a separate registrable domain so the cookie jars are split by the browser rather than by a guard. Keep the cookie attributes in one place when auth is written.
 
 ## Domain vocabulary
 
 These terms overlap dangerously — check here before naming anything.
 
-| Term                   | Is                                                                                                               | Is not                             |
-| ---------------------- | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| **System**             | Whole-site level, run by us · RBAC · not tied to any org · 2-5 people                                            | not a customer-facing role         |
-| **Organization (org)** | The customer's top level = one company · everything hangs off it · Phase 1-6 has exactly one                     | not a team, not a department       |
-| **Team**               | People grouped by org structure · one person can be in many · used for group assignment                          | not permanently bound to a project |
-| **Project**            | Where tasks live · has its own members independent of teams (like a Slack channel) · has its own custom statuses | not owned by any one team          |
-| **Task**               | One unit of work · always inside a project · up to two levels deep                                               | —                                  |
-| **Sub-task**           | A task with `parent_task_id` · a full task with its own status and assignee                                      | not a checklist item               |
-| **Sprint**             | A work cycle · optional per project (`sprint_enabled`)                                                           | not mandatory                      |
-| **Activity log**       | The user-facing _feature_ name — stored in `audit.logs`, owned by module `audit/`                                | not a schema name                  |
+| Term                   | Is                                                                                                                                                                     | Is not                             |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| **System**             | Whole-site level, run by us · RBAC · not tied to any org · 2-5 people                                                                                                  | not a customer-facing role         |
+| **Organization (org)** | The customer's top level = one company · everything hangs off it · **one person can belong to several from Phase 1**, but a single request always acts for exactly one | not a team, not a department       |
+| **Team**               | People grouped by org structure · one person can be in many · used for group assignment                                                                                | not permanently bound to a project |
+| **Project**            | Where tasks live · has its own members independent of teams (like a Slack channel) · has its own custom statuses                                                       | not owned by any one team          |
+| **Task**               | One unit of work · always inside a project · up to two levels deep                                                                                                     | —                                  |
+| **Sub-task**           | A task with `parent_task_id` · a full task with its own status and assignee                                                                                            | not a checklist item               |
+| **Sprint**             | A work cycle · optional per project (`sprint_enabled`)                                                                                                                 | not mandatory                      |
+| **Activity log**       | The user-facing _feature_ name — stored in `audit.logs`, owned by module `audit/`                                                                                      | not a schema name                  |
 
 Two permission layers, kept strictly separate — system-level RBAC (ours, crosses orgs) above org-level fixed roles (`owner`/`admin`/`member`, with `admin`/`member` on teams and projects).
 
@@ -128,13 +128,13 @@ Nothing enforces this automatically yet — there is no commitlint hook, so the 
 
 Turborepo monorepo. Workspaces are `apps/*/*` and `packages/*` — apps sit one directory deeper than usual (`apps/web/client`, `apps/api/core`) to leave room for siblings under the same domain later.
 
-| Workspace                          | What it is                                                                                                                                               |
-| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/web/client` (`@web/client`)  | Next.js 16 App Router + React 19 + Tailwind 4. `/design-system` is a live showcase of every `@repo/ui` component — check it when adding or changing one. |
-| `apps/api/core` (`@api/core`)      | NestJS 11. `src/main.ts` bootstraps `nestjs-pino` and Swagger at `/docs`; listens on `PORT` (default 3001).                                              |
-| `packages/ui` (`@repo/ui`)         | `@base-ui/react` + cva + Tailwind. One directory per component, exported individually.                                                                   |
-| `packages/shared` (`@repo/shared`) | Framework-free zod schemas, types, constants. Real `tsc` build, because Nest cannot consume raw `.ts` from a workspace the way Next transpiles it.       |
-| `packages/config` (`@repo/config`) | The only home for eslint / typescript / prettier / tailwind config.                                                                                      |
+| Workspace                          | What it is                                                                                                                                                                                                                                                                     |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `apps/web/client` (`@web/client`)  | Next.js 16 App Router + React 19 + Tailwind 4. `/design-system` is a live showcase of every `@repo/ui` component — check it when adding or changing one. **Atomic design applies here and nowhere else** — `packages/ui` is not organised that way and is not being converted. |
+| `apps/api/core` (`@api/core`)      | NestJS 11. `src/main.ts` bootstraps `nestjs-pino` and Swagger at `/docs`; listens on `PORT` (default 3001).                                                                                                                                                                    |
+| `packages/ui` (`@repo/ui`)         | `@base-ui/react` + cva + Tailwind. One directory per component, exported individually.                                                                                                                                                                                         |
+| `packages/shared` (`@repo/shared`) | Framework-free zod schemas, types, constants. Real `tsc` build, because Nest cannot consume raw `.ts` from a workspace the way Next transpiles it.                                                                                                                             |
+| `packages/config` (`@repo/config`) | The only home for eslint / typescript / prettier / tailwind config.                                                                                                                                                                                                            |
 
 ### Rules that bind code written elsewhere
 
@@ -161,7 +161,7 @@ These are the ones worth knowing _before_ opening a file. Everything else — wh
 |                                   |                                                                                                                                                                                                                                                     |
 | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `shared/org-scope/`               | The tenant isolation: `request-context`, `org-scoped.repository`, `query-builders`, `org-repository.provider`                                                                                                                                       |
-| `shared/entity/`                  | `base.entity` (six classes — a new table picks one by the three questions in [`docs/02-database/rules.md#base-entity`](./docs/02-database/rules.md#base-entity)), `audit-columns.subscriber`, `cascade-soft-delete`                                 |
+| `shared/entity/`                  | `base.entity` (seven classes — a new table picks one by the three questions in [`docs/02-database/rules.md#base-entity`](./docs/02-database/rules.md#base-entity)), `audit-columns.subscriber`, `cascade-soft-delete`                               |
 | `shared/http/`                    | `route-metadata` (`@Public`, `@SkipOrgScope`), `api-exception`, `api-exception.filter`, `zod-validation.pipe`                                                                                                                                       |
 | `shared/jobs/`                    | `advisory-lock`, `alert` — here rather than in `maintenance/` because `OutboxWorker` needs both too                                                                                                                                                 |
 | `src/maintenance/`                | The two crons at 03:05 / 03:15 `Asia/Bangkok` — audit partition upkeep and the five retention policies. `JOBS_ENABLED=false` turns both off.                                                                                                        |

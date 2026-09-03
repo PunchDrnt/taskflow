@@ -128,8 +128,9 @@ describe.skipIf(!hasTestDatabase)('retention', () => {
 
       const [project] = (await dataSource.query(
         `INSERT INTO project.projects
-           (org_id, name, created_by, updated_by, deleted_at, deleted_by)
-         VALUES ($1, 'p', $2, $2, ${daysAgo(age)}, $2)
+           (org_id, name, color, key_prefix, created_by, updated_by,
+            deleted_at, deleted_by)
+         VALUES ($1, 'p', 'gray', 'PRJ', $2, $2, ${daysAgo(age)}, $2)
          RETURNING id`,
         [org.id, SYSTEM_USER_ID],
       )) as { id: string }[]
@@ -145,9 +146,9 @@ describe.skipIf(!hasTestDatabase)('retention', () => {
 
       await dataSource.query(
         `INSERT INTO task.tasks
-           (org_id, project_id, title, status_id, sort_order,
+           (org_id, project_id, title, number, status_id, sort_order,
             created_by, updated_by, deleted_at, deleted_by)
-         VALUES ($1, $2, 't', $3, 'a0', $4, $4, ${daysAgo(age)}, $4)`,
+         VALUES ($1, $2, 't', 1, $3, 'a0', $4, $4, ${daysAgo(age)}, $4)`,
         [org.id, project.id, status.id, SYSTEM_USER_ID],
       )
     }
@@ -199,8 +200,10 @@ describe.skipIf(!hasTestDatabase)('retention', () => {
       )) as { id: string }[]
       const [project] = (await dataSource.query(
         `INSERT INTO project.projects
-           (org_id, name, created_by, updated_by, deleted_at, deleted_by)
-         VALUES ($1, 'p', $2, $2, ${daysAgo(100)}, $2) RETURNING id`,
+           (org_id, name, color, key_prefix, created_by, updated_by,
+            deleted_at, deleted_by)
+         VALUES ($1, 'p', 'gray', 'PRJ', $2, $2, ${daysAgo(100)}, $2)
+         RETURNING id`,
         [org.id, SYSTEM_USER_ID],
       )) as { id: string }[]
       const [status] = (await dataSource.query(
@@ -211,8 +214,9 @@ describe.skipIf(!hasTestDatabase)('retention', () => {
       )) as { id: string }[]
       await dataSource.query(
         `INSERT INTO task.tasks
-           (org_id, project_id, title, status_id, sort_order, created_by, updated_by)
-         VALUES ($1, $2, 't', $3, 'a0', $4, $4)`,
+           (org_id, project_id, title, number, status_id, sort_order,
+            created_by, updated_by)
+         VALUES ($1, $2, 't', 1, $3, 'a0', $4, $4)`,
         [org.id, project.id, status.id, SYSTEM_USER_ID],
       )
 
@@ -425,7 +429,7 @@ describe.skipIf(!hasTestDatabase)('retention', () => {
 
       // A pending row has no sent_at and is not the retention job's business,
       // however old it is — that one belongs to the worker.
-      expect(await retention.purgeSentNotifications()).toBe(1)
+      expect(await retention.purgeSentOutbox()).toBe(1)
 
       await dataSource.query(`DELETE FROM notify.outbox`)
       await dataSource.query(

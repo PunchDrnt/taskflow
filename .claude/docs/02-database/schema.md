@@ -1,6 +1,10 @@
 # Full Schema
 
-ทุกตารางในระบบ · ฟิลด์ที่มี _(Phase N)_ คือสร้างตั้งแต่ Phase 0 แต่เริ่มใช้ตอน Phase นั้น
+ทุกตารางในระบบ · `(Phase N)` ข้างชื่อ**ฟิลด์** = คอลัมน์มีตั้งแต่ Phase 0 แต่เริ่มใช้ตอน Phase นั้น
+
+`(Phase N)` ข้างชื่อ**ตาราง**หรือชื่อ **schema** = ตารางนั้นยังไม่มี สร้างตอน Phase นั้น
+— เป็นได้เพราะการ**เพิ่มตารางใหม่**บนฐานข้อมูลที่มีข้อมูลแล้วราคาถูก ที่แพงคือการ**แก้ตารางเดิม**
+ซึ่งเป็นเหตุผลที่คอลัมน์ต้องมาให้ครบตั้งแต่แรก แต่ตารางไม่ต้อง
 
 
 > [← Database](./README.md) · [กติกา](./rules.md) — `org_id`, base entity, FK อยู่ที่นั่น
@@ -19,6 +23,8 @@ users
   status                      text     'active' | 'deactivated' | 'pending_deletion' | 'deleted'
   deletion_requested_at       timestamptz null · วันที่เจ้าตัวกดลบบัญชี — ตัวนับ 30 วันของ grace period
   is_system                   boolean  default false · true ได้แถวเดียวทั้งตาราง — ดูด้านล่าง
+  failed_login_attempts       int      default 0 · ล้างเป็น 0 เมื่อ login สำเร็จ
+  locked_until                timestamptz null · ล็อกถึงเมื่อไหร่ · null = ไม่ถูกล็อก
   has_claimed_free_credits    boolean  default false  (SaaS — ไม่ reset แม้ org ถูกลบ)
   free_org_count              int      default 0      (SaaS)
 
@@ -65,9 +71,9 @@ sessions                                 -- 1 แถว = 1 การ login จ�
   rotated_at             timestamptz null  ใช้คำนวณ grace window 10 วินาที
   user_agent             text
   ip_address             inet
-  last_used_at           timestamptz   -- ❓ ยังไม่ตัดสินว่าเขียนตอนไหน · เขียนทุก
-                                       -- request = 1 write/request ไม่ใช่ 1 ต่อ 15
-                                       -- นาที · ทางเลือก lazy (เกิน N นาทีค่อยเขียน)
+  last_used_at           timestamptz   -- เขียนแบบ lazy: ต่อเมื่อค่าเดิมเก่ากว่า 5 นาที
+                                       -- เขียนทุก request จะทำให้ sessions เป็นตารางร้อน
+                                       -- โดยได้ความละเอียดที่ไม่มีใครใช้
   expires_at             timestamptz   +15 วัน
   revoked_at             timestamptz null
   revoked_reason         text  null    'logout' | 'logout_all' | 'password_change'
@@ -85,7 +91,7 @@ sessions                                 -- 1 แถว = 1 การ login จ�
 password_reset_tokens
   user_id             uuid  FK
   token_hash          text          hash ไม่เก็บ plain
-  expires_at          timestamptz   +10 นาที
+  expires_at          timestamptz   +30 นาที · เก็บเป็น env var ไม่ hardcode
   used_at             timestamptz null   ใช้ได้ครั้งเดียว
   CREATE INDEX ON identity.password_reset_tokens (token_hash) WHERE used_at IS NULL;
 
@@ -182,6 +188,21 @@ members                                  -- สมาชิกของ org
   -- ต้องมี role='owner' อย่างน้อย 1 แถวเสมอ (บังคับที่ application)
   -- owner มีได้หลายคน (โมเดลแบบ GitHub) — ห้ามลบ/ลดสิทธิ์คนสุดท้าย
 
+invitations                              -- ตารางมาตั้งแต่ Phase 1 · API + UI รอ Phase 2
+  email               citext        คนที่ถูกเชิญ · ยังไม่ต้องมี account
+  role                text          'admin' | 'member' — เชิญเป็น owner ไม่ได้
+  token_hash          text          hash ไม่เก็บ plain (ทรงเดียวกับ password_reset_tokens)
+  expires_at          timestamptz
+  accepted_at         timestamptz null
+  accepted_by         uuid        null · FK → identity.users · คนที่กดรับ
+  revoked_at          timestamptz null
+
+  CHECK (role IN ('admin', 'member'))
+  -- คนเดียวมีคำเชิญค้างได้ใบเดียวต่อ org · เชิญซ้ำหลังหมดอายุหรือถูกยกเลิกได้
+  CREATE UNIQUE INDEX ON organization.invitations (org_id, email)
+    WHERE accepted_at IS NULL AND revoked_at IS NULL;
+  CREATE INDEX ON organization.invitations (token_hash) WHERE accepted_at IS NULL;
+
 teams
   name                text
   description         text  null
@@ -200,12 +221,30 @@ team_members
 projects
   name                    text
   description             text     null
-  icon                    text     null   emoji
+  color                   text     token จาก palette 8 สี ไม่ใช่ hex (ทรงเดียวกับ statuses.color)
+  key_prefix              text     'DEV' · ตัวพิมพ์ใหญ่ 2-6 ตัว · ประกอบเป็น task key ตอนแสดงผล
+  next_task_number        int      default 1 · เลขถัดไปที่จะแจก — ดูด้านล่าง
+  archived_at             timestamptz null · ซ่อนจาก sidebar และ picker · ไม่ใช่การลบ
+  stale_after_days        int      null (Phase 3) · null = ปิดการเตือนงานค้าง
   completion_policy       text     'anyone' (default) | 'privileged'
   auto_complete_parent    boolean  default false
   sprint_enabled          boolean  default false
   estimate_unit           text     'none' (default) | 'point' | 'hour' | 'tshirt'  (Phase 4)
+
+  CHECK (key_prefix ~ '^[A-Z][A-Z0-9]{1,5}$')
   CREATE UNIQUE INDEX ON project.projects (org_id, name) WHERE deleted_at IS NULL;
+
+**Task key = `key_prefix` + `tasks.number` ประกอบตอนแสดงผล** ไม่เก็บสตริงสำเร็จรูปไว้ที่ไหน
+เปลี่ยน prefix แล้ว key เปลี่ยนทั้ง project ทันทีโดยไม่ต้อง backfill · prefix **ซ้ำกันได้ในหนึ่ง org**
+เพราะผู้ใช้กรอกเอง ยอมรับว่า `TF-120` ชี้ได้สองงาน (ลิสต์แสดงชื่อ project ข้างเลขอยู่แล้ว)
+
+> 🔒 **`next_task_number` เป็นคอลัมน์ ไม่ใช่ `MAX(number)+1`** — `MAX+1` จะแจกเลขซ้ำทันทีที่งาน
+> ที่มีเลขสูงสุดถูกลบ ซึ่งทำให้ key ที่คนแปะไว้ในแชทชี้ผิดงาน · แจกเลขด้วย
+> `UPDATE ... SET next_task_number = next_task_number + 1 RETURNING` ในทรานแซกชันเดียวกับ
+> การสร้าง task · คู่กับ unique เต็มบน `(project_id, number)` ที่ `task.tasks`
+
+**`archived_at` ไม่ใช่ `deleted_at`** — archive คือซ่อน ข้อมูลยังอ่านได้ครบและสมาชิกยังเข้าถึงประวัติได้
+จึงไม่เข้าคู่กับ `deleted_by` และไม่มี CHECK ผูก ([base entity](./rules.md#base-entity))
 
 members                                  -- สมาชิกของ project
   project_id          uuid  FK
@@ -251,8 +290,10 @@ tasks
   project_id          uuid       FK → project.projects
   title               text
   description         text       null
+  number              int        เลขต่อ project เริ่มที่ 1 · แจกจาก projects.next_task_number
+                                 sub-task มีเลขของตัวเอง ไม่ใช่ 120.1
   status_id           uuid       FK → project.statuses
-  priority            text       'low' | 'medium' | 'high' | null
+  priority            text       'low' | 'medium' | 'high' | 'urgent' | null
   due_date            timestamptz  null · เก็บ UTC แปลง timezone ที่ frontend
   sort_order          text COLLATE "C"
 
@@ -270,6 +311,8 @@ tasks
   estimate            numeric    null  (Phase 4)
   custom_fields       jsonb      default '{}'  (Phase 4) · key = field UUID ไม่ใช่ชื่อ
 
+  -- 🔒 unique เต็ม ไม่ใช่ partial — ตั้งใจแหกกฎ soft-delete ดูด้านล่าง
+  CREATE UNIQUE INDEX ON task.tasks (project_id, number);
   CREATE INDEX ON task.tasks (org_id, project_id, status_id);
   CREATE INDEX ON task.tasks (org_id, parent_task_id);
   CREATE INDEX ON task.tasks (org_id, sprint_id);
@@ -294,7 +337,28 @@ dependencies                                     -- Phase 5 · คู่กั�
 
   CREATE INDEX ON task.dependencies (org_id, successor_id);    -- "งานนี้รออะไรอยู่"
   CREATE INDEX ON task.dependencies (org_id, predecessor_id);  -- "เลื่อนอันนี้แล้วใครกระทบ"
+
+task_embeddings                                  -- Phase 5 · semantic search + ตรวจงานซ้ำ
+  task_id             uuid  FK → task.tasks · ON DELETE CASCADE · UNIQUE (หนึ่งงานหนึ่งเวกเตอร์)
+  embedding           vector    -- ต้องมี extension pgvector ก่อน ดูด้านล่าง
+  updated_at          timestamptz
+  -- index แบบ HNSW/IVFFlat ค่อยเลือกตอนรู้จำนวนแถวจริง ไม่ต้องตัดสินตอนนี้
 ```
+
+> ⚠️ **`vector` ไม่ใช่ type ที่ Postgres มีมาให้ — ต้องมี extension `pgvector` ก่อน**
+> `CreateExtensions` ตอนนี้มีแค่ `citext` · และต่างจาก `citext` ตรงที่ **image
+> `postgres:18-alpine` ที่ใช้อยู่ไม่มีไฟล์ของ pgvector ติดมาด้วย** `CREATE EXTENSION`
+> จึงล้มด้วย _"could not open extension control file"_ ไม่ว่าจะเป็น role ไหน
+> · ต้องเปลี่ยน image (เช่น `pgvector/pgvector`) หรือ build เอง = **งานฝั่ง deploy
+> ไม่ใช่แค่เพิ่มบรรทัดใน migration** — ต้องรู้ก่อนถึง Phase 5 ไม่ใช่ตอนนั้น
+
+> 🔒 **`UNIQUE (project_id, number)` เป็น index เต็ม ไม่ใช่ partial** — เป็นข้อยกเว้นเดียวของกติกา
+> "unique ของตารางที่ soft delete ต้องเป็น partial" ([rules](./rules.md)) และตั้งใจแหก
+>
+> เหตุผลกลับด้านกับกติกาเดิม: partial มีไว้ให้**ใช้ชื่อเดิมซ้ำได้**หลังลบ แต่เลขงานต้องไม่ถูกแจกซ้ำ
+> คนแปะ `DEV-87` ไว้ในแชทหรือในเอกสาร แล้ววันหนึ่งเลขนั้นไปโผล่บนงานคนละใบ คือความเสียหาย
+> ที่ย้อนไม่ได้ · index เต็มบวก `next_task_number` ที่เดินหน้าอย่างเดียวทำให้เลขที่แจกไปแล้ว
+> ตายไปกับงานนั้น
 
 **`UNIQUE` ธรรมดา ไม่ใช่ partial** เพราะตารางนี้ไม่ soft delete — ผูกกับเลิกผูกคือความสัมพันธ์เปลี่ยน ไม่ใช่ข้อมูลถูกทำลาย เอากลับมาก็แค่ผูกใหม่ ([base entity](./rules.md#base-entity) กลุ่มที่สี่) · ใครเลิกผูกเมื่อไหร่อยู่ใน `audit.logs` อยู่แล้ว
 
@@ -394,12 +458,16 @@ definitions
 views
   project_id          uuid  FK
   name                text
-  type                text  'table' | 'board' | 'calendar'
+  type                text  'list' | 'board' | 'calendar'   -- ไม่มี 'table' ตัดไปแล้ว
   owner_id            uuid  null = view กลางของ project · มีค่า = view ส่วนตัว
                             FK → identity.users · ON DELETE CASCADE (ดูด้านล่าง)
-  filter_json         jsonb
-  sort_json           jsonb
-  group_by            text  null
+  filter_json         jsonb  default '{}'
+  sort_json           jsonb  default '[]'   -- array: เรียงหลายชั้นตามลำดับ ไม่ใช่ object
+  group_by            text   null
+  sort_order          text COLLATE "C"      -- ลำดับแท็บ view
+  is_default          boolean default false -- view ที่เปิดมาเจอก่อน · 1 project 1 อัน
+  CREATE UNIQUE INDEX ON view.views (project_id)
+    WHERE is_default AND owner_id IS NULL AND deleted_at IS NULL;
 
 columns
   view_id             uuid  FK
@@ -416,7 +484,7 @@ columns
 >
 > ต่างจาก `oauth_accounts` ตรงที่นี่ไม่ใช่ช่องโหว่สิทธิ์ — เป็นแค่แถวที่ไม่มีเจ้าของ แต่ต้องรู้ว่า FK ไม่ได้เก็บกวาดให้
 
-## Schema `chat` (Phase 2)
+## Schema `chat` (Phase 4)
 
 > 🔒 **ต้องทำ** — 1 `external_channel_id` ผูกได้ org เดียว (unique index) กันข้อความข้ามบริษัท
 
@@ -425,6 +493,7 @@ identities
   user_id             uuid  FK
   platform            text  CHECK (platform IN ('discord','line','teams'))
   external_id         text  user id ฝั่งนั้น — เป็นข้อมูลส่วนบุคคล ต้องล้างตอน anonymize
+                            (เริ่มบังคับตอน Phase 4 ที่ตารางนี้เกิดจริง)
   linked_at           timestamptz
   UNIQUE (platform, external_id)
 
@@ -441,6 +510,10 @@ channels
 ของ `channels` หนักที่สุดในระบบ เพราะ `UNIQUE (platform, external_channel_id)` **คือกลไกเดียว**ที่บังคับ 🔒 ข้างบน — `'discord'` กับ `'Discord'` เป็นคนละคีย์ แปลว่าห้องเดียวลงทะเบียนได้สอง org แล้วข้อความข้ามบริษัททันที · เพิ่มค่าใหม่ทีหลัง (Teams มา Phase 6) เป็น integration ที่มี migration ของตัวเองอยู่แล้ว `DROP CONSTRAINT` หนึ่งบรรทัดจึงไม่ใช่ต้นทุน
 
 ## Schema `automation` (Phase 5)
+
+> ⚠️ schema นี้ยังไม่ถูกสร้าง — `CreateSchemas` สร้าง 11 อันและไม่มี `automation`
+> ต้องเพิ่มเข้าไปให้ครบตามหลัก "หนึ่ง schema ต่อหนึ่ง module สร้างล่วงหน้าทั้งหมด"
+> (`reset.ts` กับ `test/database.ts` ต้องตามด้วย)
 
 ```
 rules
@@ -481,6 +554,21 @@ rules
 ## Schema `notify`
 
 ```
+notifications                                    (Phase 3) -- กล่องขาเข้าในเว็บ
+  recipient_id        uuid
+  type                text   'assigned' | 'mentioned' | 'comment' | 'status_changed'
+                             | 'due_soon' | 'stale'
+  actor_id            uuid   null · null = ระบบเป็นคนทำ (cron เตือนใกล้ครบกำหนด)
+  entity_type         text   'task' | 'comment' | ...
+  entity_id           uuid   ไม่มี FK (polymorphic เหมือน audit.logs)
+  payload_json        jsonb  default '{}' · ข้อความสำเร็จรูปพอให้แสดงได้โดยไม่ต้อง join
+  read_at             timestamptz null
+
+  CREATE INDEX ON notify.notifications (org_id, recipient_id, created_at DESC);
+  -- ตัวนับเลข unread บนกระดิ่ง
+  CREATE INDEX ON notify.notifications (org_id, recipient_id)
+    WHERE read_at IS NULL;
+
 outbox
   recipient_id        uuid
   channel             text   'email' | 'discord' | 'line'
@@ -493,6 +581,23 @@ outbox
   CHECK (status IN ('pending', 'sent', 'failed'))
   CREATE INDEX ON notify.outbox (status, created_at) WHERE status = 'pending';
 ```
+
+**`notifications` แยกจาก `outbox` เพราะเป็นคนละอายุและคนละคำถาม**
+
+| | `notifications` | `outbox` |
+| --- | --- | --- |
+| ตอบคำถาม | อ่านหรือยัง | ส่งถึงหรือยัง |
+| ใครดู | ผู้ใช้ | worker |
+| อายุ | อยู่จนกว่า retention จะเก็บ | ลบทิ้งหลังส่งสำเร็จ |
+
+ใช้ `outbox` เป็นกล่องขาเข้าไม่ได้ เพราะ retention **ลบแถว outbox ทิ้งจริง** ประวัติแจ้งเตือน
+จะหายตามรอบ · และ `status='sent'` แปลว่าอีเมลออกไปแล้ว ไม่ได้แปลว่าคนเปิดอ่าน
+
+ทั้งสองตารางเขียนในทรานแซกชันเดียวกับ business logic เหมือนกัน — เหตุการณ์หนึ่งครั้งลงได้ทั้งคู่
+(แจ้งในเว็บ + ส่งอีเมล) หรือลงแค่ตัวใดตัวหนึ่ง
+
+**ไม่ soft delete ทั้งคู่** — `read_at` ไม่ใช่ตัวบอกการลบ และ retention เก็บกวาดด้วย hard delete
+อยู่แล้ว ([ทำไมตารางบางตัวไม่มี `deleted_at`](./rules.md#base-entity))
 
 ## Schema `billing` — Empty Tables, Reserved for Later
 

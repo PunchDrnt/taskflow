@@ -18,8 +18,9 @@ const SCHEMAS = [
   'discussion', // comments, attachments        (Phase 3)
   'field', // custom field definitions     (Phase 4)
   'view', // views, view columns          (Phase 4)
-  'chat', // chat identities and channels (Phase 2)
-  'notify', // outbox
+  'chat', // chat identities and channels (Phase 4)
+  'automation', // rules and runs           (Phase 5)
+  'notify', // outbox, notifications
   'billing', // plans, subscriptions         (reserved)
 ] as const
 

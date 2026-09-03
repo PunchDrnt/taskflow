@@ -164,13 +164,21 @@ export class CascadeSoftDelete {
     const orgColumn =
       query.table === 'organization.organizations' ? 'id' : 'org_id'
 
+    // Not every soft-deletable table has the update pair —
+    // discussion.attachments is uploaded and removed, never edited
+    // (OrgScopedCreatedSoftDeletableEntity). Read from the entity metadata
+    // rather than a second hand-written list, so a new table of that shape
+    // cannot be forgotten here.
+    const setUpdated = this.hasUpdateColumns(query.table)
+      ? ', updated_at = now(), updated_by = $1'
+      : ''
+
     // UPDATE ... RETURNING hands back [rows, affected], not rows — reading it
     // as an array of rows yields two undefined ids and a recursion that never
     // matches anything.
     const [rows] = (await manager.query(
       `UPDATE ${query.table}
-          SET deleted_at = now(), deleted_by = $1, updated_at = now(),
-              updated_by = $1
+          SET deleted_at = now(), deleted_by = $1${setUpdated}
         WHERE ${orgColumn} = $2
           AND deleted_at IS NULL
           AND ${query.where}
@@ -179,5 +187,19 @@ export class CascadeSoftDelete {
     )) as [{ id: string }[], number]
 
     return rows.map((row) => row.id)
+  }
+
+  /** Whether `schema.table` carries `updated_at`/`updated_by`. */
+  private hasUpdateColumns(table: string): boolean {
+    const metadata = this.dataSource.entityMetadatas.find(
+      (entity) => `${entity.schema ?? ''}.${entity.tableName}` === table,
+    )
+
+    // An unknown table keeps the old behaviour rather than quietly writing
+    // fewer columns than intended; every table here has an entity today.
+    return (
+      metadata === undefined ||
+      metadata.columns.some((column) => column.propertyName === 'updatedAt')
+    )
   }
 }
