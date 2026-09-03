@@ -26,7 +26,7 @@ const databaseUrlSchema = z
 /**
  * Every environment variable the API reads, validated once at boot. Add new
  * ones here: a bad value must stop the process, not surface as `undefined`
- * mid-request. Phase 1 adds `JWT_*` and the Google OAuth credentials.
+ * mid-request. Phase 1 still owes the Google OAuth credentials.
  */
 const envSchema = z
   .object({
@@ -44,6 +44,17 @@ const envSchema = z
     // the failure that matters. Off for a dev machine on a shared database — a
     // second container is already covered by the advisory lock.
     JOBS_ENABLED: z.stringbool().default(true),
+
+    // Auth. The secret signs the access token, so rotating it logs everyone
+    // out — which is the point of having one. 32 characters is the floor
+    // rather than the recommendation: HS256's key should be at least as long
+    // as its output, and a short one is the kind of mistake that still boots.
+    JWT_SECRET: z.string().min(32),
+    // Login lockout, per docs/04-features/phase-1.md#auth--users. Both are
+    // configurable because the right numbers for a 100-person internal tool
+    // and for a public SaaS are not the same, and neither is worth a deploy.
+    LOGIN_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
+    LOGIN_LOCK_MINUTES: z.coerce.number().int().positive().default(15),
 
     // Object storage. Named for the protocol rather than the server, which is
     // a deployment choice — Garage in docker-compose.yml, and nothing in the

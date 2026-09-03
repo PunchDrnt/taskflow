@@ -22,6 +22,7 @@ import { FeatureModule } from './feature/feature.module'
 import { HealthModule } from './health/health.module'
 import { MaintenanceModule } from './maintenance/maintenance.module'
 import { AuditModule } from './modules/audit/audit.module'
+import { AuthModule } from './modules/identity/auth/auth.module'
 import { NotifyModule } from './modules/notify/notify.module'
 import { StorageModule } from './modules/storage/storage.module'
 import { PermissionModule } from './permission/permission.module'
@@ -66,6 +67,7 @@ const rootEnvFile = join(__dirname, '..', '..', '..', '..', '.env')
     FeatureModule,
     StorageModule,
     AuditModule,
+    AuthModule,
     NotifyModule,
     HealthModule,
     MaintenanceModule,
