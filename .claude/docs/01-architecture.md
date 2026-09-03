@@ -29,6 +29,11 @@ Stack, การแบ่ง module, และ convention ที่ทุก mod
 | Deploy         | Docker + Caddy บน Bangmod                                         |
 | Error tracking | Sentry                                                            |
 
+**ORM ไม่เปลี่ยน** — ประเมิน Prisma / Kysely / ts-rest แล้วเมื่อ 2026-08-30 และ **ไม่เอา**
+· TypeORM ถือ decorator metadata ที่ทั้ง DI ของ Nest และ entity อาศัยอยู่ และ migration
+ทุกไฟล์เป็น SQL เขียนมือซึ่งย้าย ORM แล้วก็ยังเป็นแบบเดิม — สิ่งที่ได้จึงไม่คุ้มกับการรื้อ
+`OrgScopedRepository` ทั้งชั้น · อย่าเสนอซ้ำโดยไม่มีข้อมูลใหม่
+
 ### Repo Layout
 
 ```
@@ -649,7 +654,15 @@ FK cascade เป็น**ตาข่ายนิรภัยตอน hard dele
 | `users` (`pending_deletion`)         | anonymize หลัง **30 วัน**    | ให้เวลากู้บัญชีคืน                   |
 | `notify.outbox` (`sent`)             | ลบหลัง **30 วัน**            | ส่งไปแล้วไม่มีประโยชน์              |
 | `identity.sessions` (หมดอายุ/revoked) | ลบหลัง **7 วัน**             | โตเร็วมาก ไม่มีค่าเก็บ              |
-| `password_reset_tokens`              | ลบหลัง **1 วัน**             | อายุแค่ 10 นาที                   |
+| `password_reset_tokens`              | ลบหลัง **1 วัน**             | อายุแค่ 30 นาที เก็บไว้ตอบ ticket    |
+| `organization.invitations` (จบแล้ว)    | ลบหลัง **90 วัน**            | ใครเชิญ/ยกเลิก อยู่ใน `audit.logs`  |
+| `notify.notifications` (อ่านแล้ว)      | ลบหลัง **90 วัน**            | กล่องขาเข้า ไม่ใช่ประวัติ             |
+
+> ⚠️ **สองแถวล่างยังไม่มีโค้ดกวาด** — `resolvePurgeOrder` หาตารางจาก catalog โดยดูว่ามี
+> `deleted_at` ไหม ทั้งสองตารางไม่มี (จบชีวิตด้วย `accepted_at`/`revoked_at` และ `read_at`)
+> จึงหลุดรอบกวาดไปเงียบๆ · ต้องเขียน sweep ของตัวเองตอนฟีเจอร์มาถึง —
+> invitations ที่ **Phase 2** คู่กับ API · notifications ที่ **Phase 3**
+> · ไฟล์แนบก็เหมือนกัน: ลบแถวแล้ว object ใน storage ยังอยู่ ([Phase 3](./04-features/phase-3.md#ไฟล์แนบ))
 
 **`audit.logs` โตเร็วที่สุดในระบบ** — ทำ **partition รายเดือน** ตั้งแต่แรก เพราะทำทีหลังต้องย้ายข้อมูลทั้งตาราง
 

@@ -128,13 +128,13 @@ Nothing enforces this automatically yet — there is no commitlint hook, so the 
 
 Turborepo monorepo. Workspaces are `apps/*/*` and `packages/*` — apps sit one directory deeper than usual (`apps/web/client`, `apps/api/core`) to leave room for siblings under the same domain later.
 
-| Workspace                          | What it is                                                                                                                                               |
-| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/web/client` (`@web/client`)  | Next.js 16 App Router + React 19 + Tailwind 4. `/design-system` is a live showcase of every `@repo/ui` component — check it when adding or changing one. |
-| `apps/api/core` (`@api/core`)      | NestJS 11. `src/main.ts` bootstraps `nestjs-pino` and Swagger at `/docs`; listens on `PORT` (default 3001).                                              |
-| `packages/ui` (`@repo/ui`)         | `@base-ui/react` + cva + Tailwind. One directory per component, exported individually.                                                                   |
-| `packages/shared` (`@repo/shared`) | Framework-free zod schemas, types, constants. Real `tsc` build, because Nest cannot consume raw `.ts` from a workspace the way Next transpiles it.       |
-| `packages/config` (`@repo/config`) | The only home for eslint / typescript / prettier / tailwind config.                                                                                      |
+| Workspace                          | What it is                                                                                                                                                                                                                                                                     |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `apps/web/client` (`@web/client`)  | Next.js 16 App Router + React 19 + Tailwind 4. `/design-system` is a live showcase of every `@repo/ui` component — check it when adding or changing one. **Atomic design applies here and nowhere else** — `packages/ui` is not organised that way and is not being converted. |
+| `apps/api/core` (`@api/core`)      | NestJS 11. `src/main.ts` bootstraps `nestjs-pino` and Swagger at `/docs`; listens on `PORT` (default 3001).                                                                                                                                                                    |
+| `packages/ui` (`@repo/ui`)         | `@base-ui/react` + cva + Tailwind. One directory per component, exported individually.                                                                                                                                                                                         |
+| `packages/shared` (`@repo/shared`) | Framework-free zod schemas, types, constants. Real `tsc` build, because Nest cannot consume raw `.ts` from a workspace the way Next transpiles it.                                                                                                                             |
+| `packages/config` (`@repo/config`) | The only home for eslint / typescript / prettier / tailwind config.                                                                                                                                                                                                            |
 
 ### Rules that bind code written elsewhere
 

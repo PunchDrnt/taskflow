@@ -198,7 +198,7 @@ export class RetentionService {
     )
   }
 
-  /** Valid for ten minutes, kept a day so a "my link failed" ticket has data. */
+  /** Valid for thirty minutes, kept a day so a "my link failed" ticket has data. */
   async purgePasswordResetTokens(): Promise<number> {
     return this.deleteInBatches(
       `DELETE FROM identity.password_reset_tokens
