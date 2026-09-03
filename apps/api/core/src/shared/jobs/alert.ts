@@ -6,7 +6,7 @@ import * as Sentry from '@sentry/nestjs'
  * A union rather than a free string: the tag is what a Sentry alert rule
  * filters on, so a typo is an alert that exists and nobody receives.
  */
-export type AlertArea = 'maintenance' | 'notify'
+export type AlertArea = 'auth' | 'maintenance' | 'notify'
 
 export interface Alerts {
   /** Something threw. */

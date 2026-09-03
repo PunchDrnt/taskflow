@@ -6,6 +6,7 @@ import type { Env } from '../../../config/env'
 import {
   ACCESS_TOKEN_TTL_SECONDS,
   REFRESH_TOKEN_TTL_SECONDS,
+  type Tokens,
 } from './token.service'
 
 export const ACCESS_TOKEN_COOKIE = 'access_token'
@@ -116,9 +117,4 @@ export class AuthCookies {
 
     response.clearCookie(name, options)
   }
-}
-
-export interface Tokens {
-  accessToken: string
-  refreshToken: string
 }

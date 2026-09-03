@@ -1,0 +1,64 @@
+import { Injectable } from '@nestjs/common'
+
+import { InjectOrgRepository } from '#shared/org-scope/org-repository.provider'
+import { OrgScopedRepository } from '#shared/org-scope/org-scoped.repository'
+
+import { User } from './user.entity'
+
+/** Anything else is deactivated, pending deletion, or gone. */
+export const ACTIVE_USER_STATUS = 'active'
+
+/**
+ * The one way into `identity.users`. Every other module asks here rather than
+ * importing the entity, which is what keeps identity's shape changeable.
+ *
+ * Every read goes through `queryBuilder.base`, and that is the correct call
+ * rather than a deliberate crossing: `identity.users` has no `org_id`, so
+ * `withOrg` does not exist on it at all. It is also the only one that could
+ * work here — login happens before a request context exists, and `withOrg`
+ * would throw looking for an org nobody has chosen yet.
+ */
+@Injectable()
+export class UserService {
+  constructor(
+    @InjectOrgRepository(User)
+    private readonly users: OrgScopedRepository<User>,
+  ) {}
+
+  /** `email` is citext, so the case of what was typed does not matter. */
+  findByEmail(email: string): Promise<User | null> {
+    return this.users.queryBuilder
+      .base('user')
+      .where('user.email = :email', { email })
+      .andWhere('user.deletedAt IS NULL')
+      .getOne()
+  }
+
+  findById(id: string): Promise<User | null> {
+    return this.users.queryBuilder
+      .base('user')
+      .where('user.id = :id', { id })
+      .andWhere('user.deletedAt IS NULL')
+      .getOne()
+  }
+
+  /**
+   * The lockout counters, written without touching `updated_at`/`updated_by`.
+   *
+   * They are machine state rather than anything a person edited — the same
+   * reasoning as `sessions.last_used_at`. Moving the audit columns on a failed
+   * login would also attribute the row's last change to whoever was guessing
+   * the password, which is the opposite of what those columns mean.
+   */
+  async setLockoutState(
+    id: string,
+    state: { failedLoginAttempts: number; lockedUntil: Date | null },
+  ): Promise<void> {
+    await this.users.queryBuilder
+      .base('user')
+      .update(User)
+      .set(state)
+      .where('id = :id', { id })
+      .execute()
+  }
+}

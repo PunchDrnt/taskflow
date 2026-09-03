@@ -16,6 +16,11 @@ export const REFRESH_TOKEN_TTL_SECONDS = 15 * 24 * 60 * 60
  * wait fifteen minutes to take effect. The guard reads the session on every
  * request anyway, so resolving them there costs nothing.
  */
+export interface Tokens {
+  accessToken: string
+  refreshToken: string
+}
+
 export interface AccessTokenPayload {
   /** The user id. */
   sub: string

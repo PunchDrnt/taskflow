@@ -23,7 +23,9 @@ import { HealthModule } from './health/health.module'
 import { MaintenanceModule } from './maintenance/maintenance.module'
 import { AuditModule } from './modules/audit/audit.module'
 import { AuthModule } from './modules/identity/auth/auth.module'
+import { UserModule } from './modules/identity/user/user.module'
 import { NotifyModule } from './modules/notify/notify.module'
+import { OrganizationModule } from './modules/organization/organization.module'
 import { StorageModule } from './modules/storage/storage.module'
 import { PermissionModule } from './permission/permission.module'
 
@@ -68,6 +70,8 @@ const rootEnvFile = join(__dirname, '..', '..', '..', '..', '.env')
     StorageModule,
     AuditModule,
     AuthModule,
+    UserModule,
+    OrganizationModule,
     NotifyModule,
     HealthModule,
     MaintenanceModule,
