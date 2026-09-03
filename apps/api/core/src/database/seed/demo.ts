@@ -98,7 +98,7 @@ const STATUSES = [
   [
     '66666666-6666-6666-6666-666666666665',
     'Cancelled',
-    'red',
+    'pink',
     'a4',
     false,
     false,
