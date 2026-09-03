@@ -59,10 +59,22 @@ describe.skipIf(!hasTestDatabase)('cross-org isolation', () => {
     )
 
     await asOrg(orgA, () =>
-      projects.save(projects.create({ name: "A's project" })),
+      projects.save(
+        projects.create({
+          name: "A's project",
+          color: 'gray',
+          keyPrefix: 'PRJ',
+        }),
+      ),
     )
     await asOrg(orgB, () =>
-      projects.save(projects.create({ name: "B's project" })),
+      projects.save(
+        projects.create({
+          name: "B's project",
+          color: 'gray',
+          keyPrefix: 'PRJ',
+        }),
+      ),
     )
   }, 60_000)
 
@@ -125,7 +137,12 @@ describe.skipIf(!hasTestDatabase)('cross-org isolation', () => {
 
   it('create stamps the current org, ignoring any org passed in', async () => {
     const project = asOrg(orgA, () =>
-      projects.create({ name: 'attempted', orgId: orgB.id }),
+      projects.create({
+        name: 'attempted',
+        color: 'gray',
+        keyPrefix: 'PRJ',
+        orgId: orgB.id,
+      }),
     )
 
     expect(project.orgId).toBe(orgA.id)
@@ -162,7 +179,13 @@ describe.skipIf(!hasTestDatabase)('cross-org isolation', () => {
   it('save still updates a row this org does own', async () => {
     // Its own row rather than the fixture: later tests read those by name.
     const own = await asOrg(orgA, () =>
-      projects.save(projects.create({ name: 'A owns this' })),
+      projects.save(
+        projects.create({
+          name: 'A owns this',
+          color: 'gray',
+          keyPrefix: 'PRJ',
+        }),
+      ),
     )
 
     await asOrg(orgA, () => projects.save({ ...own, name: 'renamed by A' }))
@@ -186,7 +209,13 @@ describe.skipIf(!hasTestDatabase)('cross-org isolation', () => {
 
   it('updateById skips a soft-deleted row rather than reviving its clock', async () => {
     const own = await asOrg(orgA, () =>
-      projects.save(projects.create({ name: 'to be deleted' })),
+      projects.save(
+        projects.create({
+          name: 'to be deleted',
+          color: 'gray',
+          keyPrefix: 'PRJ',
+        }),
+      ),
     )
     await asOrg(orgA, () => projects.softDeleteById(own.id))
 
@@ -246,7 +275,9 @@ describe.skipIf(!hasTestDatabase)('cross-org isolation', () => {
 
   it('soft delete writes deletedBy, not just deletedAt', async () => {
     const project = await asOrg(orgA, () =>
-      projects.save(projects.create({ name: 'to delete' })),
+      projects.save(
+        projects.create({ name: 'to delete', color: 'gray', keyPrefix: 'PRJ' }),
+      ),
     )
     await asOrg(orgA, () => projects.softDeleteById(project.id))
 
@@ -263,7 +294,13 @@ describe.skipIf(!hasTestDatabase)('cross-org isolation', () => {
 
   it('hides a soft-deleted row from subsequent reads', async () => {
     const project = await asOrg(orgA, () =>
-      projects.save(projects.create({ name: 'disappearing' })),
+      projects.save(
+        projects.create({
+          name: 'disappearing',
+          color: 'gray',
+          keyPrefix: 'PRJ',
+        }),
+      ),
     )
 
     expect(
@@ -282,7 +319,13 @@ describe.skipIf(!hasTestDatabase)('cross-org isolation', () => {
 
   it('fills createdBy from the context when the caller omits it', async () => {
     const project = await asOrg(orgA, () =>
-      projects.save(projects.create({ name: 'unattributed' })),
+      projects.save(
+        projects.create({
+          name: 'unattributed',
+          color: 'gray',
+          keyPrefix: 'PRJ',
+        }),
+      ),
     )
 
     expect(project.createdBy).toBe(SYSTEM_USER_ID)

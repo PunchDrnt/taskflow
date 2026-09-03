@@ -24,6 +24,7 @@ const SCHEMAS = [
   'field',
   'view',
   'chat',
+  'automation',
   'notify',
   'billing',
 ]

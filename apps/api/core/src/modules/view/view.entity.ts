@@ -24,9 +24,18 @@ export class View extends BaseEntity {
   @Column('jsonb', { default: {} })
   filterJson!: Record<string, unknown>
 
-  @Column('jsonb', { default: {} })
-  sortJson!: Record<string, unknown>
+  /** An array: sorting is ordered, so an object's key order will not do. */
+  @Column('jsonb', { default: [] })
+  sortJson!: Record<string, unknown>[]
 
   @Column('text', { nullable: true })
   groupBy!: string | null
+
+  /** The order of the view tabs. */
+  @Column({ type: 'text', collation: 'C' })
+  sortOrder!: string
+
+  /** The view a project opens on — one per project, among the shared ones. */
+  @Column('boolean', { default: false })
+  isDefault!: boolean
 }

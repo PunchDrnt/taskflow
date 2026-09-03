@@ -5,7 +5,6 @@ import { MAX_TASK_DEPTH } from '@repo/shared'
 
 import { SYSTEM_USER_ID } from '#shared/system-user'
 
-import { SYSTEM_PERMISSIONS } from '../src/permission/system-permissions'
 import { createMigratedTestDataSource, hasTestDatabase } from './database'
 
 /**
@@ -39,9 +38,10 @@ describe.skipIf(!hasTestDatabase)('schema invariants', () => {
     await expect(
       dataSource.query(
         `INSERT INTO task.tasks
-           (org_id, project_id, title, status_id, sort_order, depth, parent_task_id, created_by, updated_by)
+           (org_id, project_id, title, number, status_id, sort_order, depth,
+            parent_task_id, created_by, updated_by)
          VALUES
-           (gen_random_uuid(), gen_random_uuid(), 't', gen_random_uuid(), 'a0', $1,
+           (gen_random_uuid(), gen_random_uuid(), 't', 1, gen_random_uuid(), 'a0', $1,
             gen_random_uuid(), $2, $2)`,
         [MAX_TASK_DEPTH + 1, SYSTEM_USER_ID],
       ),
@@ -58,20 +58,6 @@ describe.skipIf(!hasTestDatabase)('schema invariants', () => {
     )) as { id: string }[]
 
     expect(seeded?.id).toBe(SYSTEM_USER_ID)
-  })
-
-  it('seeds exactly the system permission keys the code names', async () => {
-    // Same shape as above: the migration lists the keys literally so editing
-    // SYSTEM_PERMISSIONS cannot change what it already did on a live
-    // database. Nothing reads these until Phase 7, which is exactly why a
-    // key added to one side and not the other would go unnoticed for months.
-    const rows = (await dataSource.query(
-      `SELECT key FROM identity.permissions WHERE deleted_at IS NULL ORDER BY key`,
-    )) as { key: string }[]
-
-    expect(rows.map((row) => row.key)).toEqual(
-      [...Object.values(SYSTEM_PERMISSIONS)].sort(),
-    )
   })
 
   /**

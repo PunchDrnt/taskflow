@@ -108,7 +108,9 @@ describe.skipIf(!hasTestDatabase)('cascade soft delete', () => {
       )
 
       await asOrg(orgId, async () => {
-        const project = await projects.save(projects.create({ name: 'gone' }))
+        const project = await projects.save(
+          projects.create({ name: 'gone', color: 'gray', keyPrefix: 'PRJ' }),
+        )
         expect(await projects.softDeleteById(project.id)).toBe(1)
 
         // Worth asserting rather than assuming: the usual warning is that the
@@ -173,8 +175,9 @@ describe.skipIf(!hasTestDatabase)('cascade soft delete', () => {
       orgB = await newOrg('cascade-b')
 
       const [project] = (await dataSource.query(
-        `INSERT INTO project.projects (org_id, name, created_by, updated_by)
-         VALUES ($1, 'p', $2, $2) RETURNING id`,
+        `INSERT INTO project.projects
+           (org_id, name, color, key_prefix, created_by, updated_by)
+         VALUES ($1, 'p', 'gray', 'PRJ', $2, $2) RETURNING id`,
         [orgA, SYSTEM_USER_ID],
       )) as { id: string }[]
       projectId = project.id
@@ -195,17 +198,18 @@ describe.skipIf(!hasTestDatabase)('cascade soft delete', () => {
 
       const [task] = (await dataSource.query(
         `INSERT INTO task.tasks
-           (org_id, project_id, title, status_id, sort_order, created_by, updated_by)
-         VALUES ($1, $2, 'parent', $3, 'a0', $4, $4) RETURNING id`,
+           (org_id, project_id, title, number, status_id, sort_order,
+            created_by, updated_by)
+         VALUES ($1, $2, 'parent', 1, $3, 'a0', $4, $4) RETURNING id`,
         [orgA, projectId, status.id, SYSTEM_USER_ID],
       )) as { id: string }[]
       taskId = task.id
 
       await dataSource.query(
         `INSERT INTO task.tasks
-           (org_id, project_id, title, status_id, sort_order, depth,
+           (org_id, project_id, title, number, status_id, sort_order, depth,
             parent_task_id, created_by, updated_by)
-         VALUES ($1, $2, 'sub', $3, 'a1', 1, $4, $5, $5)`,
+         VALUES ($1, $2, 'sub', 2, $3, 'a1', 1, $4, $5, $5)`,
         [orgA, projectId, status.id, taskId, SYSTEM_USER_ID],
       )
 
@@ -218,8 +222,9 @@ describe.skipIf(!hasTestDatabase)('cascade soft delete', () => {
 
       const [view] = (await dataSource.query(
         `INSERT INTO view.views
-           (org_id, project_id, name, type, owner_id, created_by, updated_by)
-         VALUES ($1, $2, 'board', 'board', $3, $3, $3) RETURNING id`,
+           (org_id, project_id, name, type, owner_id, sort_order,
+            created_by, updated_by)
+         VALUES ($1, $2, 'board', 'board', $3, 'a0', $3, $3) RETURNING id`,
         [orgA, projectId, SYSTEM_USER_ID],
       )) as { id: string }[]
 

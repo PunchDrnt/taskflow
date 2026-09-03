@@ -7,7 +7,7 @@ import {
 } from 'typeorm'
 
 /**
- * The columns every table carries, in the six shapes the schema uses.
+ * The columns every table carries, in the seven shapes the schema uses.
  * `org_id`, soft delete, and whether a row is ever edited after it is created
  * are three independent axes. The three questions that pick one for a new
  * table — rather than a list of which existing table took which — are in
@@ -27,6 +27,7 @@ import {
  * | `CreatedEntity`           | no     | no          | no        | identity.role_permissions,          |
  * |                          |        |             |           | identity.user_roles                 |
  * | `OrgScopedCreatedEntity`  | yes    | no          | no        | task.assignees                      |
+ * | `OrgScopedCreatedSoftDeletableEntity` | yes | yes | no | discussion.attachments             |
  *
  * Dates say `timestamptz` explicitly: TypeORM's default is `timestamp`, which
  * would silently reinterpret every value.
@@ -106,4 +107,24 @@ export abstract class BaseEntity extends SoftDeletableEntity {
 export abstract class OrgScopedCreatedEntity extends CreatedEntity {
   @Column('uuid')
   orgId!: string
+}
+
+/**
+ * `OrgScopedCreatedEntity` that can be restored. The combination looks odd
+ * until you meet the case it exists for: a file attachment is uploaded and
+ * later removed, never edited, so `updatedAt`/`updatedBy` would sit forever
+ * equal to the created pair — but deleting one has to be undoable, because it
+ * rides along when the task it hangs off is soft-deleted, and restoring the
+ * task has to bring its files back.
+ *
+ * The two axes really are independent; this is the seventh combination the
+ * three questions in docs/02-database/rules.md#base-entity allow, and the
+ * first table to need it.
+ */
+export abstract class OrgScopedCreatedSoftDeletableEntity extends OrgScopedCreatedEntity {
+  @DeleteDateColumn({ type: 'timestamptz' })
+  deletedAt!: Date | null
+
+  @Column('uuid', { nullable: true })
+  deletedBy!: string | null
 }

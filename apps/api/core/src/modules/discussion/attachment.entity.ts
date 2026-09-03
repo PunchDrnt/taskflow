@@ -1,6 +1,6 @@
 import { Column, Entity } from 'typeorm'
 
-import { BaseEntity } from '#shared/entity/base.entity'
+import { OrgScopedCreatedSoftDeletableEntity } from '#shared/entity/base.entity'
 
 /**
  * A file in object storage. Deleting this row must be followed by deleting
@@ -9,7 +9,7 @@ import { BaseEntity } from '#shared/entity/base.entity'
  * are backed up separately.
  */
 @Entity({ schema: 'discussion', name: 'attachments' })
-export class Attachment extends BaseEntity {
+export class Attachment extends OrgScopedCreatedSoftDeletableEntity {
   @Column('text')
   entityType!: string
 

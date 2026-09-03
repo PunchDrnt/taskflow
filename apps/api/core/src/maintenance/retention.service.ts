@@ -64,7 +64,7 @@ export class RetentionService {
         await step('anonymisedUsers', () =>
           this.anonymisePendingDeletionUsers(),
         )
-        await step('sentNotifications', () => this.purgeSentNotifications())
+        await step('sentOutbox', () => this.purgeSentOutbox())
         await step('finishedSessions', () => this.purgeFinishedSessions())
         await step('passwordResetTokens', () => this.purgePasswordResetTokens())
 
@@ -166,8 +166,12 @@ export class RetentionService {
     return anonymised
   }
 
-  /** Notifications delivered a month ago say nothing worth keeping. */
-  async purgeSentNotifications(): Promise<number> {
+  /**
+   * Outbox rows whose message went out a month ago. Named for the table, not
+   * for "notifications": `notify.notifications` is the in-app inbox and is a
+   * different sweep, which Phase 3 owes.
+   */
+  async purgeSentOutbox(): Promise<number> {
     return this.deleteInBatches(
       `DELETE FROM notify.outbox
         WHERE ctid IN (
@@ -176,7 +180,7 @@ export class RetentionService {
              AND sent_at < now() - make_interval(days => $1)
            LIMIT ${PURGE_BATCH_SIZE}
         )`,
-      [RETENTION_DAYS.sentNotification],
+      [RETENTION_DAYS.sentOutbox],
     )
   }
 

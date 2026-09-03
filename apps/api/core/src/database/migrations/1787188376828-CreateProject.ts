@@ -21,13 +21,30 @@ export class CreateProject1787188376828 implements MigrationInterface {
 
         name                  text        NOT NULL,
         description           text,
-        icon                  text,
+        -- A palette token, not a hex value — the same rule statuses follow.
+        color                 text        NOT NULL,
+        -- Shown as DEV-120 with tasks.number. Duplicates within one org are
+        -- allowed on purpose: people type it themselves, and the list already
+        -- shows the project name beside the number.
+        key_prefix            text        NOT NULL,
+        -- Hidden from the sidebar and from pickers. Not deleted_at: the data
+        -- stays readable and members keep their access, so it takes no
+        -- deleted_by and no CHECK pairing it with one.
+        archived_at           timestamptz,
+        -- Phase 3. NULL turns the stale-task warning off for this project.
+        stale_after_days      integer,
         -- Who may mark a task done: anyone in the project, or only the
         -- assignee and project admins.
         completion_policy     text        NOT NULL DEFAULT 'anyone',
         auto_complete_parent  boolean     NOT NULL DEFAULT false,
         sprint_enabled        boolean     NOT NULL DEFAULT false,
         estimate_unit         text        NOT NULL DEFAULT 'none',
+
+        -- The next number to hand out, bumped in the same transaction that
+        -- creates the task. Not MAX(number) + 1, which reissues a number the
+        -- moment the highest task is deleted — and a reissued number makes a
+        -- key someone pasted into chat point at different work.
+        next_task_number      integer     NOT NULL DEFAULT 1,
 
         created_at            timestamptz NOT NULL DEFAULT now(),
         created_by            uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
@@ -37,7 +54,11 @@ export class CreateProject1787188376828 implements MigrationInterface {
         deleted_by            uuid        REFERENCES identity.users(id) ON DELETE RESTRICT,
 
         CONSTRAINT projects_deleted_pair_check
-          CHECK ((deleted_at IS NULL) = (deleted_by IS NULL))
+          CHECK ((deleted_at IS NULL) = (deleted_by IS NULL)),
+        -- A format check, not a value list: nothing else depends on which
+        -- prefixes exist, only on the shape the key renders in.
+        CONSTRAINT projects_key_prefix_check
+          CHECK (key_prefix ~ '^[A-Z][A-Z0-9]{1,5}$')
       )
     `)
     // id alone is already unique; this exists so children can point at the

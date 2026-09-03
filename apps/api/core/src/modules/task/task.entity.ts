@@ -21,7 +21,11 @@ export class Task extends BaseEntity {
   @Column('uuid')
   statusId!: string
 
-  /** 'low' | 'medium' | 'high' | null */
+  /** Per project, from `Project.nextTaskNumber`. A sub-task gets its own. */
+  @Column('integer')
+  number!: number
+
+  /** `TASK_PRIORITIES` in @repo/shared, or null. */
   @Column('text', { nullable: true })
   priority!: string | null
 

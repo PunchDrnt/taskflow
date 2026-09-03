@@ -23,3 +23,11 @@ export const STATUS_COLORS = [
 ] as const
 
 export type StatusColor = (typeof STATUS_COLORS)[number]
+
+/**
+ * Task priority, or null for none. No CHECK backs this in the database —
+ * nothing indexes or constrains the value — so this list is the whole rule.
+ */
+export const TASK_PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const
+
+export type TaskPriority = (typeof TASK_PRIORITIES)[number]

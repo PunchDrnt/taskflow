@@ -72,6 +72,8 @@ describe.skipIf(!hasTestDatabase)('activity log', () => {
               manager.create(Project, {
                 orgId,
                 name: 'doomed',
+                color: 'gray',
+                keyPrefix: 'PRJ',
                 createdBy: SYSTEM_USER_ID,
                 updatedBy: SYSTEM_USER_ID,
               }),

@@ -15,7 +15,9 @@ import { SystemRolePermission } from '../modules/identity/system/system-role-per
 import { SystemRole } from '../modules/identity/system/system-role.entity'
 import { SystemUserRole } from '../modules/identity/system/system-user-role.entity'
 import { User } from '../modules/identity/user/user.entity'
+import { Notification } from '../modules/notify/notification.entity'
 import { Outbox } from '../modules/notify/outbox.entity'
+import { Invitation } from '../modules/organization/invitation.entity'
 import { OrganizationMember } from '../modules/organization/member.entity'
 import { Organization } from '../modules/organization/organization.entity'
 import { TeamMember } from '../modules/organization/team-member.entity'
@@ -55,6 +57,7 @@ export const entities: EntityList = [
   // organization
   Organization,
   OrganizationMember,
+  Invitation,
   Team,
   TeamMember,
   // project
@@ -76,6 +79,7 @@ export const entities: EntityList = [
   ViewColumn,
   // notify
   Outbox,
+  Notification,
   // billing — reserved until Phase 7
   Plan,
   Subscription,

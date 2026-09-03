@@ -8,7 +8,7 @@ import type { DataSource } from 'typeorm'
 export const RETENTION_DAYS = {
   softDeleted: 90,
   pendingDeletionUser: 30,
-  sentNotification: 30,
+  sentOutbox: 30,
   finishedSession: 7,
   passwordResetToken: 1,
 } as const

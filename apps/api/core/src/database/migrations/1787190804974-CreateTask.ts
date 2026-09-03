@@ -23,6 +23,11 @@ export class CreateTask1787190804974 implements MigrationInterface {
         title           text        NOT NULL,
         description     text,
         status_id       uuid        NOT NULL,
+        -- Handed out by project.projects.next_task_number. A sub-task gets its
+        -- own number rather than 120.1.
+        number          integer     NOT NULL,
+        -- 'low' | 'medium' | 'high' | 'urgent'. No CHECK: no index or
+        -- constraint reads these, so zod owns the list (@repo/shared).
         priority        text,
         -- UTC, rendered in the reader's timezone by the frontend.
         due_date        timestamptz,
@@ -97,6 +102,15 @@ export class CreateTask1787190804974 implements MigrationInterface {
         ADD CONSTRAINT tasks_parent_fkey
         FOREIGN KEY (parent_task_id, org_id)
         REFERENCES task.tasks (id, org_id) ON DELETE CASCADE
+    `)
+
+    // A full index, not partial on deleted_at — the one deliberate exception
+    // to that rule, and it points the other way: partial exists so a name can
+    // be reused after a delete, while a task number must never be reissued.
+    // Together with next_task_number, a number dies with its task.
+    await queryRunner.query(`
+      CREATE UNIQUE INDEX tasks_project_number_unique
+        ON task.tasks (project_id, number)
     `)
 
     // The board and list views: tasks of a project grouped by status.

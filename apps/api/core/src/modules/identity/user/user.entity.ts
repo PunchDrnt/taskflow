@@ -45,4 +45,12 @@ export class User extends SoftDeletableEntity {
 
   @Column('integer', { default: 0 })
   freeOrgCount!: number
+
+  /** Reset by a successful login. Zero is "no failures since the last one". */
+  @Column('integer', { default: 0 })
+  failedLoginAttempts!: number
+
+  /** Set while the account is locked out; attempts during it do not extend it. */
+  @Column({ type: 'timestamptz', nullable: true })
+  lockedUntil!: Date | null
 }
