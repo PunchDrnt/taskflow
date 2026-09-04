@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+import { idSchema } from './id.js'
+
 /** docs/01-architecture.md#password--rate-limit */
 export const PASSWORD_MIN_LENGTH = 8
 
@@ -46,7 +48,7 @@ export type LoginInput = z.infer<typeof loginSchema>
 
 /** `POST /v1/me/active-org` — which org the caller is acting for. */
 export const setActiveOrgSchema = z.object({
-  orgId: z.uuid('org ไม่ถูกต้อง'),
+  orgId: idSchema('org ไม่ถูกต้อง'),
 })
 
 export type SetActiveOrgInput = z.infer<typeof setActiveOrgSchema>
