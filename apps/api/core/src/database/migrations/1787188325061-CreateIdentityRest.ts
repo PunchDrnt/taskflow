@@ -76,6 +76,48 @@ export class CreateIdentityRest1787188325061 implements MigrationInterface {
         ON identity.password_reset_tokens (token_hash) WHERE used_at IS NULL
     `)
 
+    // Migrated in Phase 1, read by nobody until Google login is switched on —
+    // the same pattern as the four RBAC tables below, which have been here
+    // since Phase 0. See docs/02-database/schema.md#schema-identity.
+    await queryRunner.query(`
+      CREATE TABLE identity.oauth_accounts (
+        id                uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+
+        -- CASCADE, and it will never fire. identity.users is NEVER_PURGED and
+        -- anonymising is an UPDATE, so the rows outlive the person unless the
+        -- anonymise path deletes them itself. Kept as a net for a real org
+        -- teardown; must not be relied on. See the warning in schema.md.
+        user_id           uuid        NOT NULL REFERENCES identity.users(id) ON DELETE CASCADE,
+        provider          text        NOT NULL,
+        -- The provider's own subject id, not the email: an email can change
+        -- hands, and matching on it would hand the account over with it.
+        provider_user_id  text        NOT NULL,
+        -- What the provider said the address was when this was linked. For
+        -- tracing back, never for matching.
+        provider_email    text,
+
+        created_at        timestamptz NOT NULL DEFAULT now(),
+        created_by        uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
+
+        CONSTRAINT oauth_accounts_provider_check
+          CHECK (provider IN ('google'))
+      )
+    `)
+
+    // Plain UNIQUE rather than partial, because this table is hard-deleted:
+    // unlink and the row is gone, so there is no `deleted_at IS NULL` for a
+    // login query to forget — and forgetting it would let somebody who
+    // unlinked sign back in. Same reasoning as CreatedEntity in rules.md.
+    await queryRunner.query(`
+      CREATE UNIQUE INDEX oauth_accounts_provider_user_unique
+        ON identity.oauth_accounts (provider, provider_user_id)
+    `)
+    // One linked account per provider per person. Relaxing it later is a drop.
+    await queryRunner.query(`
+      CREATE UNIQUE INDEX oauth_accounts_user_provider_unique
+        ON identity.oauth_accounts (user_id, provider)
+    `)
+
     // No system_ prefix: the schema supplies that context, and the org-level
     // role is a column on organization.members, not a table.
     await queryRunner.query(`
@@ -176,6 +218,7 @@ export class CreateIdentityRest1787188325061 implements MigrationInterface {
     await queryRunner.query(
       `DROP TABLE IF EXISTS identity.password_reset_tokens`,
     )
+    await queryRunner.query(`DROP TABLE IF EXISTS identity.oauth_accounts`)
     await queryRunner.query(`DROP TABLE IF EXISTS identity.sessions`)
   }
 }

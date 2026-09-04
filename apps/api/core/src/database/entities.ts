@@ -8,6 +8,7 @@ import { Subscription } from '../modules/billing/subscription.entity'
 import { Attachment } from '../modules/discussion/attachment.entity'
 import { Comment } from '../modules/discussion/comment.entity'
 import { FieldDefinition } from '../modules/field/field-definition.entity'
+import { OauthAccount } from '../modules/identity/auth/oauth-account.entity'
 import { PasswordResetToken } from '../modules/identity/auth/password-reset-token.entity'
 import { Session } from '../modules/identity/auth/session.entity'
 import { SystemPermission } from '../modules/identity/system/system-permission.entity'
@@ -49,6 +50,7 @@ export const entities: EntityList = [
   // identity — outside org scoping entirely
   User,
   Session,
+  OauthAccount,
   PasswordResetToken,
   SystemRole,
   SystemPermission,
