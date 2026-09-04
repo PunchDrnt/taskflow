@@ -326,9 +326,34 @@ describe.skipIf(!hasTestDatabase)('auth', () => {
       const rotated = await auth.refresh(tokens.refreshToken)
 
       expect(rotated.refreshToken).not.toBe(tokens.refreshToken)
-      expect(rotated.accessToken).not.toBe(tokens.accessToken)
+      // Deliberately not `not.toBe` on the access token: same user, same
+      // session and the same second mint a byte-identical JWT, which is
+      // correct rather than a collision. It used to differ here only because
+      // the rotated one was missing its `sub` — an assertion that passed on
+      // the strength of the bug it should have caught. What has to hold is
+      // that the new one stays valid at least as long.
+      expect(
+        claimsOf(rotated.accessToken).exp as number,
+      ).toBeGreaterThanOrEqual(claimsOf(tokens.accessToken).exp as number)
       // Same session, not a new one: the row is the login.
       expect(decodeSid(rotated.accessToken)).toBe(decodeSid(tokens.accessToken))
+    })
+
+    it('mints a token that names its user, not just its session', async () => {
+      // 🔒 The regression this file missed. `rotate()` asked for `user_id` in
+      // its RETURNING, TypeORM takes property names there and dropped the one
+      // it did not recognise without complaint, and the token came out with
+      // no `sub` — unusable, so every request after a refresh answered 401.
+      // Every assertion above still passed, because they only read `sid`.
+      const userId = await newUser('nina')
+      const { tokens } = await login('nina')
+
+      const rotated = await auth.refresh(tokens.refreshToken)
+
+      expect(claimsOf(rotated.accessToken)).toMatchObject({
+        sub: userId,
+        sid: decodeSid(tokens.accessToken),
+      })
     })
 
     it('answers a token spent moments ago with the pair it produced', async () => {
@@ -576,12 +601,14 @@ describe.skipIf(!hasTestDatabase)('auth', () => {
 })
 
 /** The session id, read back out of the access token the way the guard will. */
-function decodeSid(accessToken: string): string {
-  const claims = JSON.parse(
+function claimsOf(accessToken: string): Record<string, unknown> {
+  return JSON.parse(
     Buffer.from(accessToken.split('.')[1]!, 'base64url').toString(),
-  ) as { sid: string }
+  ) as Record<string, unknown>
+}
 
-  return claims.sid
+function decodeSid(accessToken: string): string {
+  return claimsOf(accessToken).sid as string
 }
 
 async function codeOfSettled(

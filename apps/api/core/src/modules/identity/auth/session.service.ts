@@ -138,13 +138,32 @@ export class SessionService {
       .where('current_token_hash = :presentedHash', { presentedHash })
       .andWhere('revoked_at IS NULL')
       .andWhere('expires_at > :now', { now })
-      .returning(['id', 'user_id'])
+      // ⚠️ Property names going in, column names coming back out, and a name
+      // that is neither is dropped from the SQL without a word. This read
+      // `['id', 'user_id']` and shipped: `user_id` matches no property, so it
+      // never reached the RETURNING clause, `userId` came back undefined, and
+      // every access token minted by a refresh carried no `sub` — unusable,
+      // so every request after the first refresh answered 401. Measured
+      // against TypeORM 0.3 on 2026-09-04; test/auth.spec.ts now signs a
+      // request with the rotated token rather than trusting that one exists.
+      .returning(['id', 'userId'])
       .execute()
 
     const rows = result.raw as { id: string; user_id: string }[]
     if (rows.length === 0) return null
 
-    return { id: rows[0]!.id, userId: rows[0]!.user_id }
+    const rotated = rows[0]!
+    // Belt and braces for the silent drop above: a rotation that cannot name
+    // its user is not a rotation, and failing here beats minting a token that
+    // authenticates nobody.
+    if (typeof rotated.user_id !== 'string') {
+      throw new Error(
+        'Rotation returned no user_id. `returning()` takes entity property ' +
+          'names and silently ignores anything else — check the argument.',
+      )
+    }
+
+    return { id: rotated.id, userId: rotated.user_id }
   }
 
   /**
