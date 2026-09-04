@@ -1,6 +1,10 @@
 import { HttpStatus, Injectable, Logger } from '@nestjs/common'
 
-import { AUTH_ERROR_CODES, type LoginInput } from '@repo/shared'
+import {
+  AUTH_ERROR_CODES,
+  type ChangePasswordInput,
+  type LoginInput,
+} from '@repo/shared'
 
 import { ApiException } from '#shared/http/api-exception'
 import { alertsFor } from '#shared/jobs/alert'
@@ -269,6 +273,71 @@ export class AuthService {
     this.cache.clear()
   }
 
+  // --- passwords ---------------------------------------------------------
+
+  /**
+   * Changes a password for somebody already signed in, and signs every *other*
+   * device out.
+   *
+   * That asymmetry is the point. The reason to change a password is usually
+   * that somebody else might know it, so every session it could have opened
+   * has to go — but ending the caller's own session too would answer a
+   * successful change with a login screen, which reads as a failure and
+   * teaches people not to do it.
+   *
+   * `currentPassword` is verified every time, including here where the caller
+   * already holds a valid session: an unlocked laptop is exactly the case this
+   * check exists for.
+   */
+  async changePassword(
+    userId: string,
+    sessionId: string,
+    input: ChangePasswordInput,
+    now = new Date(),
+  ): Promise<{ signedOutSessions: number }> {
+    const user = await this.users.findById(userId)
+
+    // No password set at all — the system user, or an account that only ever
+    // signed in through a provider. There is nothing to verify against, and
+    // treating an absent hash as a match would be a way in.
+    if (!user?.passwordHash) throw wrongCurrentPassword()
+
+    if (
+      !(await this.passwords.verify(user.passwordHash, input.currentPassword))
+    )
+      throw wrongCurrentPassword()
+
+    await this.users.setPasswordHash(
+      userId,
+      await this.passwords.hash(input.newPassword),
+      userId,
+      now,
+    )
+
+    const signedOutSessions = await this.sessions.revokeAllForUser(
+      userId,
+      'password_changed',
+      sessionId,
+      now,
+    )
+
+    // The revoked sessions are still in this instance's cache for up to
+    // SESSION_CACHE_TTL_MS, and a cache hit skips the row that now says
+    // revoked. Dropping them makes the sign-out immediate on this instance
+    // rather than eventually.
+    this.forgetOtherSessions(userId, sessionId)
+
+    return { signedOutSessions }
+  }
+
+  /** Drops every cached session for one person, keeping `except` if given. */
+  private forgetOtherSessions(userId: string, except?: string): void {
+    for (const [sid, entry] of this.cache) {
+      if (entry.value.userId === userId && sid !== except)
+        this.cache.delete(sid)
+    }
+  }
+
   // --- the per-request check ---------------------------------------------
 
   /**
@@ -353,5 +422,18 @@ function sessionExpired(): ApiException {
     HttpStatus.UNAUTHORIZED,
     AUTH_ERROR_CODES.SESSION_EXPIRED,
     'เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่',
+  )
+}
+
+/**
+ * 400, not 401: the caller is signed in and stays signed in — what failed is
+ * one field of a form, and a 401 would send the client to the login screen it
+ * does not need.
+ */
+function wrongCurrentPassword(): ApiException {
+  return new ApiException(
+    HttpStatus.BAD_REQUEST,
+    AUTH_ERROR_CODES.WRONG_CURRENT_PASSWORD,
+    'รหัสผ่านปัจจุบันไม่ถูกต้อง',
   )
 }

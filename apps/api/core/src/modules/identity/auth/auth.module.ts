@@ -13,6 +13,7 @@ import { AuthController } from './auth.controller'
 import { AuthGuard } from './auth.guard'
 import { AuthService } from './auth.service'
 import { LockoutService } from './lockout.service'
+import { MePasswordController } from './me-password.controller'
 import { PasswordService } from './password.service'
 import { Session } from './session.entity'
 import { SessionService } from './session.service'
@@ -51,7 +52,7 @@ import { ACCESS_TOKEN_TTL_SECONDS, TokenService } from './token.service'
       }),
     }),
   ],
-  controllers: [AuthController],
+  controllers: [AuthController, MePasswordController],
   providers: [
     // Global from here rather than from AppModule: APP_GUARD is picked up
     // wherever it is provided, and this is the module that already has

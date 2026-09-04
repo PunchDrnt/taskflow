@@ -71,6 +71,27 @@ export class UserService {
   }
 
   /**
+   * Replaces the stored hash. The caller has already checked whatever had to
+   * be true first — the current password, or a valid reset token — because
+   * those two paths differ in nothing else and deciding here would mean this
+   * method knowing which one it was serving.
+   */
+  async setPasswordHash(
+    id: string,
+    passwordHash: string,
+    actorId: string,
+    now = new Date(),
+  ): Promise<void> {
+    await this.users.queryBuilder
+      .base('user')
+      .update(User)
+      .set({ passwordHash, updatedAt: now, updatedBy: actorId })
+      .where('id = :id', { id })
+      .andWhere('deleted_at IS NULL')
+      .execute()
+  }
+
+  /**
    * The lockout counters, written without touching `updated_at`/`updated_by`.
    *
    * They are machine state rather than anything a person edited — the same

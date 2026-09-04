@@ -19,6 +19,17 @@ export interface RequestContext {
   orgId: string | null
   /** The user acting. Writes are attributed to them. */
   userId: string
+  /**
+   * The session this request arrived on, or `null` for anything that is not
+   * an HTTP request — a job, a seed, a migration.
+   *
+   * Here rather than passed down because only the guard knows it and only it
+   * can be trusted about it. "Sign out every device except this one" is the
+   * case that needs it: without the current session's id that operation can
+   * only be all-or-nothing, and answering a successful password change with a
+   * login screen reads as a failure.
+   */
+  sessionId: string | null
 }
 
 /** A context that has an org — what everything touching org-scoped data needs. */

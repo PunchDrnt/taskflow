@@ -54,6 +54,27 @@ export const setActiveOrgSchema = z.object({
 export type SetActiveOrgInput = z.infer<typeof setActiveOrgSchema>
 
 /**
+ * `PATCH /v1/me/password`.
+ *
+ * `confirmNewPassword` is checked here as well as in the form. The client is
+ * where the mismatch should be caught, because that is where it can be shown
+ * next to the field — but "the client already checked" is not a property the
+ * API can rely on, and the cost of checking again is one `refine`.
+ */
+export const changePasswordSchema = z
+  .object({
+    currentPassword: presentedPassword,
+    newPassword: passwordSchema,
+    confirmNewPassword: z.string(),
+  })
+  .refine((value) => value.newPassword === value.confirmNewPassword, {
+    path: ['confirmNewPassword'],
+    message: 'รหัสผ่านใหม่ไม่ตรงกัน',
+  })
+
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>
+
+/**
  * The codes the sign-in screens branch on. Here rather than in
  * `API_ERROR_CODES` for the reason given there: that file is for codes no
  * feature owns, and every module collecting its codes into it would make it a
@@ -76,6 +97,12 @@ export const AUTH_ERROR_CODES = {
   NO_ORGANIZATION: 'NO_ORGANIZATION',
   /** Signed in, a member of several, and has not picked → the org picker. */
   ORG_NOT_SELECTED: 'ORG_NOT_SELECTED',
+  /**
+   * `currentPassword` on a change did not match. Separate from
+   * INVALID_CREDENTIALS because the screen is different — the caller is
+   * already signed in, and the field to highlight is not the email.
+   */
+  WRONG_CURRENT_PASSWORD: 'WRONG_CURRENT_PASSWORD',
 } as const
 
 export type AuthErrorCode =

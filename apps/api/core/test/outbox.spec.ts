@@ -52,7 +52,10 @@ describe.skipIf(!hasTestDatabase)('notification outbox', () => {
     } as never)
 
   const asOrg = <R>(fn: () => R): R =>
-    runWithRequestContext({ orgId, userId: SYSTEM_USER_ID }, fn)
+    runWithRequestContext(
+      { orgId, userId: SYSTEM_USER_ID, sessionId: null },
+      fn,
+    )
 
   const queue = (template = 'task_assigned') =>
     asOrg(() =>

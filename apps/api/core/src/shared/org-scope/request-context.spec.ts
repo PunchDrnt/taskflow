@@ -10,7 +10,7 @@ import {
   runWithRequestContext,
 } from './request-context'
 
-const context = { orgId: 'org-1', userId: 'user-1' }
+const context = { orgId: 'org-1', userId: 'user-1', sessionId: null }
 
 /**
  * One HTTP request, as far as AsyncLocalStorage can tell. Node's HTTP server
@@ -34,13 +34,16 @@ describe('request context', () => {
   it('models "signed in, no org" rather than faking one', () => {
     // A person in three companies who has not picked yet, and a system-role
     // account that belongs to none. Both are signed in; neither has an org.
-    runWithRequestContext({ orgId: null, userId: 'user-1' }, () => {
-      expect(requireRequestContext().userId).toBe('user-1')
+    runWithRequestContext(
+      { orgId: null, userId: 'user-1', sessionId: null },
+      () => {
+        expect(requireRequestContext().userId).toBe('user-1')
 
-      // Anything org-scoped goes through requireOrgContext, so this state
-      // cannot reach a query as a null org_id that silently matches nothing.
-      expect(() => requireOrgContext()).toThrow(/No organisation/)
-    })
+        // Anything org-scoped goes through requireOrgContext, so this state
+        // cannot reach a query as a null org_id that silently matches nothing.
+        expect(() => requireOrgContext()).toThrow(/No organisation/)
+      },
+    )
   })
 
   it('narrows orgId to a string when there is one', () => {
@@ -74,10 +77,13 @@ describe('request context', () => {
     const seen: string[] = []
 
     const request = (orgId: string, delay: number) =>
-      runWithRequestContext({ orgId, userId: `user-${orgId}` }, async () => {
-        await new Promise((resolve) => setTimeout(resolve, delay))
-        seen.push(requireOrgContext().orgId)
-      })
+      runWithRequestContext(
+        { orgId, userId: `user-${orgId}`, sessionId: null },
+        async () => {
+          await new Promise((resolve) => setTimeout(resolve, delay))
+          seen.push(requireOrgContext().orgId)
+        },
+      )
 
     // The slower request starts first, so a shared mutable "current org"
     // would report org-b for both.
@@ -88,9 +94,12 @@ describe('request context', () => {
 
   it('nests, so a job acting for another org restores the outer one', () => {
     runWithRequestContext(context, () => {
-      runWithRequestContext({ orgId: 'org-2', userId: 'system' }, () => {
-        expect(requireRequestContext().orgId).toBe('org-2')
-      })
+      runWithRequestContext(
+        { orgId: 'org-2', userId: 'system', sessionId: null },
+        () => {
+          expect(requireRequestContext().orgId).toBe('org-2')
+        },
+      )
 
       expect(requireRequestContext().orgId).toBe('org-1')
     })
@@ -146,7 +155,11 @@ describe('openRequestContext', () => {
       inRequest(async () => {
         const fill = openRequestContext()
         await new Promise((resolve) => setTimeout(resolve, 1))
-        fill({ orgId: `org-${index}`, userId: `user-${index}` })
+        fill({
+          orgId: `org-${index}`,
+          userId: `user-${index}`,
+          sessionId: `session-${index}`,
+        })
 
         // Interleave: the later requests finish first, so a store shared
         // across requests would answer with whoever entered last.
@@ -201,7 +214,7 @@ describe('openRequestContext over HTTP', () => {
     const guard = async (orgId: string): Promise<void> => {
       const fill = openRequestContext()
       await new Promise((resolve) => setTimeout(resolve, 5)) // session lookup
-      fill({ orgId, userId: `user-${orgId}` })
+      fill({ orgId, userId: `user-${orgId}`, sessionId: `session-${orgId}` })
     }
 
     server = createServer(async (request, response) => {
