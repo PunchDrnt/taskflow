@@ -57,18 +57,24 @@ unique เต็ม · `views.sort_order` / `is_default`
 ตารางมีครบแล้ว (`identity.sessions` · `password_reset_tokens` ตั้งแต่ Phase 0 ·
 `failed_login_attempts` / `locked_until` ลงแล้วใน [schema batch](#schema-ลงแล้ว)) · ที่เหลือคือโค้ดล้วน
 
-- [ ] `@nestjs/jwt` + guard เขียนเอง — **ไม่ใช้ `@nestjs/passport`** ([เหตุผล](../docs/01-architecture.md#auth))
-- [ ] 🔒 **`AuthGuard` เป็น `APP_GUARD` และใช้ `enterWith` ไม่ใช่ `run`**
+- [x] `@nestjs/jwt` + guard เขียนเอง — **ไม่ใช้ `@nestjs/passport`** ([เหตุผล](../docs/01-architecture.md#auth))
+- [x] 🔒 **`AuthGuard` เป็น `APP_GUARD` และเปิด context ด้วย `openRequestContext()` ก่อน `await` แรก**
       · `canActivate` คืน boolean แล้วจบ scope — `run` ทำให้ controller เห็น context เป็น `null`
-      · วัดไว้แล้วใน Phase 0 ว่า `enterWith` รอดข้าม `await` และ 20 request ซ้อนกันไม่รั่วข้าม org
-      · **ห้ามเปลี่ยนโครงตรงนี้โดยไม่รันเทสซ้ำ** — ถ้ารั่วคือ cross-org leak ทันที ไม่ใช่บั๊กธรรมดา
-- [ ] Guard อ่าน `@Public()` ผ่าน `Reflector` — decorator มีอยู่แล้วใน `shared/http/route-metadata.ts` **ยังไม่มีใครอ่าน**
-- [ ] `@SkipOrgScope()` — endpoint ที่ล็อกอินแล้วแต่ยังไม่ผูก org · **Phase 1 มีผู้ใช้จริงสองกลุ่ม**:
+      · ⚠️ **แก้แล้วหลังยิง server จริง (2026-09-04)** — เวอร์ชันแรกเรียก `enterWith` _หลัง_ await (ต้อง query session ก่อนถึงจะรู้ org)
+      แล้ว `POST /v1/me/active-org` คืน 500 `No request context` · store ที่เข้าหลัง `await` ลงบน promise resource ที่ handler ไม่สืบมา
+      · **อาการไม่คงที่** — request แรกของ connection ถูก, request ที่ 3 ไม่ถูก · ยิงมือทีละครั้งจะดูเหมือนผ่าน
+      · เทสต์เดิมไม่จับเพราะเรียก `enterWith` ตรงๆ ใน request handler ไม่ได้แยกเป็น `guard()` ที่ถูก `await` แบบ Nest — ระยะ async หนึ่งชั้นนั้นคือทั้งหมดของบั๊ก
+      · ท่าที่ถูก: จอง slot (`enterWith` cell เปล่า) ในส่วนหัวที่ยังไม่เจอ `await` แล้วเติมค่าทีหลัง
+      — วัดแล้วถูกทั้ง 40 request ขนานและ 10 request ต่อเนื่องบน keep-alive เส้นเดียว
+      · ⚠️ harness ในโปรเซสเดียวไม่ใช่ตัวแทนที่ถูก (`AsyncResource` ซ้อนกันสืบ store ตัวนอกมา) — `auth.guard.spec.ts` จึง assert ที่ call ไม่ใช่ที่ store
+      · **ห้ามเปลี่ยนโครงตรงนี้โดยไม่ยิง server จริงซ้ำ** — unit test ผ่านหมดตอนที่ guard พังอยู่ · ถ้ารั่วคือ cross-org leak ไม่ใช่บั๊กธรรมดา
+- [x] Guard อ่าน `@Public()` ผ่าน `Reflector` — decorator มีอยู่แล้วใน `shared/http/route-metadata.ts` **ยังไม่มีใครอ่าน**
+- [x] `@SkipOrgScope()` — endpoint ที่ล็อกอินแล้วแต่ยังไม่ผูก org · **Phase 1 มีผู้ใช้จริงสองกลุ่ม**:
       หน้า Home ที่รวมงานข้าม org และคนที่ยังไม่ได้อยู่ org ไหนเลย
-- [ ] เลิกใช้ `RequestContextMiddleware` เมื่อ guard มาแล้ว — อย่าปล่อยให้ทั้งสองตัวเซ็ต context พร้อมกัน
-- [ ] Login / Logout / Refresh rotation — refresh 1 อันใช้ได้ครั้งเดียว หมุนแล้ว**ไม่สร้างแถวใหม่** แค่เปลี่ยน token hash
+- [x] เลิกใช้ `RequestContextMiddleware` เมื่อ guard มาแล้ว — อย่าปล่อยให้ทั้งสองตัวเซ็ต context พร้อมกัน
+- [x] Login / Logout / Refresh rotation — refresh 1 อันใช้ได้ครั้งเดียว หมุนแล้ว**ไม่สร้างแถวใหม่** แค่เปลี่ยน token hash
       · เก็บ chain ทุก generation ไม่คุ้ม — `previous_token_hash` + `rotated_at` ครอบ reuse detection กับ grace window ไว้แล้ว ที่ chain ซื้อเพิ่มคือจับ replay ของ token เก่ามากๆ ซึ่งไม่ได้เกิดบ่อยขึ้นตามจำนวนคน แต่จำนวนแถวโตตามคนเต็มๆ
-- [ ] 🔒 **การหมุนต้อง atomic — เงื่อนไขอยู่ใน `UPDATE` ไม่ใช่ `SELECT` ก่อนแล้วค่อยเขียน**
+- [x] 🔒 **การหมุนต้อง atomic — เงื่อนไขอยู่ใน `UPDATE` ไม่ใช่ `SELECT` ก่อนแล้วค่อยเขียน**
 
       ```sql
       UPDATE identity.sessions
@@ -82,37 +88,44 @@ unique เต็ม · `views.sort_order` / `is_default`
       · อ่านก่อนแล้วค่อยเขียนจะทับกันเงียบ ๆ ตอนเปิดสองแท็บแล้ว access token หมดอายุพร้อมกัน
       · **บทเรียนเดียวกับ `OutboxWorker.claim()`** — ตอนนั้น `SELECT ... FOR UPDATE` แล้วค่อย update ทำให้ worker สองตัวส่งอีเมล 23 ฉบับจาก 12 แถว เพราะ `dataSource.query()` รันทีละ statement ใน transaction ของตัวเอง lock เลยหลุดก่อนอ่าน
 
-- [ ] **`last_used_at` เขียนแบบ lazy — เฉพาะตอนค่าเก่าเกิน 5 นาที** (ปิด ❓ แล้ว)
+- [x] **`last_used_at` เขียนแบบ lazy — เฉพาะตอนค่าเก่าเกิน 5 นาที** (ปิด ❓ แล้ว)
       · เขียนทุก request = **1 write ต่อ request** ไม่ใช่ 1 ต่อ 15 นาที · write amplification สูงกว่าเรื่องหมุน token หลายอันดับ และเป็นตัวที่ทำให้ `sessions` กลายเป็นตารางร้อน
-- [ ] เช็ค session ทุก request (cache 30 วิ) — `revoked_at IS NULL` · `expires_at > now` · `user.status='active'`
+- [x] เช็ค session ทุก request (cache 30 วิ) — `revoked_at IS NULL` · `expires_at > now` · `user.status='active'`
       · นี่คือสิ่งที่ทำให้ deactivate/logout มีผลเกือบทันที ไม่ต้องรอ token หมดอายุ
       · ชั้นนี้คือจุดที่จะกลายเป็นคอขวดก่อนใครถ้าคนเยอะขึ้นมาก — ไม่ใช่จำนวนแถว · [เงื่อนไขที่จะเอา Redis เข้ามา](../docs/01-architecture.md#redis--queue--ยังไม่มี-และเงื่อนไขที่จะมี) ระบุ "session revocation cache ที่เช็คทุก request" ไว้เป็นหนึ่งในสามข้ออยู่แล้ว
-- [ ] 🔒 **Cookie attributes อยู่ที่เดียว** — `httpOnly · Secure · SameSite=Lax` · refresh ตั้ง `path=/api/v1/auth`
+- [x] 🔒 **Cookie attributes อยู่ที่เดียว** — `httpOnly · Secure · SameSite=Lax` · refresh ตั้ง `path=/api/v1/auth`
       · กระจายไปหลายที่เมื่อไหร่ จะมีตัวใดตัวหนึ่งตกหล่นแบบไม่มีใครเห็น
-- [ ] Access token payload มีแค่ `sub` `sid` `exp` — **ไม่ใส่ role และไม่ใส่ org**
+- [x] Access token payload มีแค่ `sub` `sid` `exp` — **ไม่ใส่ role และไม่ใส่ org**
       · เหตุผลเดียวกันทั้งคู่: ถอดสิทธิ์/ถอดคนออกจาก org แล้วต้องรอ 15 นาที
       · และตั้งแต่หนึ่งคนอยู่ได้หลาย org ค่าเดียวใน token ก็ตอบไม่ได้อยู่ดี ([ทั้งหมด](../docs/01-architecture.md#org-ไหนของ-request-นี้))
-- [ ] **org ของ request มาจาก cookie `active_org` ที่ตรวจกับ membership ทุกครั้ง**
+- [x] **org ของ request มาจาก cookie `active_org` ที่ตรวจกับ membership ทุกครั้ง**
       · cookie เป็น*ตัวเลือก* ไม่ใช่*สิทธิ์* — แก้ cookie แล้วได้ 403 ไม่ใช่ข้อมูล org อื่น
       · ไม่ได้อยู่ org ไหนเลย → `orgId` เป็น `null` แต่ login ผ่าน · route ที่ต้องใช้ org ตอบ 403 `NO_ORGANIZATION`
       · อยู่หลาย org แต่ยังไม่ได้เลือก → 403 `ORG_NOT_SELECTED` **คนละ code กัน** เพราะต้องการคนละหน้าจอ
       · cookie ที่ชี้ org ที่ไม่ได้เป็นสมาชิก → 403 แล้ว**ลบ cookie ทิ้ง** ไม่ใช่แค่ปฏิเสธ
-      · ⚠️ `RequestContext.orgId` วันนี้เป็น `string` ไม่ใช่ `string | null` — ต้องแก้ type แล้วไล่ call site (compiler หาให้เอง)
+      · code ที่ตอบคือ `ORG_NOT_SELECTED` ไม่ใช่การเงียบๆ เปลี่ยนไปใช้ org อื่นที่เขาเป็นสมาชิก — ตอบแทน org ที่ client ไม่ได้ขอคือทางที่งานไปโผล่ผิดบริษัท · พอ cookie ถูกลบแล้ว request ถัดไปก็แก้ตัวเองได้
+      · ✅ `RequestContext.orgId` เป็น `string | null` แล้ว · อะไรที่แตะข้อมูล org ใช้ `requireOrgContext()` ซึ่ง throw ถ้าเป็น null (5 call site, compiler หาให้ครบ)
 - [ ] `GET /api/v1/me` — ชื่อ อีเมล role ดึงจากตรงนี้
 - [ ] ลืมรหัสผ่าน (ลิงก์อีเมล **อายุ 30 นาที เก็บเป็น env var** ใช้ได้ครั้งเดียว) / เปลี่ยนรหัสผ่าน (ต้องใส่รหัสเดิม)
-- [ ] **Remember me** — เป็นค่าของ `sessions.expires_at` ไม่ใช่กลไกใหม่
-- [ ] **ล็อกบัญชีเมื่อ login ผิดหลายครั้ง** — `identity.users.failed_login_attempts` + `locked_until`
+- [x] **Remember me** — เป็นค่าของ `sessions.expires_at` ไม่ใช่กลไกใหม่
+- [x] **ล็อกบัญชีเมื่อ login ผิดหลายครั้ง** — `identity.users.failed_login_attempts` + `locked_until`
       · เก็บใน DB ไม่ใช่ memory · ลองผิดระหว่างล็อกไม่ต่อเวลา · อีเมลที่ไม่มีในระบบไม่นับอะไรเลย
-      · ✅ สองคอลัมน์ลงแล้ว เหลือ `LOGIN_MAX_ATTEMPTS` / `LOGIN_LOCK_MINUTES` ใน `env.ts` กับตัวโค้ด
+      · ✅ ครบแล้ว — `LOGIN_MAX_ATTEMPTS` / `LOGIN_LOCK_MINUTES` อยู่ใน `env.ts` · lock หมดอายุแล้วนับใหม่ (N ครั้งต่อหน้าต่าง) ไม่ใช่สะสมต่อ
 - [ ] `/register` มีอยู่แต่ดักด้วย `FeatureService.isEnabled(org, 'public_registration')` → `false`
       · **การใช้งานจริงครั้งแรกของ `FeatureService`** ที่เขียนรอไว้ตั้งแต่ Phase 0
 
 **ตรวจก่อนปิดข้อนี้**
 
-- [ ] token หมดอายุ → 401 ไม่ใช่ 500
-- [ ] logout แล้วใช้ access token เดิมต่อ → ถูกปฏิเสธภายใน 30 วินาที (cache TTL)
-- [ ] deactivate user ระหว่างที่เขาล็อกอินอยู่ → request ถัดไปเข้าไม่ได้
-- [ ] 🔒 request หลายอันจากคนละ org พร้อมกัน → ไม่มีอันไหนเห็น org ผิด
+- [x] token หมดอายุ → 401 ไม่ใช่ 500
+- [x] logout แล้วใช้ access token เดิมต่อ → ถูกปฏิเสธภายใน 30 วินาที (cache TTL)
+- [x] deactivate user ระหว่างที่เขาล็อกอินอยู่ → request ถัดไปเข้าไม่ได้
+- [x] 🔒 request หลายอันจากคนละ org พร้อมกัน → ไม่มีอันไหนเห็น org ผิด
+
+**เหลือใน §1** — `GET /api/v1/me` · ลืม/เปลี่ยนรหัสผ่าน · `/register` หลัง `FeatureService` (ยกไป PR ถัดไป)
+
+⚠️ **`setGlobalPrefix('v1')` ลงแล้ว และ health ถูก exclude ไว้** — healthcheck ใน `deploy/compose.yml`
+ยิง `127.0.0.1:3001/health/live` ตรงๆ ไม่ผ่าน Caddy · ย้ายเข้า prefix เมื่อไหร่ container จะรายงาน unhealthy
+แล้ว `web` กับ `caddy` ไม่ขึ้นเลย · route health ยัง `@Public()` ด้วยเหตุผลเดียวกัน (ยิงมาแบบไม่มี cookie)
 
 ---
 
@@ -281,9 +294,11 @@ unique เต็ม · `views.sort_order` / `is_default`
 
 | จุด | เรื่อง |
 | --- | --- |
-| `enterWith` ใน guard | `run` ใช้ไม่ได้ (scope ปิดก่อน handler) · ถ้าเปลี่ยนโครง auth ต้องรันเทส concurrency ซ้ำ ไม่ใช่แค่ดูว่า login ผ่าน |
+| `enterWith` ใน guard | `run` ใช้ไม่ได้ (scope ปิดก่อน handler) · และ `enterWith` ต้องอยู่**ก่อน `await` แรก** · ถ้าเปลี่ยนโครง auth ต้องยิง server จริงซ้ำ ไม่ใช่แค่ดูว่า login ผ่าน (login เป็น `@Public()` จึงผ่านแม้ guard พัง) |
 | `@Public()` | มีอยู่แล้วแต่**ยังไม่มีใครอ่าน** · ลืมต่อ `Reflector` = ทุก endpoint ต้องล็อกอิน รวมทั้ง `/login` เอง |
-| `RequestContextMiddleware` | ต้องเลิกใช้เมื่อ guard มา · ปล่อยไว้ทั้งคู่แล้วจะมีสองที่เซ็ต context ที่ debug ยากมาก |
+| ~~`RequestContextMiddleware`~~ | ✅ ลบไปแล้วพร้อม `AuthGuard` — `openRequestContext` มีที่เรียกที่เดียวคือ guard |
+| `.returning([...])` ของ TypeORM | รับ **property name** เข้า แต่คืน key เป็น **column name** · ชื่อที่ไม่ตรง property ถูกตัดออกจาก SQL **เงียบๆ** ไม่ error — `['id','user_id']` ทำให้ refresh ออก token ที่ไม่มี `sub` แล้วทุก request หลัง refresh 401 (เจอตอนยิงจริง 2026-09-04, unit test ผ่านหมด) |
+| `z.uuid()` ของ zod 4 | เช็ค version/variant nibble ตาม RFC 9562 ด้วย · `SYSTEM_USER_ID` (nil UUID) และ id ของ demo seed สอบตก ทั้งที่ column `uuid` ของ Postgres รับหมด — ใช้ `idSchema()` (`z.guid()`) กับทุก id |
 | `skip` ใน repository | ตัดออกจาก type แล้ว compile ไม่ผ่าน · ไม่ใช่บั๊ก เป็นความตั้งใจ — ต้องเขียน cursor helper |
 | `save()` ที่มี `id` | เช็คก่อนว่า org นี้เป็นเจ้าของ ถ้าไม่ใช่ throw · เจอตอนเขียน update endpoint แน่ |
 | `updateById` | ไม่โหลด entity → subscriber ไม่ทำงาน · มันเขียน `updatedBy` ให้เองแล้ว อย่าเขียนซ้ำ |

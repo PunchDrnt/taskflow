@@ -9,6 +9,7 @@ const required = {
   S3_ACCESS_KEY: 'GK0000000000000000000000de',
   S3_SECRET_KEY: '0'.repeat(63) + '1',
   S3_BUCKET: 'taskflow',
+  JWT_SECRET: 'a'.repeat(32),
 }
 
 // What production additionally demands, on top of `required`.
@@ -81,6 +82,37 @@ describe('validateEnv', () => {
     ).toThrow(/SENTRY_DSN/)
 
     expect(() => validateEnv({ ...required, ...productionOnly })).not.toThrow()
+  })
+
+  it('refuses to boot without a JWT secret, and refuses a short one', () => {
+    // No default anywhere: a fallback secret is a secret everyone has. The
+    // floor is HS256's own output length — a shorter key still boots and still
+    // signs, which is exactly what makes it worth checking here.
+    const { JWT_SECRET: _omitted, ...withoutSecret } = required
+
+    expect(() => validateEnv(withoutSecret)).toThrow(/JWT_SECRET/)
+    expect(() =>
+      validateEnv({ ...required, JWT_SECRET: 'a'.repeat(31) }),
+    ).toThrow(/JWT_SECRET/)
+  })
+
+  it('defaults the login lockout and coerces it from strings', () => {
+    const defaults = validateEnv({ ...required })
+
+    expect(defaults.LOGIN_MAX_ATTEMPTS).toBe(5)
+    expect(defaults.LOGIN_LOCK_MINUTES).toBe(15)
+
+    expect(
+      validateEnv({ ...required, LOGIN_MAX_ATTEMPTS: '3' }).LOGIN_MAX_ATTEMPTS,
+    ).toBe(3)
+    // Zero attempts locks everyone out on their first try, and a zero-minute
+    // lock is no lock at all.
+    expect(() => validateEnv({ ...required, LOGIN_MAX_ATTEMPTS: '0' })).toThrow(
+      /LOGIN_MAX_ATTEMPTS/,
+    )
+    expect(() =>
+      validateEnv({ ...required, LOGIN_LOCK_MINUTES: '-5' }),
+    ).toThrow(/LOGIN_LOCK_MINUTES/)
   })
 
   it('rejects a Sentry DSN that is not a URL', () => {

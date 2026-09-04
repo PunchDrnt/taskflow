@@ -13,7 +13,7 @@ import {
 } from 'typeorm'
 
 import { QueryBuilders } from './query-builders'
-import { requireRequestContext } from './request-context'
+import { requireOrgContext, requireRequestContext } from './request-context'
 
 /**
  * `FindManyOptions` without `skip`. Lists are ordered by LexoRank `sort_order`,
@@ -46,7 +46,7 @@ export class OrgScopedRepository<T extends ObjectLiteral> {
 
   /** The organisation this repository is currently bound to. */
   get orgId(): string {
-    return requireRequestContext().orgId
+    return requireOrgContext().orgId
   }
 
   // --- scope -------------------------------------------------------------

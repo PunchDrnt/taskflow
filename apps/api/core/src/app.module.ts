@@ -1,9 +1,5 @@
 import { join } from 'node:path'
-import {
-  Module,
-  type MiddlewareConsumer,
-  type NestModule,
-} from '@nestjs/common'
+import { Module } from '@nestjs/common'
 import { ConfigModule, ConfigService } from '@nestjs/config'
 import { APP_FILTER } from '@nestjs/core'
 import { EventEmitterModule } from '@nestjs/event-emitter'
@@ -11,7 +7,6 @@ import { SentryGlobalFilter, SentryModule } from '@sentry/nestjs/setup'
 import { LoggerModule } from 'nestjs-pino'
 
 import { ApiExceptionFilter } from '#shared/http/api-exception.filter'
-import { RequestContextMiddleware } from '#shared/org-scope/request-context.middleware'
 import { SharedModule } from '#shared/shared.module'
 
 import { AppController } from './app.controller'
@@ -22,7 +17,10 @@ import { FeatureModule } from './feature/feature.module'
 import { HealthModule } from './health/health.module'
 import { MaintenanceModule } from './maintenance/maintenance.module'
 import { AuditModule } from './modules/audit/audit.module'
+import { AuthModule } from './modules/identity/auth/auth.module'
+import { UserModule } from './modules/identity/user/user.module'
 import { NotifyModule } from './modules/notify/notify.module'
+import { OrganizationModule } from './modules/organization/organization.module'
 import { StorageModule } from './modules/storage/storage.module'
 import { PermissionModule } from './permission/permission.module'
 
@@ -66,6 +64,9 @@ const rootEnvFile = join(__dirname, '..', '..', '..', '..', '.env')
     FeatureModule,
     StorageModule,
     AuditModule,
+    AuthModule,
+    UserModule,
+    OrganizationModule,
     NotifyModule,
     HealthModule,
     MaintenanceModule,
@@ -82,11 +83,4 @@ const rootEnvFile = join(__dirname, '..', '..', '..', '..', '.env')
     { provide: APP_FILTER, useClass: ApiExceptionFilter },
   ],
 })
-export class AppModule implements NestModule {
-  // Applied to every route: the context has to exist before any handler runs,
-  // and a route that opted out would be a route where org scoping silently
-  // stops applying.
-  configure(consumer: MiddlewareConsumer): void {
-    consumer.apply(RequestContextMiddleware).forRoutes('*')
-  }
-}
+export class AppModule {}

@@ -1,0 +1,357 @@
+import { HttpStatus, Injectable, Logger } from '@nestjs/common'
+
+import { AUTH_ERROR_CODES, type LoginInput } from '@repo/shared'
+
+import { ApiException } from '#shared/http/api-exception'
+import { alertsFor } from '#shared/jobs/alert'
+
+import {
+  MembershipService,
+  resolveActiveOrg,
+  type Membership,
+} from '../../organization/membership.service'
+import { ACTIVE_USER_STATUS, UserService } from '../user/user.service'
+import { LockoutService } from './lockout.service'
+import { PasswordService } from './password.service'
+import {
+  ROTATION_GRACE_MS,
+  SessionService,
+  type SessionOrigin,
+  type SessionRecord,
+} from './session.service'
+import { TokenService, type Tokens } from './token.service'
+
+const alerts = alertsFor('auth')
+
+/**
+ * How long an authenticated request may reuse the last session lookup.
+ *
+ * The whole cost of keeping role and org out of the token: revoking either
+ * takes effect within this window instead of within the token's fifteen
+ * minutes. Thirty seconds is the number docs/01-architecture.md#auth fixes.
+ */
+const SESSION_CACHE_TTL_MS = 30_000
+
+/** Past this many entries the expired ones are swept. ~20 daily users. */
+const SESSION_CACHE_SWEEP_AT = 500
+
+/** Who is calling, resolved from a session id — what the guard needs. */
+export interface AuthenticatedUser {
+  userId: string
+  sessionId: string
+  memberships: Membership[]
+}
+
+export interface LoginResult {
+  tokens: Tokens
+  memberships: Membership[]
+  /** Set when exactly one membership makes the choice for them. */
+  activeOrgId: string | null
+}
+
+interface CacheEntry {
+  value: AuthenticatedUser
+  expiresAt: number
+}
+
+/**
+ * The auth flows: sign in, sign out, refresh, and the per-request check the
+ * guard runs. Owns the policy; SessionService, LockoutService, PasswordService
+ * and TokenService own the mechanisms.
+ */
+@Injectable()
+export class AuthService {
+  private readonly logger = new Logger(AuthService.name)
+
+  /** sid → who, for SESSION_CACHE_TTL_MS. Per instance, and that is fine. */
+  private readonly cache = new Map<string, CacheEntry>()
+
+  /**
+   * A refresh that has just happened, keyed by the hash of the token it spent.
+   * See `refresh` — this is what makes the grace window able to *answer*.
+   */
+  private readonly recentRotations = new Map<
+    string,
+    { tokens: Tokens; expiresAt: number }
+  >()
+
+  /**
+   * An argon2 hash of nothing anybody knows, verified against when the email
+   * does not exist so that the two answers take the same time. Without it a
+   * fast rejection is an oracle for which addresses are registered — the one
+   * thing the shared INVALID_CREDENTIALS message exists to hide.
+   */
+  private decoyHash: Promise<string> | null = null
+
+  constructor(
+    private readonly users: UserService,
+    private readonly memberships: MembershipService,
+    private readonly sessions: SessionService,
+    private readonly lockout: LockoutService,
+    private readonly passwords: PasswordService,
+    private readonly tokens: TokenService,
+  ) {}
+
+  // --- login -------------------------------------------------------------
+
+  async login(input: LoginInput, origin: SessionOrigin): Promise<LoginResult> {
+    const user = await this.users.findByEmail(input.email)
+
+    if (!user || user.passwordHash === null) {
+      await this.passwords.verify(await this.decoy(), input.password)
+      throw invalidCredentials()
+    }
+
+    // Before the password, so an attempt during a lock never reaches the
+    // counter and so cannot extend it.
+    if (this.lockout.isLocked(user)) throw accountLocked()
+
+    if (!(await this.passwords.verify(user.passwordHash, input.password))) {
+      throw (await this.lockout.recordFailure(user))
+        ? accountLocked()
+        : invalidCredentials()
+    }
+
+    // Only after a correct password, so a deactivated account is revealed to
+    // the person who owns it and to nobody else.
+    if (user.status !== ACTIVE_USER_STATUS) {
+      throw new ApiException(
+        HttpStatus.UNAUTHORIZED,
+        AUTH_ERROR_CODES.ACCOUNT_INACTIVE,
+        'บัญชีนี้ถูกปิดใช้งาน',
+      )
+    }
+
+    await this.lockout.reset(user)
+
+    const refreshToken = this.tokens.createRefreshToken()
+    const session = await this.sessions.create(
+      user.id,
+      this.tokens.hashRefreshToken(refreshToken),
+      origin,
+      input.rememberMe,
+    )
+
+    const memberships = await this.memberships.listForUser(user.id)
+
+    return {
+      tokens: {
+        accessToken: this.tokens.signAccessToken({
+          sub: user.id,
+          sid: session.id,
+        }),
+        refreshToken,
+      },
+      memberships,
+      // No cookie exists yet, so this is only ever the single-membership case.
+      activeOrgId: resolveActiveOrg(memberships, undefined).orgId,
+    }
+  }
+
+  // --- refresh -----------------------------------------------------------
+
+  /**
+   * Spends a refresh token for a new pair.
+   *
+   * Four outcomes, and the difference between the middle two is the whole
+   * design:
+   *
+   * | presented token | answer |
+   * | --- | --- |
+   * | the current one | rotated, new pair |
+   * | one rotated away seconds ago, by this instance | the pair that rotation produced |
+   * | one rotated away seconds ago, race lost | 401, session left alone |
+   * | one rotated away longer ago | 401, session revoked as `token_reuse` |
+   *
+   * Losing a race is not evidence of theft. Two tabs waking together both
+   * present the same token, one `UPDATE` wins, and revoking on the other would
+   * sign people out for having two tabs open. What separates the two is time,
+   * not order: past the grace window nobody is still racing, and a token that
+   * was replaced is a token that should have been forgotten.
+   *
+   * `recentRotations` is what lets the grace window *answer* rather than
+   * merely forgive. The row cannot help — it holds hashes, and the plaintext
+   * the loser needs exists only in the reply the winner got, so it is held
+   * here for those ten seconds and nowhere else.
+   */
+  async refresh(
+    presented: string | undefined,
+    now = new Date(),
+  ): Promise<Tokens> {
+    if (presented === undefined) throw sessionExpired()
+
+    const presentedHash = this.tokens.hashRefreshToken(presented)
+
+    const replayed = this.recentRotations.get(presentedHash)
+    if (replayed && replayed.expiresAt > now.getTime()) return replayed.tokens
+
+    const nextToken = this.tokens.createRefreshToken()
+    const rotated = await this.sessions.rotate(
+      presentedHash,
+      this.tokens.hashRefreshToken(nextToken),
+      now,
+    )
+
+    if (rotated) {
+      this.cache.delete(rotated.id)
+
+      const tokens = {
+        accessToken: this.tokens.signAccessToken({
+          sub: rotated.userId,
+          sid: rotated.id,
+        }),
+        refreshToken: nextToken,
+      }
+
+      this.sweep(this.recentRotations, now.getTime())
+      this.recentRotations.set(presentedHash, {
+        tokens,
+        expiresAt: now.getTime() + ROTATION_GRACE_MS,
+      })
+
+      return tokens
+    }
+
+    await this.detectReuse(presentedHash, now)
+
+    throw sessionExpired()
+  }
+
+  /**
+   * The token was not current. If it is one this session rotated away from
+   * outside the grace window, somebody is using a token that was replaced —
+   * either the thief or the victim, and there is no way to tell which, so the
+   * session ends for both.
+   */
+  private async detectReuse(presentedHash: string, now: Date): Promise<void> {
+    const session = await this.sessions.findByPreviousToken(presentedHash)
+    if (!session) return
+
+    const rotatedAt = session.rotatedAt?.getTime() ?? 0
+    if (now.getTime() - rotatedAt <= ROTATION_GRACE_MS) return
+
+    await this.sessions.revoke(session.id, 'token_reuse', now)
+    this.cache.delete(session.id)
+
+    this.logger.warn(
+      `Refresh token reuse on session ${session.id}; session revoked`,
+    )
+    alerts.condition('Refresh token reuse detected', {
+      sessionId: session.id,
+      userId: session.userId,
+      rotatedAt: session.rotatedAt,
+    })
+  }
+
+  // --- logout ------------------------------------------------------------
+
+  /**
+   * Which session a refresh token belongs to, for logout. The refresh cookie
+   * is what logout has to work from: it is scoped to `/api/v1/auth`, so it is
+   * the one credential guaranteed to be present on exactly these routes.
+   */
+  findSessionByRefreshToken(token: string): Promise<SessionRecord | null> {
+    return this.sessions
+      .findByCurrentToken(this.tokens.hashRefreshToken(token))
+      .then((session) =>
+        session ? { id: session.id, userId: session.userId } : null,
+      )
+  }
+
+  async logout(sessionId: string): Promise<void> {
+    await this.sessions.revoke(sessionId, 'logout')
+    this.cache.delete(sessionId)
+  }
+
+  /** Every device, this one included — for "sign out everywhere". */
+  async logoutAll(userId: string): Promise<void> {
+    await this.sessions.revokeAllForUser(userId, 'logout_all')
+    this.cache.clear()
+  }
+
+  // --- the per-request check ---------------------------------------------
+
+  /**
+   * Who a session id belongs to, and which orgs they may act for — one lookup,
+   * cached for thirty seconds.
+   *
+   * Memberships are loaded in the same fill rather than in a second query,
+   * because the guard needs both on every request and neither is in the token.
+   * That is what makes removing someone from an org take effect in thirty
+   * seconds instead of at the next token expiry.
+   */
+  async authenticate(
+    sessionId: string,
+    now = new Date(),
+  ): Promise<AuthenticatedUser | null> {
+    const cached = this.cache.get(sessionId)
+    if (cached && cached.expiresAt > now.getTime()) return cached.value
+
+    const session = await this.sessions.findLive(sessionId, now)
+    if (!session) return null
+
+    const user = await this.users.findById(session.userId)
+    if (!user || user.status !== ACTIVE_USER_STATUS) return null
+
+    const value: AuthenticatedUser = {
+      userId: user.id,
+      sessionId: session.id,
+      memberships: await this.memberships.listForUser(user.id),
+    }
+
+    this.sweep(this.cache, now.getTime())
+    this.cache.set(sessionId, {
+      value,
+      expiresAt: now.getTime() + SESSION_CACHE_TTL_MS,
+    })
+
+    // Outside the cached path on purpose: it is already rate-limited to one
+    // write per five minutes, and skipping it on a cache hit would stretch
+    // that to whatever the traffic happens to be.
+    await this.sessions.touch(session, now)
+
+    return value
+  }
+
+  // --- internals ---------------------------------------------------------
+
+  private decoy(): Promise<string> {
+    this.decoyHash ??= this.passwords.hash(this.tokens.createRefreshToken())
+
+    return this.decoyHash
+  }
+
+  /** Neither map is ever read after expiry, so nothing evicts them otherwise. */
+  private sweep(map: Map<string, { expiresAt: number }>, now: number): void {
+    if (map.size < SESSION_CACHE_SWEEP_AT) return
+
+    for (const [key, entry] of map) {
+      if (entry.expiresAt <= now) map.delete(key)
+    }
+  }
+}
+
+function invalidCredentials(): ApiException {
+  return new ApiException(
+    HttpStatus.UNAUTHORIZED,
+    AUTH_ERROR_CODES.INVALID_CREDENTIALS,
+    'อีเมลหรือรหัสผ่านไม่ถูกต้อง',
+  )
+}
+
+/** Says locked, never for how long — see LockoutService. */
+function accountLocked(): ApiException {
+  return new ApiException(
+    HttpStatus.UNAUTHORIZED,
+    AUTH_ERROR_CODES.ACCOUNT_LOCKED,
+    'บัญชีถูกล็อกชั่วคราวจากการเข้าสู่ระบบผิดหลายครั้ง',
+  )
+}
+
+function sessionExpired(): ApiException {
+  return new ApiException(
+    HttpStatus.UNAUTHORIZED,
+    AUTH_ERROR_CODES.SESSION_EXPIRED,
+    'เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่',
+  )
+}

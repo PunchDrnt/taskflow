@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common'
 import type { EntityManager } from 'typeorm'
 
-import { requireRequestContext } from '#shared/org-scope/request-context'
+import { requireOrgContext } from '#shared/org-scope/request-context'
 
 import { Outbox } from './outbox.entity'
 
@@ -36,7 +36,7 @@ export class EmailService {
       )
     }
 
-    const { orgId, userId } = requireRequestContext()
+    const { orgId, userId } = requireOrgContext()
 
     // jsonb: TypeORM's QueryDeepPartialEntity walks into the object and does
     // not know what to make of `unknown` values, so the column is handed over
