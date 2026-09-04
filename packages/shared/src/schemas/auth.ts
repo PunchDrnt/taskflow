@@ -94,6 +94,33 @@ export const resetPasswordSchema = z
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>
 
 /**
+ * `POST /v1/auth/register` — gated by `public_registration`, which is off.
+ *
+ * No `orgId`: registering creates a person, not a membership. Somebody who
+ * signs up belongs to nothing until an admin adds them, which is exactly why
+ * the feature is off — otherwise anyone who knows the URL can sit in the
+ * system waiting for a mis-click.
+ */
+export const registerSchema = z
+  .object({
+    email: emailSchema,
+    password: passwordSchema,
+    confirmPassword: z.string(),
+    name: z.string().trim().min(1, 'กรุณากรอกชื่อ').max(200, 'ชื่อยาวเกินไป'),
+    nickname: z
+      .string()
+      .trim()
+      .min(1, 'กรุณากรอกชื่อเล่น')
+      .max(100, 'ชื่อเล่นยาวเกินไป'),
+  })
+  .refine((value) => value.password === value.confirmPassword, {
+    path: ['confirmPassword'],
+    message: 'รหัสผ่านไม่ตรงกัน',
+  })
+
+export type RegisterInput = z.infer<typeof registerSchema>
+
+/**
  * The codes the sign-in screens branch on. Here rather than in
  * `API_ERROR_CODES` for the reason given there: that file is for codes no
  * feature owns, and every module collecting its codes into it would make it a
@@ -127,6 +154,15 @@ export const AUTH_ERROR_CODES = {
    * three, so a guessed code cannot be told apart from a stale one.
    */
   INVALID_RESET_CODE: 'INVALID_RESET_CODE',
+  /**
+   * Public sign-up is switched off for this installation. Not FORBIDDEN: the
+   * caller is not being refused permission, the feature is not on at all, and
+   * the screen to show is "ask an admin to invite you" rather than "you may
+   * not do that".
+   */
+  REGISTRATION_DISABLED: 'REGISTRATION_DISABLED',
+  /** Sign-up only: that address already has an account. */
+  EMAIL_TAKEN: 'EMAIL_TAKEN',
 } as const
 
 export type AuthErrorCode =

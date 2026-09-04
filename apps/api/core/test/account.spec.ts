@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import {
   changePasswordSchema,
+  registerSchema,
   resetPasswordSchema,
   updateProfileSchema,
 } from '@repo/shared'
@@ -14,6 +15,7 @@ import { createOrgScopedRepository } from '#shared/org-scope/org-scoped.reposito
 import { SYSTEM_USER_ID } from '#shared/system-user'
 
 import type { Env } from '../src/config/env'
+import { FeatureService } from '../src/feature/feature.service'
 import { AuthService } from '../src/modules/identity/auth/auth.service'
 import { LockoutService } from '../src/modules/identity/auth/lockout.service'
 import { PasswordResetToken } from '../src/modules/identity/auth/password-reset-token.entity'
@@ -569,6 +571,97 @@ describe.skipIf(!hasTestDatabase)('account', () => {
           newPassword: NEW_PASSWORD,
           confirmNewPassword: NEW_PASSWORD,
         }).success,
+      ).toBe(false)
+    })
+  })
+
+  describe('register', () => {
+    it('is off, which is the whole point of the endpoint existing', () => {
+      // 🔒 docs/04-features/phase-1.md#auth--users: the route is written now
+      // and gated, rather than added later. If this ever reads true by
+      // accident, anybody who knows the URL can create an account and wait to
+      // be mis-clicked into an organisation.
+      expect(new FeatureService().isEnabled(null, 'public_registration')).toBe(
+        false,
+      )
+    })
+
+    it('creates a person who belongs to no organisation', async () => {
+      // The service behind the gate, so that flipping the flag one day gets a
+      // working endpoint rather than a first bug report.
+      const created = await auth.register({
+        email: `register-${(counter += 1)}@example.test`,
+        password: PASSWORD,
+        confirmPassword: PASSWORD,
+        name: 'Somchai Ura',
+        nickname: 'Chai',
+      })
+
+      const user = await rowOf(created.id)
+      expect(user?.nickname).toBe('Chai')
+      expect(user?.status).toBe('active')
+      expect(user?.createdBy).toBe(SYSTEM_USER_ID)
+      expect(
+        await dataSource.query(
+          `SELECT 1 FROM organization.members WHERE user_id = $1`,
+          [created.id],
+        ),
+      ).toHaveLength(0)
+    })
+
+    it('stores a hash of the password, not the password', async () => {
+      const created = await auth.register({
+        email: `register-${(counter += 1)}@example.test`,
+        password: PASSWORD,
+        confirmPassword: PASSWORD,
+        name: 'a',
+        nickname: 'a',
+      })
+
+      const stored = (await rowOf(created.id))!.passwordHash!
+      expect(stored).not.toContain(PASSWORD)
+      expect(await new PasswordService().verify(stored, PASSWORD)).toBe(true)
+    })
+
+    it('refuses an address that already has an account', async () => {
+      const email = `register-${(counter += 1)}@example.test`
+      const person = {
+        email,
+        password: PASSWORD,
+        confirmPassword: PASSWORD,
+        name: 'a',
+        nickname: 'a',
+      }
+
+      await auth.register(person)
+
+      expect(await codeOf(auth.register(person))).toBe('EMAIL_TAKEN')
+    })
+  })
+
+  describe('registerSchema', () => {
+    const valid = {
+      email: 'someone@example.test',
+      password: PASSWORD,
+      confirmPassword: PASSWORD,
+      name: 'Somchai',
+      nickname: 'Chai',
+    }
+
+    it('refuses a mismatched confirmation', () => {
+      expect(
+        registerSchema.safeParse({ ...valid, confirmPassword: 'nope' }).success,
+      ).toBe(false)
+    })
+
+    it('has no orgId, because registering creates a person not a membership', () => {
+      const parsed = registerSchema.parse({ ...valid, orgId: 'anything' })
+      expect(parsed).not.toHaveProperty('orgId')
+    })
+
+    it('requires a nickname like every other name field here', () => {
+      expect(
+        registerSchema.safeParse({ ...valid, nickname: ' ' }).success,
       ).toBe(false)
     })
   })

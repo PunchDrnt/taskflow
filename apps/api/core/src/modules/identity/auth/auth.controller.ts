@@ -11,17 +11,22 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger'
 import type { Request, Response } from 'express'
 
 import {
+  AUTH_ERROR_CODES,
   forgotPasswordSchema,
   loginSchema,
+  registerSchema,
   resetPasswordSchema,
   type ForgotPasswordInput,
   type LoginInput,
+  type RegisterInput,
   type ResetPasswordInput,
 } from '@repo/shared'
 
+import { ApiException } from '#shared/http/api-exception'
 import { Public } from '#shared/http/route-metadata'
 import { ZodValidationPipe } from '#shared/http/zod-validation.pipe'
 
+import { FeatureService } from '../../../feature/feature.service'
 import { AuthCookies, REFRESH_TOKEN_COOKIE } from './auth.cookies'
 import { AuthService } from './auth.service'
 import { PasswordResetService } from './password-reset.service'
@@ -41,6 +46,7 @@ export class AuthController {
   constructor(
     private readonly auth: AuthService,
     private readonly passwordReset: PasswordResetService,
+    private readonly features: FeatureService,
     private readonly cookies: AuthCookies,
   ) {}
 
@@ -135,6 +141,37 @@ export class AuthController {
     if (session) await this.auth.logoutAll(session.userId)
 
     this.cookies.clearSession(response)
+  }
+
+  /**
+   * Exists, and is off.
+   *
+   * docs/04-features/phase-1.md#auth--users is explicit that the endpoint
+   * should be written now and gated rather than added later: with open
+   * sign-up, anybody who knows the URL can create an account and wait for
+   * somebody to mis-click them into an organisation. This is
+   * `FeatureService`'s first real caller — the flag mechanism is Phase 7's,
+   * but the call site is cheap today and expensive to retrofit.
+   *
+   * The org passed is null: whether this installation accepts sign-ups is not
+   * a per-tenant question, and there is no tenant here to ask about.
+   */
+  @Post('register')
+  @Public()
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create an account, if sign-up is enabled' })
+  async register(
+    @Body(new ZodValidationPipe(registerSchema)) body: RegisterInput,
+  ): Promise<{ id: string }> {
+    if (!this.features.isEnabled(null, 'public_registration')) {
+      throw new ApiException(
+        HttpStatus.FORBIDDEN,
+        AUTH_ERROR_CODES.REGISTRATION_DISABLED,
+        'ระบบนี้ไม่เปิดให้สมัครเอง กรุณาติดต่อผู้ดูแลองค์กร',
+      )
+    }
+
+    return this.auth.register(body)
   }
 
   /**

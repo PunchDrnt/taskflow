@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common'
 
 import { InjectOrgRepository } from '#shared/org-scope/org-repository.provider'
 import { OrgScopedRepository } from '#shared/org-scope/org-scoped.repository'
+import { SYSTEM_USER_ID } from '#shared/system-user'
 
 import { User } from './user.entity'
 
@@ -68,6 +69,41 @@ export class UserService {
       .where('id = :id', { id })
       .andWhere('deleted_at IS NULL')
       .execute()
+  }
+
+  /**
+   * Creates a person, belonging to no organisation.
+   *
+   * That is the whole shape of registering here: an account is a person, a
+   * membership is somebody adding them. `createdBy` is the system user because
+   * there is nobody signed in to attribute it to.
+   *
+   * The unique index on `email` is partial (`WHERE status <> 'deleted'`), so a
+   * duplicate raises rather than being caught by a check here — a check would
+   * be a race, and the constraint is what actually holds.
+   */
+  async create(person: {
+    email: string
+    passwordHash: string
+    name: string
+    nickname: string
+  }): Promise<User> {
+    const inserted = await this.users.queryBuilder
+      .base('user')
+      .insert()
+      .into(User)
+      .values({
+        ...person,
+        status: ACTIVE_USER_STATUS,
+        createdBy: SYSTEM_USER_ID,
+        updatedBy: SYSTEM_USER_ID,
+      })
+      .returning(['id'])
+      .execute()
+
+    const id = (inserted.raw as { id: string }[])[0]!.id
+
+    return (await this.findById(id))!
   }
 
   /**

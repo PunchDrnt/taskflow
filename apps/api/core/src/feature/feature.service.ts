@@ -32,6 +32,12 @@ const ENABLED_FEATURES = new Set<Feature>()
  * and `org_id` on every table: the call site is cheap to write today and
  * expensive to add later.
  *
+ * The org is nullable because the first real caller — `POST /v1/auth/register`
+ * — asks before anybody has one. That is not a gap in the caller but the shape
+ * of the question: whether this *installation* accepts sign-ups is not a
+ * per-tenant answer, and Phase 7 has to decide what it means there rather than
+ * be handed an org that was invented to satisfy the signature.
+ *
  * Not `can()`: PermissionService already owns that word, with a different
  * question behind it. "May this person do it" and "does this plan include it"
  * are separate answers, and a call site should not have to guess which one it
@@ -41,7 +47,7 @@ const ENABLED_FEATURES = new Set<Feature>()
  */
 @Injectable()
 export class FeatureService {
-  isEnabled(_orgId: string, feature: Feature): boolean {
+  isEnabled(_orgId: string | null, feature: Feature): boolean {
     return ENABLED_FEATURES.has(feature)
   }
 }

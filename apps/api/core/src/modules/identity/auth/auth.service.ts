@@ -4,6 +4,7 @@ import {
   AUTH_ERROR_CODES,
   type ChangePasswordInput,
   type LoginInput,
+  type RegisterInput,
 } from '@repo/shared'
 
 import { ApiException } from '#shared/http/api-exception'
@@ -150,6 +151,35 @@ export class AuthService {
       // No cookie exists yet, so this is only ever the single-membership case.
       activeOrgId: resolveActiveOrg(memberships, undefined).orgId,
     }
+  }
+
+  /**
+   * Creates an account that belongs to no organisation.
+   *
+   * Deliberately does not sign the new person in. There is nothing for them to
+   * see yet — they are a member of nowhere until an admin adds them — and
+   * issuing a session here would be one more path that mints one.
+   *
+   * A duplicate address is reported as taken rather than swallowed. That does
+   * leak whether an address is registered, which `forgot-password` works hard
+   * to avoid; the difference is that a sign-up form has no other way to
+   * explain itself, and the whole endpoint is behind a flag that is off. If
+   * public registration is ever switched on, this is the line to revisit —
+   * the usual answer is to accept quietly and send a "you already have an
+   * account" mail instead.
+   */
+  async register(input: RegisterInput): Promise<{ id: string }> {
+    const existing = await this.users.findByEmail(input.email)
+    if (existing) throw emailTaken()
+
+    const user = await this.users.create({
+      email: input.email,
+      passwordHash: await this.passwords.hash(input.password),
+      name: input.name,
+      nickname: input.nickname,
+    })
+
+    return { id: user.id }
   }
 
   // --- refresh -----------------------------------------------------------
@@ -444,5 +474,14 @@ function wrongCurrentPassword(): ApiException {
     HttpStatus.BAD_REQUEST,
     AUTH_ERROR_CODES.WRONG_CURRENT_PASSWORD,
     'รหัสผ่านปัจจุบันไม่ถูกต้อง',
+  )
+}
+
+/** 409, because the request is well-formed and conflicts with what exists. */
+function emailTaken(): ApiException {
+  return new ApiException(
+    HttpStatus.CONFLICT,
+    AUTH_ERROR_CODES.EMAIL_TAKEN,
+    'อีเมลนี้ถูกใช้แล้ว',
   )
 }
