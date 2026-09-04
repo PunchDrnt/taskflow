@@ -3,7 +3,7 @@ import type { EntityManager } from 'typeorm'
 
 import { InjectOrgRepository } from '#shared/org-scope/org-repository.provider'
 import { OrgScopedRepository } from '#shared/org-scope/org-scoped.repository'
-import { requireRequestContext } from '#shared/org-scope/request-context'
+import { requireOrgContext } from '#shared/org-scope/request-context'
 
 import type { Changes } from './changes'
 import { AuditLog } from './log.entity'
@@ -65,7 +65,7 @@ export class AuditService {
 
     // org and actor come from the context rather than the caller, for the same
     // reason every other write does: an argument can be passed wrongly.
-    const { orgId, userId } = requireRequestContext()
+    const { orgId, userId } = requireOrgContext()
 
     await manager.insert(AuditLog, {
       orgId,

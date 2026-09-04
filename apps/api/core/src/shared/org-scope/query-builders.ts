@@ -1,6 +1,6 @@
 import type { ObjectLiteral, Repository, SelectQueryBuilder } from 'typeorm'
 
-import { requireRequestContext } from './request-context'
+import { requireOrgContext } from './request-context'
 
 /** `identity.*` and `billing.plans` have no `org_id` and so fail this. */
 type OrgScoped = { orgId: string }
@@ -84,7 +84,7 @@ export class QueryBuilders<T extends ObjectLiteral> {
 
   /** Scoped to the current org, and sealed against being widened again. */
   withOrg: WithOrg<T> = ((alias: string): ScopedQueryBuilder<T> => {
-    const { orgId } = requireRequestContext()
+    const { orgId } = requireOrgContext()
 
     const builder = this.repository
       .createQueryBuilder(alias)

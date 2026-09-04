@@ -438,7 +438,7 @@ Phase 0 จึงลงแรงกับ **repository base class + isolation te
 | `enterRequestContext` (`enterWith`) | HTTP request — `AuthGuard` เรียกตอน Phase 1 |
 | `runWithRequestContext` (`run`) | background job · seed · test |
 
-ตอนนี้ยังไม่มี auth จึงเป็น `RequestContextMiddleware` ที่เปิดให้ชั่วคราวด้วย `run` — [ตารางใน Auth](#auth) บอกว่ามันถูกถอดเมื่อไหร่
+`AuthGuard` เป็นที่เดียวที่เปิด context ของ HTTP request แล้ว — `RequestContextMiddleware` ที่เคยเปิดให้ชั่วคราวถูกลบทิ้งพร้อมกับ guard ตัวจริง
 
 > **ทำไมเป็นสองตัว ไม่ใช่ตัวเดียว** — `run` ปิด scope ตัวเองตอน callback คืนค่า ซึ่งใช้ใน guard ไม่ได้เพราะ `canActivate` คืน `boolean` · เหตุผลเต็มพร้อมผลวัดอยู่ที่ [Auth](#auth) ซึ่งเป็นที่ที่ guard ถูกเขียน
 
@@ -811,13 +811,19 @@ Auth ทั้งก้อนอยู่ใน guard ที่เดียว �
 
 ข้อสุดท้ายสำคัญที่สุด — `enterWith` มีชื่อเสียงว่าอันตรายเพราะไปแก้ store ของ async resource ปัจจุบัน ถ้ามันรั่วข้าม request คือ cross-org leak ทันที · ทดสอบแล้วไม่รั่ว แต่ **ห้ามเปลี่ยนโครงตรงนี้โดยไม่รันเทสต์ซ้ำ**
 
+**guard เรียก `enterWith` _หลัง_ await** (ต้อง query session ก่อนถึงจะรู้ว่า org ไหน) ซึ่งเป็นลำดับที่ต้องวัดแยก:
+store ที่เข้าหลัง await จะเห็นจากฝั่งคนเรียกก็ต่อเมื่อ async resource ของคนเรียก **ไม่มี store ของตัวเอง** อยู่ก่อน
+· HTTP server ของ Node ให้เงื่อนไขนั้นพอดี — วัดแล้วทั้ง request ขนาน 8 ตัวและ request ต่อเนื่องบน keep-alive
+เส้นเดียวกัน ไม่มีรั่ว ([`request-context.spec.ts`](../../apps/api/core/src/shared/org-scope/request-context.spec.ts) ยิง server จริง)
+· แต่ **harness ในโปรเซสเดียวไม่ใช่ตัวแทนที่ถูก** — `AsyncResource` ซ้อนกันจะสืบ store ของตัวนอกมา
+ซึ่งเป็นเหตุผลที่ `auth.guard.spec.ts` assert ที่ "guard เรียก `enterRequestContext` ด้วยค่าอะไร" ไม่ใช่อ่าน store กลับมา
+
 `runWithRequestContext` (ที่ใช้ `run`) ยังเป็นตัวที่ถูกสำหรับ background job, seed และเทสต์ — สองแบบอยู่คู่กันโดยตั้งใจ
 
 | ชั้น                        | หน้าที่                                                                |
 | -------------------------- | -------------------------------------------------------------------- |
 | `AuthGuard` (`APP_GUARD`)  | verify JWT → เช็ค session + membership → หา org ของ request → `enterWith({ userId, orgId })` → allow/deny |
 | Guard ตัวถัดไป                | `PermissionService.assert` — ใช้ context ที่ตัวแรกเปิดไว้ได้เลย              |
-| `RequestContextMiddleware` | เลิกใช้เมื่อ `AuthGuard` มาแล้ว — ตอนนี้ยังอยู่เพราะยังไม่มี auth                |
 
 **Library**
 

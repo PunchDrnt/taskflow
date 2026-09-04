@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
+import { APP_GUARD } from '@nestjs/core'
 import { JwtModule } from '@nestjs/jwt'
 
 import { provideOrgRepository } from '#shared/org-scope/org-repository.provider'
@@ -9,6 +10,7 @@ import { OrganizationModule } from '../../organization/organization.module'
 import { UserModule } from '../user/user.module'
 import { AuthCookiesModule } from './auth-cookies.module'
 import { AuthController } from './auth.controller'
+import { AuthGuard } from './auth.guard'
 import { AuthService } from './auth.service'
 import { LockoutService } from './lockout.service'
 import { PasswordService } from './password.service'
@@ -25,8 +27,9 @@ import { ACCESS_TOKEN_TTL_SECONDS, TokenService } from './token.service'
  * here (docs/01-architecture.md#auth). The secret is bound once, in this
  * factory, so TokenService never reads config.
  *
- * Exports `AuthService` for the guard, which lives in `APP_GUARD` and so is
- * constructed by the root module rather than by this one.
+ * `AuthGuard` is registered here as `APP_GUARD`, so every route in the
+ * application is authenticated unless it says otherwise — a new controller is
+ * protected by default and opting out is a decorator somebody has to write.
  */
 @Module({
   imports: [
@@ -50,6 +53,10 @@ import { ACCESS_TOKEN_TTL_SECONDS, TokenService } from './token.service'
   ],
   controllers: [AuthController],
   providers: [
+    // Global from here rather than from AppModule: APP_GUARD is picked up
+    // wherever it is provided, and this is the module that already has
+    // everything the guard injects.
+    { provide: APP_GUARD, useClass: AuthGuard },
     provideOrgRepository(Session),
     PasswordService,
     TokenService,

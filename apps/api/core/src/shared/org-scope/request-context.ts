@@ -7,10 +7,23 @@ import { AsyncLocalStorage } from 'node:async_hooks'
  * omitted eventually is, and here that failure is a cross-org leak.
  */
 export interface RequestContext {
-  /** The organisation whose data this request may touch. */
-  orgId: string
+  /**
+   * The organisation whose data this request may touch, or `null` for someone
+   * signed in and not acting for any one org.
+   *
+   * Null is a real state, not a gap: the Home screen lists your organisations
+   * before you have picked one, somebody in three companies has not chosen
+   * yet, and a system-role account is deliberately a member of none. Anything
+   * org-scoped calls `requireOrgContext` and so cannot see this value at all.
+   */
+  orgId: string | null
   /** The user acting. Writes are attributed to them. */
   userId: string
+}
+
+/** A context that has an org — what everything touching org-scoped data needs. */
+export interface OrgRequestContext extends RequestContext {
+  orgId: string
 }
 
 const storage = new AsyncLocalStorage<RequestContext>()
@@ -64,4 +77,30 @@ export function requireRequestContext(): RequestContext {
   }
 
   return context
+}
+
+/**
+ * The context, with an org guaranteed.
+ *
+ * The narrowing is the point: `orgId` is nullable on `RequestContext`, so
+ * `string | null` will not assign to `string` and the compiler finds every
+ * place that needs this rather than leaving it to be remembered. Callers that
+ * only want `userId` — the audit columns subscriber, `updatedBy` — keep using
+ * `requireRequestContext` and are unaffected.
+ *
+ * Throwing rather than defaulting, for the reason the context exists: there is
+ * no safe org to guess, and guessing is the leak itself.
+ */
+export function requireOrgContext(): OrgRequestContext {
+  const context = requireRequestContext()
+
+  if (context.orgId === null) {
+    throw new Error(
+      'No organisation in the request context. This request is signed in but ' +
+        'not acting for any one org — route it through @SkipOrgScope(), or ' +
+        'have the caller choose an org with POST /v1/me/active-org.',
+    )
+  }
+
+  return { ...context, orgId: context.orgId }
 }

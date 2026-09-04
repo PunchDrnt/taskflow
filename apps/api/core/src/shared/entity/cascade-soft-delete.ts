@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common'
 import { InjectDataSource } from '@nestjs/typeorm'
 import { DataSource, type EntityManager } from 'typeorm'
 
-import { requireRequestContext } from '../org-scope/request-context'
+import { requireOrgContext } from '../org-scope/request-context'
 
 interface ChildLink {
   /** `schema.table`. */
@@ -92,7 +92,7 @@ export class CascadeSoftDelete {
    * site `cascade.delete(...)` reads like the hard delete this is not.
    */
   async softDelete(table: string, id: string): Promise<Record<string, number>> {
-    const { orgId, userId } = requireRequestContext()
+    const { orgId, userId } = requireOrgContext()
 
     return this.dataSource.transaction(async (manager) => {
       const deleted: Record<string, number> = {}

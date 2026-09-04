@@ -1,9 +1,5 @@
 import { join } from 'node:path'
-import {
-  Module,
-  type MiddlewareConsumer,
-  type NestModule,
-} from '@nestjs/common'
+import { Module } from '@nestjs/common'
 import { ConfigModule, ConfigService } from '@nestjs/config'
 import { APP_FILTER } from '@nestjs/core'
 import { EventEmitterModule } from '@nestjs/event-emitter'
@@ -11,7 +7,6 @@ import { SentryGlobalFilter, SentryModule } from '@sentry/nestjs/setup'
 import { LoggerModule } from 'nestjs-pino'
 
 import { ApiExceptionFilter } from '#shared/http/api-exception.filter'
-import { RequestContextMiddleware } from '#shared/org-scope/request-context.middleware'
 import { SharedModule } from '#shared/shared.module'
 
 import { AppController } from './app.controller'
@@ -88,11 +83,4 @@ const rootEnvFile = join(__dirname, '..', '..', '..', '..', '.env')
     { provide: APP_FILTER, useClass: ApiExceptionFilter },
   ],
 })
-export class AppModule implements NestModule {
-  // Applied to every route: the context has to exist before any handler runs,
-  // and a route that opted out would be a route where org scoping silently
-  // stops applying.
-  configure(consumer: MiddlewareConsumer): void {
-    consumer.apply(RequestContextMiddleware).forRoutes('*')
-  }
-}
+export class AppModule {}
