@@ -10,13 +10,21 @@ import {
 import { ApiOperation, ApiTags } from '@nestjs/swagger'
 import type { Request, Response } from 'express'
 
-import { loginSchema, type LoginInput } from '@repo/shared'
+import {
+  forgotPasswordSchema,
+  loginSchema,
+  resetPasswordSchema,
+  type ForgotPasswordInput,
+  type LoginInput,
+  type ResetPasswordInput,
+} from '@repo/shared'
 
 import { Public } from '#shared/http/route-metadata'
 import { ZodValidationPipe } from '#shared/http/zod-validation.pipe'
 
 import { AuthCookies, REFRESH_TOKEN_COOKIE } from './auth.cookies'
 import { AuthService } from './auth.service'
+import { PasswordResetService } from './password-reset.service'
 
 /**
  * Sign in, sign out, refresh. Every route is `@Public()` — not because they are
@@ -32,6 +40,7 @@ import { AuthService } from './auth.service'
 export class AuthController {
   constructor(
     private readonly auth: AuthService,
+    private readonly passwordReset: PasswordResetService,
     private readonly cookies: AuthCookies,
   ) {}
 
@@ -126,6 +135,56 @@ export class AuthController {
     if (session) await this.auth.logoutAll(session.userId)
 
     this.cookies.clearSession(response)
+  }
+
+  /**
+   * 204 whether or not the address exists, always.
+   *
+   * That is the entire security property of this endpoint. Anything that
+   * varied — a different status, a different message, or a reply that came
+   * back faster because no mail was queued — would turn it into a way to test
+   * whether a person has an account here. The work it does or does not do is
+   * decided inside the service and never reaches the response.
+   */
+  @Post('forgot-password')
+  @Public()
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    summary: 'Send a password reset link, if the address exists',
+  })
+  async forgotPassword(
+    @Body(new ZodValidationPipe(forgotPasswordSchema))
+    body: ForgotPasswordInput,
+  ): Promise<void> {
+    await this.passwordReset.request(body.email)
+  }
+
+  /**
+   * Spends the emailed link. Revokes every session, including any the person
+   * still has open elsewhere — if the reason for the reset was that somebody
+   * else got in, those are the sessions that matter.
+   *
+   * Deliberately does not sign the caller in. Landing on the login screen with
+   * the new password is one extra step and proves it works; issuing a session
+   * to whoever posted the code would make the link a login rather than a
+   * reset.
+   */
+  @Post('reset-password')
+  @Public()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Set a new password using an emailed link' })
+  async resetPassword(
+    @Body(new ZodValidationPipe(resetPasswordSchema)) body: ResetPasswordInput,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<{ signedOutSessions: number }> {
+    const result = await this.passwordReset.reset(body.code, body.newPassword)
+
+    // Whatever this browser was holding is revoked now; leaving the cookies in
+    // place would mean the next request answering 401 with a token that looks
+    // valid, which is a confusing way to be signed out.
+    this.cookies.clearSession(response)
+
+    return result
   }
 
   private async sessionFromRefreshCookie(request: Request) {

@@ -570,6 +570,7 @@ notifications                                    (Phase 3) -- กล่องข
     WHERE read_at IS NULL;
 
 outbox
+  org_id              uuid   null ได้ ⚠ ตารางเดียวในระบบ — ดูย่อหน้าใต้บล็อกนี้
   recipient_id        uuid
   channel             text   'email' | 'discord' | 'line'
   template            text   'task_assigned' | 'due_soon' | ...
@@ -581,6 +582,17 @@ outbox
   CHECK (status IN ('pending', 'sent', 'failed'))
   CREATE INDEX ON notify.outbox (status, created_at) WHERE status = 'pending';
 ```
+
+🔒 **`outbox.org_id` เป็น nullable — ที่เดียวในทั้ง schema** (ตัดสิน 2026-09-04 ตอนเขียน forgot password)
+
+แถวเกือบทั้งหมดในตารางนี้เป็นของ org เดียวจริงๆ (มีคนถูก assign งาน · มีคน mention) แต่ **เมลรีเซ็ตรหัสผ่านเป็นของ _บัญชี_ ไม่ใช่ของ org** — คนคนนั้นอาจอยู่หลาย org หรือไม่อยู่ org ไหนเลย และการหยิบมาสัก org หนึ่งคือการยัดเรื่อง _การล็อกอิน_ ของเขาไปไว้ใต้บริษัทที่ไม่เกี่ยวข้อง · endpoint `/auth/forgot-password` ยังเป็น `@Public()` ด้วย จึงไม่มี request context ให้อ่านตั้งแต่แรก
+
+นี่คือข้อยกเว้นที่ [`00-overview.md`](../00-overview.md#binding-decisions) เขียนไว้อยู่แล้ว ("แถวที่ไม่ได้เป็นของ org ไหน") เพียงแต่ใช้ **รายแถว** แทนที่จะเป็นรายตาราง
+
+- เขียนผ่าน `EmailService.enqueueSystem()` ซึ่ง**ไม่**เรียก `requireOrgContext()` และ attribute แถวให้ system user · `enqueue()` ตัวเดิมยังบังคับ org เหมือนเดิม
+- ไม่มีใครอ่านคอลัมน์นี้แบบ scoped อยู่แล้ว — `OutboxWorker` ข้าม org โดยตั้งใจและ select ด้วย `status` · ถ้าวันหนึ่งมีหน้าจอ "เมลของ org นี้" มันจะ filter `org_id = $1` ซึ่งตัดแถวระดับบัญชีออกไปเองอย่างถูกต้อง
+- entity จึง extend `TimestampedEntity` แล้วประกาศคอลัมน์เอง ไม่ใช่ `OrgScopedEntity` — subclass ขยาย `string` เป็น `string | null` ไม่ได้
+- ⚠️ `notify.notifications` **ยัง `NOT NULL` เหมือนเดิม** — กล่องขาเข้าในเว็บอยู่ใต้ org switcher เสมอ
 
 **`notifications` แยกจาก `outbox` เพราะเป็นคนละอายุและคนละคำถาม**
 

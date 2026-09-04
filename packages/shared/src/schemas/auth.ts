@@ -74,6 +74,25 @@ export const changePasswordSchema = z
 
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>
 
+/** `POST /v1/auth/forgot-password` — answers 204 either way. */
+export const forgotPasswordSchema = z.object({ email: emailSchema })
+
+export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>
+
+/** `POST /v1/auth/reset-password` — the code comes from the emailed link. */
+export const resetPasswordSchema = z
+  .object({
+    code: z.string().min(1, 'ลิงก์ไม่ถูกต้อง'),
+    newPassword: passwordSchema,
+    confirmNewPassword: z.string(),
+  })
+  .refine((value) => value.newPassword === value.confirmNewPassword, {
+    path: ['confirmNewPassword'],
+    message: 'รหัสผ่านใหม่ไม่ตรงกัน',
+  })
+
+export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>
+
 /**
  * The codes the sign-in screens branch on. Here rather than in
  * `API_ERROR_CODES` for the reason given there: that file is for codes no
@@ -103,6 +122,11 @@ export const AUTH_ERROR_CODES = {
    * already signed in, and the field to highlight is not the email.
    */
   WRONG_CURRENT_PASSWORD: 'WRONG_CURRENT_PASSWORD',
+  /**
+   * The reset link is wrong, already spent, or expired. One code for all
+   * three, so a guessed code cannot be told apart from a stale one.
+   */
+  INVALID_RESET_CODE: 'INVALID_RESET_CODE',
 } as const
 
 export type AuthErrorCode =

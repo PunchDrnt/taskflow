@@ -1,6 +1,6 @@
 import { Column, Entity } from 'typeorm'
 
-import { OrgScopedEntity } from '#shared/entity/base.entity'
+import { TimestampedEntity } from '#shared/entity/base.entity'
 
 /**
  * A notification waiting to go out — written inside the business transaction,
@@ -8,7 +8,23 @@ import { OrgScopedEntity } from '#shared/entity/base.entity'
  * soft delete: `status` tracks its life and retention removes sent rows.
  */
 @Entity({ schema: 'notify', name: 'outbox' })
-export class Outbox extends OrgScopedEntity {
+export class Outbox extends TimestampedEntity {
+  /**
+   * Null for a message that belongs to the *account* rather than to an
+   * organisation — today the password-reset mail, whose recipient may be in
+   * several orgs or in none.
+   *
+   * This is why the class extends `TimestampedEntity` and declares the column
+   * itself rather than taking `OrgScopedEntity`'s: that base makes `orgId` a
+   * `string`, and a subclass cannot widen it. The reason the column is
+   * nullable at all is in the migration, beside it.
+   *
+   * It costs nothing at the read side — OutboxWorker crosses orgs on purpose
+   * and never filters on this.
+   */
+  @Column('uuid', { nullable: true })
+  orgId!: string | null
+
   @Column('uuid')
   recipientId!: string
 

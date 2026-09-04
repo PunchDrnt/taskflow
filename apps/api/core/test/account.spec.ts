@@ -3,7 +3,11 @@ import { JwtService } from '@nestjs/jwt'
 import { IsNull, type DataSource } from 'typeorm'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
-import { changePasswordSchema, updateProfileSchema } from '@repo/shared'
+import {
+  changePasswordSchema,
+  resetPasswordSchema,
+  updateProfileSchema,
+} from '@repo/shared'
 
 import { ApiException } from '#shared/http/api-exception'
 import { createOrgScopedRepository } from '#shared/org-scope/org-scoped.repository'
@@ -12,6 +16,11 @@ import { SYSTEM_USER_ID } from '#shared/system-user'
 import type { Env } from '../src/config/env'
 import { AuthService } from '../src/modules/identity/auth/auth.service'
 import { LockoutService } from '../src/modules/identity/auth/lockout.service'
+import { PasswordResetToken } from '../src/modules/identity/auth/password-reset-token.entity'
+import {
+  PASSWORD_RESET_TEMPLATE,
+  PasswordResetService,
+} from '../src/modules/identity/auth/password-reset.service'
 import { PasswordService } from '../src/modules/identity/auth/password.service'
 import { Session } from '../src/modules/identity/auth/session.entity'
 import { SessionService } from '../src/modules/identity/auth/session.service'
@@ -21,6 +30,8 @@ import {
 } from '../src/modules/identity/auth/token.service'
 import { User } from '../src/modules/identity/user/user.entity'
 import { UserService } from '../src/modules/identity/user/user.service'
+import { EmailService } from '../src/modules/notify/email.service'
+import { Outbox } from '../src/modules/notify/outbox.entity'
 import { OrganizationMember } from '../src/modules/organization/member.entity'
 import { MembershipService } from '../src/modules/organization/membership.service'
 import { createMigratedTestDataSource, hasTestDatabase } from './database'
@@ -28,6 +39,8 @@ import { createMigratedTestDataSource, hasTestDatabase } from './database'
 const PASSWORD = 'correct horse battery staple'
 const NEW_PASSWORD = 'a different long password'
 const ORIGIN = { userAgent: 'vitest', ipAddress: '127.0.0.1' }
+const RESET_TTL_MINUTES = 30
+const RESET_MAX_PER_HOUR = 3
 
 /**
  * What a person can change about their own account: the profile here, and the
@@ -42,6 +55,7 @@ describe.skipIf(!hasTestDatabase)('account', () => {
   let users: UserService
   let sessions: SessionService
   let auth: AuthService
+  let resets: PasswordResetService
   let counter = 0
 
   const newUser = async (withPassword = false): Promise<string> => {
@@ -120,11 +134,34 @@ describe.skipIf(!hasTestDatabase)('account', () => {
         }),
       ),
     )
+
+    const resetConfig = {
+      get: (key: keyof Env) => {
+        if (key === 'PASSWORD_RESET_TTL_MINUTES') return RESET_TTL_MINUTES
+        if (key === 'PASSWORD_RESET_MAX_PER_HOUR') return RESET_MAX_PER_HOUR
+        return 'https://app.example.test'
+      },
+    } as unknown as ConfigService<Env, true>
+
+    resets = new PasswordResetService(
+      createOrgScopedRepository(dataSource, PasswordResetToken),
+      dataSource,
+      users,
+      sessions,
+      auth,
+      new PasswordService(),
+      new TokenService(new JwtService({ secret: 'x'.repeat(32) })),
+      new EmailService(),
+      resetConfig,
+    )
   })
 
   afterAll(async () => {
     await dataSource?.destroy()
   })
+
+  const emailOf = async (id: string): Promise<string> =>
+    (await rowOf(id))!.email
 
   /** The `code` of the ApiException a call threw, for asserting on the branch. */
   const codeOf = async (promise: Promise<unknown>): Promise<string> => {
@@ -333,6 +370,204 @@ describe.skipIf(!hasTestDatabase)('account', () => {
           ...valid,
           newPassword: 'short',
           confirmNewPassword: 'short',
+        }).success,
+      ).toBe(false)
+    })
+  })
+
+  describe('forgot password', () => {
+    /** The link that was mailed, read back out of the queued row. */
+    const queuedCodeFor = async (userId: string): Promise<string | null> => {
+      const row = await dataSource.getRepository(Outbox).findOne({
+        where: { recipientId: userId, template: PASSWORD_RESET_TEMPLATE },
+        order: { createdAt: 'DESC' },
+      })
+
+      const url = row?.payloadJson.url
+      return typeof url === 'string' ? url.split('code=')[1]! : null
+    }
+
+    it('queues a mail that belongs to no organisation', async () => {
+      // 🔒 The reason notify.outbox.org_id is nullable at all. The recipient
+      // may be in several orgs or in none, and a message about their *login*
+      // filed under one company would be wrong in both cases.
+      const id = await newUser(true)
+
+      await resets.request(await emailOf(id))
+
+      const row = await dataSource.getRepository(Outbox).findOneBy({
+        recipientId: id,
+      })
+      expect(row?.orgId).toBeNull()
+      expect(row?.createdBy).toBe(SYSTEM_USER_ID)
+      expect(row?.template).toBe(PASSWORD_RESET_TEMPLATE)
+    })
+
+    it('says nothing about an address that does not exist', async () => {
+      // Not an assertion about a return value — there is none. The property is
+      // that no work is visible either way, so the caller cannot use this
+      // endpoint to test whether somebody has an account.
+      const before = await dataSource.getRepository(Outbox).count()
+
+      await expect(
+        resets.request('definitely-nobody@example.test'),
+      ).resolves.toBeUndefined()
+
+      expect(await dataSource.getRepository(Outbox).count()).toBe(before)
+    })
+
+    it('sends nothing to an account with no password to reset', async () => {
+      const id = await newUser()
+
+      await resets.request(await emailOf(id))
+
+      expect(
+        await dataSource.getRepository(Outbox).countBy({ recipientId: id }),
+      ).toBe(0)
+    })
+
+    it('invalidates the previous link when a new one is asked for', async () => {
+      const id = await newUser(true)
+      const email = await emailOf(id)
+
+      await resets.request(email)
+      const first = (await queuedCodeFor(id))!
+      await resets.request(email)
+      const second = (await queuedCodeFor(id))!
+
+      expect(second).not.toBe(first)
+      expect(await codeOf(resets.reset(first, NEW_PASSWORD))).toBe(
+        'INVALID_RESET_CODE',
+      )
+      await expect(resets.reset(second, NEW_PASSWORD)).resolves.toBeDefined()
+    })
+
+    it('stops after PASSWORD_RESET_MAX_PER_HOUR, still answering the same', async () => {
+      const id = await newUser(true)
+      const email = await emailOf(id)
+
+      for (let n = 0; n < RESET_MAX_PER_HOUR + 2; n += 1) {
+        await expect(resets.request(email)).resolves.toBeUndefined()
+      }
+
+      expect(
+        await dataSource.getRepository(Outbox).countBy({ recipientId: id }),
+      ).toBe(RESET_MAX_PER_HOUR)
+    })
+
+    it('counts the window from the request, so an hour later is allowed again', async () => {
+      const id = await newUser(true)
+      const email = await emailOf(id)
+      const start = new Date()
+
+      for (let n = 0; n < RESET_MAX_PER_HOUR; n += 1) {
+        await resets.request(email, start)
+      }
+      await resets.request(email, start)
+      expect(
+        await dataSource.getRepository(Outbox).countBy({ recipientId: id }),
+      ).toBe(RESET_MAX_PER_HOUR)
+
+      await resets.request(email, new Date(start.getTime() + 61 * 60_000))
+
+      expect(
+        await dataSource.getRepository(Outbox).countBy({ recipientId: id }),
+      ).toBe(RESET_MAX_PER_HOUR + 1)
+    })
+  })
+
+  describe('reset password', () => {
+    const codeFor = async (id: string): Promise<string> => {
+      await resets.request(await emailOf(id))
+      const row = await dataSource.getRepository(Outbox).findOne({
+        where: { recipientId: id, template: PASSWORD_RESET_TEMPLATE },
+        order: { createdAt: 'DESC' },
+      })
+
+      return String(row!.payloadJson.url).split('code=')[1]!
+    }
+
+    it('sets the password and revokes every session, sparing none', async () => {
+      // Unlike a change, which keeps the caller's: here there is no caller to
+      // keep, and if the reason for the reset was a break-in then the
+      // intruder's session is the one that has to go.
+      const id = await newUser(true)
+      await newSession(id)
+      await newSession(id)
+      const code = await codeFor(id)
+
+      const result = await resets.reset(code, NEW_PASSWORD)
+
+      expect(result.signedOutSessions).toBe(2)
+      expect(await liveSessionCount(id)).toBe(0)
+      expect(
+        await new PasswordService().verify(
+          (await rowOf(id))!.passwordHash!,
+          NEW_PASSWORD,
+        ),
+      ).toBe(true)
+    })
+
+    it('is single use', async () => {
+      const id = await newUser(true)
+      const code = await codeFor(id)
+
+      await resets.reset(code, NEW_PASSWORD)
+
+      expect(await codeOf(resets.reset(code, 'yet another password'))).toBe(
+        'INVALID_RESET_CODE',
+      )
+    })
+
+    it('refuses a code past its expiry', async () => {
+      const id = await newUser(true)
+      const code = await codeFor(id)
+
+      const later = new Date(Date.now() + (RESET_TTL_MINUTES + 1) * 60_000)
+
+      expect(await codeOf(resets.reset(code, NEW_PASSWORD, later))).toBe(
+        'INVALID_RESET_CODE',
+      )
+    })
+
+    it('answers a made-up code exactly as it answers a spent one', async () => {
+      // One code for wrong, spent and expired, so a guess cannot be told apart
+      // from a stale link.
+      expect(await codeOf(resets.reset('not-a-real-code', NEW_PASSWORD))).toBe(
+        'INVALID_RESET_CODE',
+      )
+    })
+
+    it('stores a hash, never the code itself', async () => {
+      const id = await newUser(true)
+      const code = await codeFor(id)
+
+      const row = await dataSource
+        .getRepository(PasswordResetToken)
+        .findOneBy({ userId: id })
+
+      expect(row!.tokenHash).not.toBe(code)
+      expect(row!.tokenHash).toMatch(/^[0-9a-f]{64}$/)
+    })
+  })
+
+  describe('resetPasswordSchema', () => {
+    it('refuses a mismatched confirmation', () => {
+      expect(
+        resetPasswordSchema.safeParse({
+          code: 'abc',
+          newPassword: NEW_PASSWORD,
+          confirmNewPassword: 'something else',
+        }).success,
+      ).toBe(false)
+    })
+
+    it('refuses an empty code', () => {
+      expect(
+        resetPasswordSchema.safeParse({
+          code: '',
+          newPassword: NEW_PASSWORD,
+          confirmNewPassword: NEW_PASSWORD,
         }).success,
       ).toBe(false)
     })

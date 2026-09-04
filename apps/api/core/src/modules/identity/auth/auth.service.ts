@@ -321,17 +321,26 @@ export class AuthService {
       now,
     )
 
-    // The revoked sessions are still in this instance's cache for up to
-    // SESSION_CACHE_TTL_MS, and a cache hit skips the row that now says
-    // revoked. Dropping them makes the sign-out immediate on this instance
-    // rather than eventually.
-    this.forgetOtherSessions(userId, sessionId)
+    this.forgetSessions(userId, sessionId)
 
     return { signedOutSessions }
   }
 
-  /** Drops every cached session for one person, keeping `except` if given. */
-  private forgetOtherSessions(userId: string, except?: string): void {
+  /**
+   * Drops one person's cached sessions, keeping `except` if given.
+   *
+   * Revoking writes the row, but a cache hit within SESSION_CACHE_TTL_MS never
+   * reads it — so without this a sign-out is eventual rather than immediate.
+   * Thirty seconds of that is the accepted cost for an ordinary revocation; it
+   * is not the right answer when the reason is "somebody else may be signed in
+   * as me", which is what both password paths are for. Public so
+   * `PasswordResetService` can say the same thing.
+   *
+   * Per instance, like the cache itself. With more than one API process this
+   * becomes shared state, which is one of the three things
+   * docs/01-architecture.md names as the reason to add Redis.
+   */
+  forgetSessions(userId: string, except?: string): void {
     for (const [sid, entry] of this.cache) {
       if (entry.value.userId === userId && sid !== except)
         this.cache.delete(sid)
