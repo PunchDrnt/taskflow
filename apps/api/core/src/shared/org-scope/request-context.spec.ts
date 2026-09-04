@@ -3,8 +3,8 @@ import { Agent, createServer, get, type Server } from 'node:http'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import {
-  enterRequestContext,
   getRequestContext,
+  openRequestContext,
   requireOrgContext,
   requireRequestContext,
   runWithRequestContext,
@@ -16,7 +16,7 @@ const context = { orgId: 'org-1', userId: 'user-1' }
  * One HTTP request, as far as AsyncLocalStorage can tell. Node's HTTP server
  * gives every request its own async resource, and that boundary is the only
  * thing keeping one `enterWith` out of the next request — so a test that calls
- * `enterRequestContext` bare would prove nothing and leak into its neighbours.
+ * `openRequestContext` bare would prove nothing and leak into its neighbours.
  */
 const inRequest = <T>(fn: () => Promise<T>): Promise<T> =>
   new AsyncResource('test-request').runInAsyncScope(fn)
@@ -101,13 +101,14 @@ describe('request context', () => {
  * 🔒 These pin the mechanism AuthGuard is required to use. A failure here is a
  * cross-org leak, not an ordinary bug — see checklists/phase-1.md §1.
  */
-describe('enterRequestContext', () => {
+describe('openRequestContext', () => {
   it('outlives the call that set it, which run() cannot do', async () => {
     await inRequest(async () => {
-      // The shape of canActivate: set the context, return, let something else
-      // call the handler. runWithRequestContext would have closed by now.
+      // The shape of canActivate: open the slot, fill it, return, and let
+      // something else call the handler. runWithRequestContext would have
+      // closed by now.
       const canActivate = (): boolean => {
-        enterRequestContext(context)
+        openRequestContext()(context)
         return true
       }
 
@@ -116,9 +117,24 @@ describe('enterRequestContext', () => {
     })
   })
 
+  it('is not readable until it is filled', async () => {
+    await inRequest(async () => {
+      const fill = openRequestContext()
+
+      // The window inside canActivate, between opening the slot and knowing
+      // the org. Empty rather than stale: a half-open context that answered
+      // with the previous request's org is the leak this shape exists to
+      // prevent.
+      expect(getRequestContext()).toBeUndefined()
+
+      fill(context)
+      expect(requireRequestContext()).toEqual(context)
+    })
+  })
+
   it('survives awaits', async () => {
     await inRequest(async () => {
-      enterRequestContext(context)
+      openRequestContext()(context)
 
       await new Promise((resolve) => setTimeout(resolve, 5))
       expect(requireRequestContext()).toEqual(context)
@@ -128,7 +144,9 @@ describe('enterRequestContext', () => {
   it('keeps 20 concurrent requests apart', async () => {
     const orgOf = async (index: number): Promise<string> =>
       inRequest(async () => {
-        enterRequestContext({ orgId: `org-${index}`, userId: `user-${index}` })
+        const fill = openRequestContext()
+        await new Promise((resolve) => setTimeout(resolve, 1))
+        fill({ orgId: `org-${index}`, userId: `user-${index}` })
 
         // Interleave: the later requests finish first, so a store shared
         // across requests would answer with whoever entered last.
@@ -143,9 +161,9 @@ describe('enterRequestContext', () => {
     expect(seen).toEqual(Array.from({ length: 20 }, (_, i) => `org-${i}`))
   })
 
-  it('does not reach a request that never entered one', async () => {
+  it('does not reach a request that never opened one', async () => {
     await inRequest(async () => {
-      enterRequestContext(context)
+      openRequestContext()(context)
       await Promise.resolve()
     })
 
@@ -158,31 +176,39 @@ describe('enterRequestContext', () => {
 /**
  * 🔒 The guard's actual shape, over a real HTTP server.
  *
- * `AuthGuard` looks the session up and *then* calls `enterRequestContext`, so
- * the `enterWith` happens after an await. That ordering is not covered by the
- * cases above, which all enter first, and it is the one that carries the risk:
- * a store entered after an await is visible to the caller only when the
- * caller's async resource has none of its own.
+ * The shape matters more than the transport, and getting it wrong is what let
+ * a broken guard ship: an earlier version of this test called `enterWith`
+ * *inline in the request handler*, after an await, and passed. Nest does not
+ * do that. `canActivate` is its own async function that the guards consumer
+ * awaits, so its post-await `enterWith` lands on a promise resource the
+ * handler never inherits — and the failure is intermittent, correct on the
+ * first request of a connection and undefined on the third, which is why a
+ * single hand-written request looks fine.
  *
- * That condition is exactly what Node's HTTP server provides and exactly what
- * an in-process harness does not — nest two `AsyncResource`s and the second
- * inherits the first's store, which is why `auth.guard.spec.ts` asserts on the
- * call rather than on the store. Measured here instead, where the shape is
- * real: parallel requests, and sequential ones sharing a keep-alive socket.
+ * So the server below calls a separate `guard()` and awaits it, the way Nest
+ * does, with a pipe-shaped await after it. Parallel requests, and sequential
+ * ones sharing a keep-alive socket, because a fresh socket per request hides
+ * the reuse case entirely.
  */
-describe('enterRequestContext over HTTP', () => {
+describe('openRequestContext over HTTP', () => {
   let server: Server
   let origin: string
   let requestCount = 0
 
   beforeAll(async () => {
+    // Nest's chain, one frame at a time: the guard is its own awaited async
+    // function, not code inlined here, because that difference is the bug.
+    const guard = async (orgId: string): Promise<void> => {
+      const fill = openRequestContext()
+      await new Promise((resolve) => setTimeout(resolve, 5)) // session lookup
+      fill({ orgId, userId: `user-${orgId}` })
+    }
+
     server = createServer(async (request, response) => {
       const orgId = `org-${(requestCount += 1)}`
 
-      // The guard: a session lookup, then the context, then the handler.
-      await new Promise((resolve) => setTimeout(resolve, 5))
-      enterRequestContext({ orgId, userId: `user-${orgId}` })
-      await new Promise((resolve) => setTimeout(resolve, 5))
+      await guard(orgId)
+      await new Promise((resolve) => setTimeout(resolve, 5)) // the pipes
 
       response.end(
         JSON.stringify({ expected: orgId, seen: getRequestContext()?.orgId }),

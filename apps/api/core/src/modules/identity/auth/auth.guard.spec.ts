@@ -9,7 +9,7 @@ import { AUTH_ERROR_CODES } from '@repo/shared'
 
 import { ApiException } from '#shared/http/api-exception'
 import { IS_PUBLIC, SKIP_ORG_SCOPE } from '#shared/http/route-metadata'
-import { enterRequestContext } from '#shared/org-scope/request-context'
+import { openRequestContext } from '#shared/org-scope/request-context'
 
 import type { Env } from '../../../config/env'
 import type { Membership } from '../../organization/membership.service'
@@ -23,23 +23,28 @@ import type { AuthenticatedUser, AuthService } from './auth.service'
 import { ACCESS_TOKEN_TTL_SECONDS, TokenService } from './token.service'
 
 /**
- * The guard's own call, spied on rather than read back out of
+ * The guard's own calls, spied on rather than read back out of
  * AsyncLocalStorage afterwards.
  *
- * `enterWith` is issued *after* an await here, and a store entered that way is
- * reliably visible to the caller only when the caller's async resource has
- * none of its own — which is exactly one HTTP request, and is not reproducible
- * in a test harness where every case is nested inside the same parent
- * resource. Measured: over a real server it holds for parallel requests and
- * for sequential ones on a keep-alive connection alike, and
- * request-context.spec.ts pins that. What is left for this file is the guard's
- * decision — whether it enters a context at all, and which org it names.
+ * Reading the store back is what an in-process harness cannot do honestly:
+ * every case here runs nested inside the same parent async resource, so one
+ * test inherits the previous one's store and the assertion passes for the
+ * wrong reason. The mechanism itself — that a slot opened in the synchronous
+ * prefix reaches the handler and a value entered after an await does not — is
+ * pinned over a real HTTP server in request-context.spec.ts. What is left for
+ * this file is the guard's *decision*: whether it opens a context at all,
+ * whether it fills one, and which org it names.
  */
+// `vi.hoisted`, because vi.mock is lifted above every other statement in
+// the file and its factory would otherwise close over an uninitialised const.
+const { filled } = vi.hoisted(() => ({ filled: vi.fn() }))
+
 vi.mock('#shared/org-scope/request-context', () => ({
-  enterRequestContext: vi.fn(),
+  openRequestContext: vi.fn(() => filled),
 }))
 
-const entered = vi.mocked(enterRequestContext)
+const opened = vi.mocked(openRequestContext)
+const entered = filled
 
 const ACME = '11111111-1111-4111-8111-111111111111'
 const GLOBEX = '22222222-2222-4222-8222-222222222222'
@@ -125,6 +130,7 @@ async function codeOf(promise: Promise<unknown>): Promise<string> {
 beforeEach(() => {
   cleared = []
   entered.mockClear()
+  opened.mockClear()
 })
 
 describe('AuthGuard', () => {
@@ -133,6 +139,22 @@ describe('AuthGuard', () => {
       guardFor(null).canActivate(httpContext({}, { public: true })),
     ).resolves.toBe(true)
 
+    expect(opened).not.toHaveBeenCalled()
+    expect(entered).not.toHaveBeenCalled()
+  })
+
+  it('opens the context slot before it knows who is calling', async () => {
+    // 🔒 The ordering the whole mechanism rests on: the slot has to be opened
+    // in canActivate's synchronous prefix, so it is opened even on the paths
+    // that go on to throw. Opened but never filled reads as no context at
+    // all, which is what a rejected request should look like.
+    expect(
+      await codeOf(
+        guardFor(signedIn([membership(ACME)])).canActivate(httpContext({})),
+      ),
+    ).toBe('UNAUTHENTICATED')
+
+    expect(opened).toHaveBeenCalledTimes(1)
     expect(entered).not.toHaveBeenCalled()
   })
 

@@ -11,7 +11,7 @@ import { AUTH_ERROR_CODES } from '@repo/shared'
 
 import { ApiException } from '#shared/http/api-exception'
 import { IS_PUBLIC, SKIP_ORG_SCOPE } from '#shared/http/route-metadata'
-import { enterRequestContext } from '#shared/org-scope/request-context'
+import { openRequestContext } from '#shared/org-scope/request-context'
 
 import { resolveActiveOrg } from '../../organization/membership.service'
 import {
@@ -50,6 +50,14 @@ export class AuthGuard implements CanActivate {
       return true
     }
 
+    // 🔒 Before the first `await` in this method, and it has to stay there.
+    // `enterWith` writes into the async resource executing right now: up here
+    // that is still the one Express owns, which the handler inherits, and
+    // after the session lookup below it is a promise resource the handler
+    // never sees. The org is not known yet, so the slot is opened now and
+    // filled at the bottom. See `openRequestContext` for the measurement.
+    const fillRequestContext = openRequestContext()
+
     const http = context.switchToHttp()
     const request = http.getRequest<Request>()
 
@@ -81,13 +89,7 @@ export class AuthGuard implements CanActivate {
       throw noOrg(caller.memberships.length)
     }
 
-    // 🔒 `enterWith`, never `run`: `canActivate` returns a boolean rather than
-    // calling the handler, so a `run` scope would close before the controller
-    // ran and every query below it would find no context at all. `enterWith`
-    // writes into the async resource the request already owns, which the
-    // handler and everything it awaits inherit. Measured in Phase 0 and
-    // pinned by request-context.spec.ts.
-    enterRequestContext({ userId: caller.userId, orgId: active.orgId })
+    fillRequestContext({ userId: caller.userId, orgId: active.orgId })
 
     return true
   }
