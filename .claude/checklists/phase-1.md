@@ -58,13 +58,16 @@ unique เต็ม · `views.sort_order` / `is_default`
 `failed_login_attempts` / `locked_until` ลงแล้วใน [schema batch](#schema-ลงแล้ว)) · ที่เหลือคือโค้ดล้วน
 
 - [x] `@nestjs/jwt` + guard เขียนเอง — **ไม่ใช้ `@nestjs/passport`** ([เหตุผล](../docs/01-architecture.md#auth))
-- [x] 🔒 **`AuthGuard` เป็น `APP_GUARD` และใช้ `enterWith` ไม่ใช่ `run`**
+- [x] 🔒 **`AuthGuard` เป็น `APP_GUARD` และเปิด context ด้วย `openRequestContext()` ก่อน `await` แรก**
       · `canActivate` คืน boolean แล้วจบ scope — `run` ทำให้ controller เห็น context เป็น `null`
-      · วัดไว้แล้วใน Phase 0 ว่า `enterWith` รอดข้าม `await` และ 20 request ซ้อนกันไม่รั่วข้าม org
-      · ✅ วัดเพิ่มตอนเขียน guard: guard เรียก `enterWith` **หลัง** await (ต้อง query session ก่อน) ซึ่งเป็นลำดับที่ Phase 0 ไม่ได้ครอบ
-      — ยิง server จริงแล้วไม่รั่วทั้ง 8 request ขนานและ 4 request ต่อเนื่องบน keep-alive เส้นเดียว
+      · ⚠️ **แก้แล้วหลังยิง server จริง (2026-09-04)** — เวอร์ชันแรกเรียก `enterWith` _หลัง_ await (ต้อง query session ก่อนถึงจะรู้ org)
+      แล้ว `POST /v1/me/active-org` คืน 500 `No request context` · store ที่เข้าหลัง `await` ลงบน promise resource ที่ handler ไม่สืบมา
+      · **อาการไม่คงที่** — request แรกของ connection ถูก, request ที่ 3 ไม่ถูก · ยิงมือทีละครั้งจะดูเหมือนผ่าน
+      · เทสต์เดิมไม่จับเพราะเรียก `enterWith` ตรงๆ ใน request handler ไม่ได้แยกเป็น `guard()` ที่ถูก `await` แบบ Nest — ระยะ async หนึ่งชั้นนั้นคือทั้งหมดของบั๊ก
+      · ท่าที่ถูก: จอง slot (`enterWith` cell เปล่า) ในส่วนหัวที่ยังไม่เจอ `await` แล้วเติมค่าทีหลัง
+      — วัดแล้วถูกทั้ง 40 request ขนานและ 10 request ต่อเนื่องบน keep-alive เส้นเดียว
       · ⚠️ harness ในโปรเซสเดียวไม่ใช่ตัวแทนที่ถูก (`AsyncResource` ซ้อนกันสืบ store ตัวนอกมา) — `auth.guard.spec.ts` จึง assert ที่ call ไม่ใช่ที่ store
-      · **ห้ามเปลี่ยนโครงตรงนี้โดยไม่รันเทสซ้ำ** — ถ้ารั่วคือ cross-org leak ทันที ไม่ใช่บั๊กธรรมดา
+      · **ห้ามเปลี่ยนโครงตรงนี้โดยไม่ยิง server จริงซ้ำ** — unit test ผ่านหมดตอนที่ guard พังอยู่ · ถ้ารั่วคือ cross-org leak ไม่ใช่บั๊กธรรมดา
 - [x] Guard อ่าน `@Public()` ผ่าน `Reflector` — decorator มีอยู่แล้วใน `shared/http/route-metadata.ts` **ยังไม่มีใครอ่าน**
 - [x] `@SkipOrgScope()` — endpoint ที่ล็อกอินแล้วแต่ยังไม่ผูก org · **Phase 1 มีผู้ใช้จริงสองกลุ่ม**:
       หน้า Home ที่รวมงานข้าม org และคนที่ยังไม่ได้อยู่ org ไหนเลย
@@ -291,9 +294,11 @@ unique เต็ม · `views.sort_order` / `is_default`
 
 | จุด | เรื่อง |
 | --- | --- |
-| `enterWith` ใน guard | `run` ใช้ไม่ได้ (scope ปิดก่อน handler) · ถ้าเปลี่ยนโครง auth ต้องรันเทส concurrency ซ้ำ ไม่ใช่แค่ดูว่า login ผ่าน |
+| `enterWith` ใน guard | `run` ใช้ไม่ได้ (scope ปิดก่อน handler) · และ `enterWith` ต้องอยู่**ก่อน `await` แรก** · ถ้าเปลี่ยนโครง auth ต้องยิง server จริงซ้ำ ไม่ใช่แค่ดูว่า login ผ่าน (login เป็น `@Public()` จึงผ่านแม้ guard พัง) |
 | `@Public()` | มีอยู่แล้วแต่**ยังไม่มีใครอ่าน** · ลืมต่อ `Reflector` = ทุก endpoint ต้องล็อกอิน รวมทั้ง `/login` เอง |
-| ~~`RequestContextMiddleware`~~ | ✅ ลบไปแล้วพร้อม `AuthGuard` — `enterRequestContext` มีที่เรียกที่เดียวคือ guard |
+| ~~`RequestContextMiddleware`~~ | ✅ ลบไปแล้วพร้อม `AuthGuard` — `openRequestContext` มีที่เรียกที่เดียวคือ guard |
+| `.returning([...])` ของ TypeORM | รับ **property name** เข้า แต่คืน key เป็น **column name** · ชื่อที่ไม่ตรง property ถูกตัดออกจาก SQL **เงียบๆ** ไม่ error — `['id','user_id']` ทำให้ refresh ออก token ที่ไม่มี `sub` แล้วทุก request หลัง refresh 401 (เจอตอนยิงจริง 2026-09-04, unit test ผ่านหมด) |
+| `z.uuid()` ของ zod 4 | เช็ค version/variant nibble ตาม RFC 9562 ด้วย · `SYSTEM_USER_ID` (nil UUID) และ id ของ demo seed สอบตก ทั้งที่ column `uuid` ของ Postgres รับหมด — ใช้ `idSchema()` (`z.guid()`) กับทุก id |
 | `skip` ใน repository | ตัดออกจาก type แล้ว compile ไม่ผ่าน · ไม่ใช่บั๊ก เป็นความตั้งใจ — ต้องเขียน cursor helper |
 | `save()` ที่มี `id` | เช็คก่อนว่า org นี้เป็นเจ้าของ ถ้าไม่ใช่ throw · เจอตอนเขียน update endpoint แน่ |
 | `updateById` | ไม่โหลด entity → subscriber ไม่ทำงาน · มันเขียน `updatedBy` ให้เองแล้ว อย่าเขียนซ้ำ |
