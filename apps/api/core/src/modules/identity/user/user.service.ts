@@ -43,6 +43,34 @@ export class UserService {
   }
 
   /**
+   * The fields a person may edit about themselves.
+   *
+   * `email` is deliberately not among them: it is the login identifier and is
+   * unique across the system, so changing it needs a confirmation round trip
+   * to the new address before it takes effect — Phase 2's flow, not a field on
+   * this form.
+   *
+   * `base('user')` for the same reason every read here uses it, plus one more:
+   * `updateById` would narrow the where clause by `orgId`, and this table has
+   * no such column. Unlike `setLockoutState` this does move `updated_at` and
+   * `updated_by` — a person edited it, which is exactly what those columns are
+   * for.
+   */
+  async updateProfile(
+    id: string,
+    profile: { name: string; nickname: string; avatarUrl: string | null },
+    now = new Date(),
+  ): Promise<void> {
+    await this.users.queryBuilder
+      .base('user')
+      .update(User)
+      .set({ ...profile, updatedAt: now, updatedBy: id })
+      .where('id = :id', { id })
+      .andWhere('deleted_at IS NULL')
+      .execute()
+  }
+
+  /**
    * The lockout counters, written without touching `updated_at`/`updated_by`.
    *
    * They are machine state rather than anything a person edited — the same
