@@ -1,3 +1,4 @@
+import { hash } from '@node-rs/argon2'
 import { DataSource } from 'typeorm'
 
 import { SYSTEM_USER_ID } from '#shared/system-user'
@@ -18,6 +19,19 @@ import { buildDataSourceOptions } from '../data-source.options'
  * Deletes what it made before making it again, so it can be re-run. It refuses
  * to touch a production database at all.
  */
+/**
+ * The password every demo account shares, printed on the way out so nobody has
+ * to read it out of this file.
+ *
+ * A real hash rather than a null column, which is what this was before auth
+ * existed: with `AuthGuard` in place a seeded database that nobody can log
+ * into is a database nobody can use, and the alternative was what it replaced
+ * — hand-writing an argon2 hash into psql to try anything. It is safe only
+ * because `seed()` refuses to run against `NODE_ENV=production`; treat it the
+ * way `.env.example` is treated, as a committed fake.
+ */
+const DEMO_PASSWORD = 'demo-password-not-for-production'
+
 const ORG_ID = '11111111-1111-1111-1111-111111111111'
 
 const PEOPLE = [
@@ -136,13 +150,15 @@ async function seed(dataSource: DataSource): Promise<void> {
       PEOPLE.map(([id]) => id),
     ])
 
-    // password_hash is null: nothing authenticates yet, and a fake hash would
-    // look like a credential that works.
+    // Hashed once and shared by all four, because hashing is deliberately slow
+    // and this is the same throwaway password four times over.
+    const passwordHash = await hash(DEMO_PASSWORD)
+
     for (const [id, email, name, nickname] of PEOPLE) {
       await manager.query(
-        `INSERT INTO identity.users (id, email, name, nickname, status, created_by, updated_by)
-         VALUES ($1, $2, $3, $4, 'active', $5, $5)`,
-        [id, email, name, nickname, SYSTEM_USER_ID],
+        `INSERT INTO identity.users (id, email, name, nickname, status, password_hash, created_by, updated_by)
+         VALUES ($1, $2, $3, $4, 'active', $5, $6, $6)`,
+        [id, email, name, nickname, passwordHash, SYSTEM_USER_ID],
       )
     }
 
@@ -353,6 +369,10 @@ async function main(): Promise<void> {
     )) as { count: number }[]
     console.log(
       `seeded org ${ORG_ID}: ${PEOPLE.length} users, ${STATUSES.length} statuses, ${count} tasks`,
+    )
+    console.log(
+      `sign in as any of ${PEOPLE.map(([, email]) => email).join(', ')} ` +
+        `with the password ${DEMO_PASSWORD}`,
     )
   } finally {
     await dataSource.destroy()
