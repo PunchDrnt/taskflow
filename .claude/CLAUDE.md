@@ -32,7 +32,7 @@ A doc that disagrees with the code is worse than no doc, because people trust it
 The full list with rationale is in [`docs/00-overview.md`](./docs/00-overview.md#binding-decisions). In short:
 
 - Date-times are `timestamptz`, stored UTC — never `timestamp`
-- `org_id` on every table whose rows belong to one org — exempt only where a row belongs to no single org, which today means schema `identity`, `billing.plans` and `organization.organizations` (whose `org_id` would always equal its `id`). It is a test to apply, not a list to memorise, and a join table needs the column _most_: with both FKs composite on `(id, org_id)`, linking two orgs' rows becomes impossible in the database rather than merely discouraged. The cross-org isolation test must exist
+- `org_id` on every table whose rows belong to one org — exempt only where a row belongs to no single org, which today means schema `iam`, `billing.plans` and `organization.organizations` (whose `org_id` would always equal its `id`). It is a test to apply, not a list to memorise, and a join table needs the column _most_: with both FKs composite on `(id, org_id)`, linking two orgs' rows becomes impossible in the database rather than merely discouraged. The cross-org isolation test must exist
 - Unique constraints on soft-deleted tables must be **partial** indexes (`WHERE deleted_at IS NULL`) — with one deliberate exception, `task.tasks (project_id, number)`, which is a full index because a task number must never be reissued
 - `created_by` / `updated_by` / `completed_by` are `RESTRICT` — deleting a user is anonymisation, not a hard delete
 - `deleted_at` and `deleted_by` are set together, enforced by a CHECK on every soft-deleted table. Tables that already carry a state column meaning "no longer usable" (`sessions.revoked_at`, `password_reset_tokens.used_at`, `outbox.status`) have neither: a second delete marker is one more thing to keep in sync, and the retention policy hard-deletes them anyway
@@ -57,6 +57,8 @@ These terms overlap dangerously — check here before naming anything.
 | **Sub-task**           | A task with `parent_task_id` · a full task with its own status and assignee                                                                                            | not a checklist item               |
 | **Sprint**             | A work cycle · optional per project (`sprint_enabled`)                                                                                                                 | not mandatory                      |
 | **Activity log**       | The user-facing _feature_ name — stored in `audit.logs`, owned by module `audit/`                                                                                      | not a schema name                  |
+| **Username**           | The unique login name · `a-z0-9_`, 3-30 chars, lives in URLs and @-mentions · one per live account                                                                     | not a display name                 |
+| **Nickname**           | What colleagues call the person · may repeat · Thai users go by it, so the assignee picker searches and shows it                                                       | not a login identifier             |
 
 Two permission layers, kept strictly separate — system-level RBAC (ours, crosses orgs) above org-level fixed roles (`owner`/`admin`/`member`, with `admin`/`member` on teams and projects).
 
@@ -145,10 +147,10 @@ These are the ones worth knowing _before_ opening a file. Everything else — wh
 - **Nothing in the running app may import `database/data-source.ts`.** It reads `process.env` at import time and exists for the TypeORM CLI; `database.module.ts` builds its options from `ConfigService`.
 - **`synchronize` is permanently `false`** and every migration is handwritten — it cannot emit partitions, partial indexes, `COLLATE "C"` or extensions, all of which this schema needs. Entities are listed explicitly in `database/entities.ts`, not by glob, so `nest build` and Vitest's SWC transform see the same list.
 - **A new soft-deletable table must be named in `AGGREGATE_CHILDREN` or `ROOTS`** in `shared/entity/cascade-soft-delete.ts`, or a test fails. The map is hand-written because the database cannot answer what belongs to what — `tasks.project_id` is `RESTRICT` and `tasks.status_id` is `NOT NULL`, and neither means what the cascade needs.
-- **Entities describe columns only** — no `@ManyToOne` for `created_by` and friends. A service that wants a user's name calls `UserService`; importing identity's `User` everywhere would break that boundary. Constraints, indexes and FKs live in migrations.
+- **Entities describe columns only** — no `@ManyToOne` for `created_by` and friends. A service that wants a user's name calls `UserService`; importing iam's `User` everywhere would break that boundary. Constraints, indexes and FKs live in migrations.
 - **Services inject `OrgScopedRepository`, never `Repository<T>`** — via `provideOrgRepository(Entity)` + `@InjectOrgRepository(Entity)`. ESLint enforces it under `src/modules/**`; `src/maintenance/` is deliberately outside that rule, since every statement in it crosses orgs on purpose and is raw SQL.
 - **Reach the shared layer as `#shared/*`** — a package.json subpath import, not a tsconfig `paths` alias, so tsc, `node dist/main.js`, the TypeORM CLI and Docker all resolve it with no loader. Files _inside_ `shared/` import each other relatively.
-- **`queryBuilder.withOrg(alias)` is the default; `queryBuilder.base(alias)` is the deliberate crossing.** `withOrg` does not exist on an entity without `orgId`, so `base` is the only option on `identity.*` and `billing.plans` — and a decision that needs saying out loud anywhere else.
+- **`queryBuilder.withOrg(alias)` is the default; `queryBuilder.base(alias)` is the deliberate crossing.** `withOrg` does not exist on an entity without `orgId`, so `base` is the only option on `iam.*` and `billing.plans` — and a decision that needs saying out loud anywhere else.
 - **`AuditService.record(manager, …)` and `EmailService.enqueue(manager, …)` take the caller's `EntityManager`** and throw outside a transaction. That is how the 🔒 "audit writes in the same transaction" rule is enforced rather than remembered — a listener runs after the commit and cannot satisfy it.
 - **`@repo/shared` must not import `@nestjs/*`, `typeorm`, `react` or `next`** — it ships to both runtimes. `no-restricted-imports` enforces it.
 - **Import `@repo/ui` components by their specific path**, not from a package root; there is no barrel file.
@@ -169,7 +171,7 @@ These are the ones worth knowing _before_ opening a file. Everything else — wh
 | `src/modules/audit/`              | The first real domain module, and the shape the others should copy                                                                                                                                                                                  |
 | `src/modules/notify/`, `storage/` | The service wrappers. `RESEND_API_KEY` is the only optional variable in `env.ts` — absent it logs instead of sending, absent under `NODE_ENV=production` the process refuses to start.                                                              |
 
-`src/modules/<module>/*.entity.ts` is one entity per table. `identity/` is the one module split a level deeper — `auth/`, `user/`, `system/` — the structure `docs/01-architecture.md` §2 always specified, because Phase 1 gives it three times the files of any other module.
+`src/modules/<module>/*.entity.ts` is one entity per table. `iam/` is the one module split a level deeper — `auth/`, `user/`, `system/` — the structure `docs/01-architecture.md` §2 always specified, because Phase 1 gives it three times the files of any other module.
 
 Migrations run against compiled output:
 

@@ -8,6 +8,7 @@ import {
   ACTIVE_ORG_COOKIE,
   AuthCookies,
   REFRESH_TOKEN_COOKIE,
+  TWO_FACTOR_COOKIE,
 } from './auth.cookies'
 
 interface SetCall {
@@ -119,6 +120,9 @@ describe('setting and clearing', () => {
       ACCESS_TOKEN_COOKIE,
       REFRESH_TOKEN_COOKIE,
       ACTIVE_ORG_COOKIE,
+      // A half-finished login has no business outliving the session it was
+      // going to create.
+      TWO_FACTOR_COOKIE,
     ])
     for (const call of cleared) {
       const { maxAge: _maxAge, ...expected } = cookies.optionsFor(call.name)

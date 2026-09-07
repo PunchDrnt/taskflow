@@ -16,10 +16,12 @@ import {
   loginSchema,
   registerSchema,
   resetPasswordSchema,
+  twoFactorLoginSchema,
   type ForgotPasswordInput,
   type LoginInput,
   type RegisterInput,
   type ResetPasswordInput,
+  type TwoFactorLoginInput,
 } from '@repo/shared'
 
 import { ApiException } from '#shared/http/api-exception'
@@ -27,9 +29,19 @@ import { Public } from '#shared/http/route-metadata'
 import { ZodValidationPipe } from '#shared/http/zod-validation.pipe'
 
 import { FeatureService } from '../../../feature/feature.service'
-import { AuthCookies, REFRESH_TOKEN_COOKIE } from './auth.cookies'
-import { AuthService } from './auth.service'
+import {
+  AuthCookies,
+  REFRESH_TOKEN_COOKIE,
+  TWO_FACTOR_COOKIE,
+} from './auth.cookies'
+import {
+  AuthService,
+  isTwoFactorChallenge,
+  type LoginResult,
+} from './auth.service'
 import { PasswordResetService } from './password-reset.service'
+import { TokenService } from './token.service'
+import { TwoFactorService } from './two-factor.service'
 
 /**
  * Sign in, sign out, refresh. Every route is `@Public()` — not because they are
@@ -46,27 +58,91 @@ export class AuthController {
   constructor(
     private readonly auth: AuthService,
     private readonly passwordReset: PasswordResetService,
+    private readonly twoFactor: TwoFactorService,
     private readonly features: FeatureService,
+    private readonly tokens: TokenService,
     private readonly cookies: AuthCookies,
   ) {}
 
   @Post('login')
   @Public()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Sign in with email and password' })
+  @ApiOperation({ summary: 'Sign in with an email or username, and password' })
   async login(
     @Body(new ZodValidationPipe(loginSchema)) body: LoginInput,
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
   ) {
-    const result = await this.auth.login(body, {
-      userAgent: request.get('user-agent') ?? 'unknown',
-      // Both columns are NOT NULL and ip_address is `inet`, so an empty string
-      // would not insert. Express resolves this from X-Forwarded-For only when
-      // `trust proxy` is set, which Caddy's hop makes necessary.
-      ipAddress: request.ip ?? '0.0.0.0',
-    })
+    const outcome = await this.auth.login(body, originOf(request))
 
+    // The password was right and a second factor is owed. 200 with a code to
+    // branch on rather than an error status: nothing failed, the login is
+    // halfway done, and the screen that follows is a field, not a message.
+    if (isTwoFactorChallenge(outcome)) {
+      this.cookies.setTwoFactorChallenge(response, outcome.challenge)
+
+      return {
+        twoFactorRequired: true,
+        code: AUTH_ERROR_CODES.TWO_FACTOR_REQUIRED,
+      }
+    }
+
+    return this.completeLogin(response, outcome)
+  }
+
+  /**
+   * The second half. The challenge cookie says who; the code says it is really
+   * them.
+   *
+   * `@Public()` like the first half and for the same reason: what it checks is
+   * in its own cookie and body, not in an access token the guard would look
+   * for. `rememberMe` is deliberately not repeated — it was answered in step
+   * one and asking again would let the second request quietly extend a session
+   * the first one scoped.
+   */
+  @Post('login/2fa')
+  @Public()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Finish signing in with a code from the app' })
+  async loginTwoFactor(
+    @Body(new ZodValidationPipe(twoFactorLoginSchema))
+    body: TwoFactorLoginInput,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const challenge = readCookie(request, TWO_FACTOR_COOKIE)
+    const userId =
+      challenge === undefined
+        ? null
+        : this.tokens.verifyTwoFactorChallenge(challenge)
+
+    // Expired, forged, or never issued — all one answer, and the client's move
+    // is the same in every case: start again from the password.
+    if (userId === null) {
+      this.cookies.clearTwoFactorChallenge(response)
+      throw new ApiException(
+        HttpStatus.UNAUTHORIZED,
+        AUTH_ERROR_CODES.SESSION_EXPIRED,
+        'หมดเวลายืนยัน กรุณาเข้าสู่ระบบใหม่',
+      )
+    }
+
+    await this.twoFactor.verify(userId, body.code)
+
+    // Spent, whatever happens next. Leaving it would give an attacker who
+    // guesses one code a second attempt with the same challenge.
+    this.cookies.clearTwoFactorChallenge(response)
+
+    const result = await this.auth.issueSession(
+      userId,
+      originOf(request),
+      false,
+    )
+
+    return this.completeLogin(response, result)
+  }
+
+  private completeLogin(response: Response, result: LoginResult) {
     this.cookies.setSession(response, result.tokens)
 
     // Set here rather than left to the guard: with one org there is nothing to
@@ -79,6 +155,7 @@ export class AuthController {
     // The org list rides along so the picker can be drawn without a second
     // round trip on the one screen where latency is most visible.
     return {
+      twoFactorRequired: false,
       organizations: result.memberships,
       activeOrgId: result.activeOrgId,
     }
@@ -242,4 +319,16 @@ function readCookie(request: Request, name: string): string | undefined {
   const value = (request.cookies as Record<string, string> | undefined)?.[name]
 
   return value === undefined || value === '' ? undefined : value
+}
+
+/**
+ * `ip_address` is `inet` and both columns are NOT NULL, so an empty string
+ * would not insert. Express resolves the address from X-Forwarded-For only
+ * when `trust proxy` is set, which Caddy's hop makes necessary.
+ */
+function originOf(request: Request) {
+  return {
+    userAgent: request.get('user-agent') ?? 'unknown',
+    ipAddress: request.ip ?? '0.0.0.0',
+  }
 }

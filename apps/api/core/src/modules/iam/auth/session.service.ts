@@ -30,13 +30,13 @@ export interface SessionRecord {
 }
 
 /**
- * `identity.sessions`: one row per login, for the life of that login.
+ * `iam.sessions`: one row per login, for the life of that login.
  *
  * Rotation changes hashes in place rather than inserting — the row is the
  * session, so "sign out this device" stays one row to revoke however many
  * times the token has turned over.
  *
- * Every query is `queryBuilder.base`, which is the only option: `identity.*`
+ * Every query is `queryBuilder.base`, which is the only option: `iam.*`
  * has no `org_id`, and a session is not an org's row anyway — the same person
  * uses one session across every org they belong to.
  */

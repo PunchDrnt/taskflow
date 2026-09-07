@@ -43,18 +43,18 @@ unique เต็ม · `views.sort_order` / `is_default`
       · **ตัดสินแล้ว: allow-list ว่าง ปิดหมดเป็น default** — `ENABLED_FEATURES` เป็น `Set` เปล่า ชื่อที่ไม่ได้อยู่ในนั้นคือปิด · การเพิ่มชื่อเข้า `FEATURES` จึงเป็นการ**ดัก** feature ไม่ใช่การเปิด
       · doc ไม่ต้องแก้ — **โค้ดขยับมาตรงกับ doc** ไม่ใช่ทางกลับกัน
       · test ครอบว่าไม่มี feature ไหนเปิดอยู่จริง และชื่อที่ยังไม่มีใครเปิด return `false` — ไม่ใช่เชื่อคอมเมนต์
-- [ ] **`identity.oauth_accounts` — migrate ไว้ แต่ feature ปิด ยังไม่ใช้** (ตัดสินแล้ว)
-      · ตารางลงตาม schema ใน [`02-database/schema.md`](../docs/02-database/schema.md#schema-identity) · เป็นแพทเทิร์นเดียวกับ `identity.roles`/`permissions` ที่ migrate ตั้งแต่ Phase 0 แล้วไม่มีใครอ่านจนถึง Phase 7
+- [ ] **`iam.oauth_accounts` — migrate ไว้ แต่ feature ปิด ยังไม่ใช้** (ตัดสินแล้ว)
+      · ตารางลงตาม schema ใน [`02-database/schema.md`](../docs/02-database/schema.md#schema-iam) · เป็นแพทเทิร์นเดียวกับ `iam.roles`/`permissions` ที่ migrate ตั้งแต่ Phase 0 แล้วไม่มีใครอ่านจนถึง Phase 7
       · **Google login ยังไม่เปิดใช้** — ปิดด้วยกลไกที่ปิดได้จริง ดูข้อบน ไม่ใช่ `FeatureService` ตามสภาพปัจจุบัน
       · **hard delete** (`CreatedEntity`) ตามสามคำถามใน [`02-database/rules.md`](../docs/02-database/rules.md#base-entity) — ลืม `deleted_at IS NULL` ใน flow ล็อกอินคือช่องให้คนที่ unlink แล้วเข้ากลับมาได้ · จึงไม่ต้องแตะ `AGGREGATE_CHILDREN`/`ROOTS` เลย และ index เป็น `UNIQUE` ธรรมดาไม่ใช่ partial
-      · 🔒 **anonymise ต้อง `DELETE` แถว oauth เอง** — `ON DELETE CASCADE` บน `user_id` ไม่ยิง เพราะ `identity.users` อยู่ใน `NEVER_PURGED` และ anonymise เป็น `UPDATE` · ไม่ลบ = แถวค้างให้ล็อกอินกลับเข้ามาได้
+      · 🔒 **anonymise ต้อง `DELETE` แถว oauth เอง** — `ON DELETE CASCADE` บน `user_id` ไม่ยิง เพราะ `iam.users` อยู่ใน `NEVER_PURGED` และ anonymise เป็น `UPDATE` · ไม่ลบ = แถวค้างให้ล็อกอินกลับเข้ามาได้
       · roadmap ไม่ได้จัด Google login ไว้ phase ไหน — ตอนเปิดใช้จริงค่อยเพิ่มเข้า roadmap
 
 ---
 
 ## 1. Auth — ทุกอย่างข้างล่างพึ่งข้อนี้
 
-ตารางมีครบแล้ว (`identity.sessions` · `password_reset_tokens` ตั้งแต่ Phase 0 ·
+ตารางมีครบแล้ว (`iam.sessions` · `password_reset_tokens` ตั้งแต่ Phase 0 ·
 `failed_login_attempts` / `locked_until` ลงแล้วใน [schema batch](#schema-ลงแล้ว)) · ที่เหลือคือโค้ดล้วน
 
 - [x] `@nestjs/jwt` + guard เขียนเอง — **ไม่ใช้ `@nestjs/passport`** ([เหตุผล](../docs/01-architecture.md#auth))
@@ -77,7 +77,7 @@ unique เต็ม · `views.sort_order` / `is_default`
 - [x] 🔒 **การหมุนต้อง atomic — เงื่อนไขอยู่ใน `UPDATE` ไม่ใช่ `SELECT` ก่อนแล้วค่อยเขียน**
 
       ```sql
-      UPDATE identity.sessions
+      UPDATE iam.sessions
          SET previous_token_hash = current_token_hash,
              current_token_hash  = $new, rotated_at = now()
        WHERE current_token_hash = $presented AND revoked_at IS NULL
@@ -118,13 +118,20 @@ unique เต็ม · `views.sort_order` / `is_default`
       · ⚠️ **`notify.outbox.org_id` กลายเป็น nullable** เพราะเมลรีเซ็ตเป็นของบัญชี ไม่ใช่ของ org
       แก้ [`00-overview`](../docs/00-overview.md#binding-decisions) กับ [`schema.md`](../docs/02-database/schema.md#schema-notify) แล้วใน commit เดียวกัน
 - [x] **Remember me** — เป็นค่าของ `sessions.expires_at` ไม่ใช่กลไกใหม่
-- [x] **ล็อกบัญชีเมื่อ login ผิดหลายครั้ง** — `identity.users.failed_login_attempts` + `locked_until`
+- [x] **ล็อกบัญชีเมื่อ login ผิดหลายครั้ง** — `iam.users.failed_login_attempts` + `locked_until`
       · เก็บใน DB ไม่ใช่ memory · ลองผิดระหว่างล็อกไม่ต่อเวลา · อีเมลที่ไม่มีในระบบไม่นับอะไรเลย
       · ✅ ครบแล้ว — `LOGIN_MAX_ATTEMPTS` / `LOGIN_LOCK_MINUTES` อยู่ใน `env.ts` · lock หมดอายุแล้วนับใหม่ (N ครั้งต่อหน้าต่าง) ไม่ใช่สะสมต่อ
 - [x] `/register` มีอยู่แต่ดักด้วย `FeatureService.isEnabled(org, 'public_registration')` → `false`
       · **การใช้งานจริงครั้งแรกของ `FeatureService`** ที่เขียนรอไว้ตั้งแต่ Phase 0
 
-- [x] ตาราง `identity.oauth_accounts` — migrate แล้ว ยังไม่มีใครอ่าน (แพทเทิร์นเดียวกับตาราง RBAC ตั้งแต่ Phase 0)
+- [x] **2FA แบบ TOTP — เปิดเอง ไม่บังคับใคร** (นอกแผนเดิม · roadmap เขียนไว้ว่า Phase หลัง + บังคับ system role)
+      · ลงครึ่งแรกก่อนเพราะ**การบังคับต้องมี system role ให้บังคับ** ซึ่ง `iam.user_roles` ยังไม่มีแถวเลยตั้งแต่ Phase 0
+      · 🔒 secret เข้ารหัส AES-256-GCM ไม่ใช่เก็บดิบ — `deploy/backup.sh` เขียน dump ลงดิสก์ กุญแจต้องไม่อยู่ใน dump
+      · 🔒 `last_used_step` กัน replay — โค้ดอันเดียวใช้ได้ทั้งหน้าต่าง 30 วิ ไม่จำ step = โดนแอบมองครั้งเดียวใช้ได้สองรอบ
+      · challenge เป็น JWT 5 นาที มี `purpose` และ**ไม่มี `sid`** — guard ปฏิเสธสองชั้น
+      · recovery code 10 อัน เก็บแต่ hash · ตัดด้วย statement เดียวแบบ session rotation
+      · **`phone` ไม่เกี่ยวกับ 2FA** — เลือก TOTP ไม่ใช่ SMS เบอร์เป็นข้อมูลโปรไฟล์ล้วนๆ
+- [x] ตาราง `iam.oauth_accounts` — migrate แล้ว ยังไม่มีใครอ่าน (แพทเทิร์นเดียวกับตาราง RBAC ตั้งแต่ Phase 0)
 
 **ตรวจก่อนปิดข้อนี้**
 
@@ -146,7 +153,7 @@ unique เต็ม · `views.sort_order` / `is_default`
 - [x] 🔒 **Email unique ทั้งระบบแบบ partial index** — ลงมาตั้งแต่ `CreateIdentityUsers` แล้ว (`users_email_unique`)
 
       ```sql
-      CREATE UNIQUE INDEX ON identity.users (email) WHERE status != 'deleted';
+      CREATE UNIQUE INDEX ON iam.users (email) WHERE status != 'deleted';
       ```
 
       · `citext` อยู่แล้ว → `A@x.com` ชนกับ `a@x.com` เอง ไม่ต้องพัน `lower()`

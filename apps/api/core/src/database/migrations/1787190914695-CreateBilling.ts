@@ -28,11 +28,11 @@ export class CreateBilling1787190914695 implements MigrationInterface {
         features_json  jsonb       NOT NULL DEFAULT '{}'::jsonb,
 
         created_at     timestamptz NOT NULL DEFAULT now(),
-        created_by     uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
+        created_by     uuid        NOT NULL REFERENCES iam.users(id) ON DELETE RESTRICT,
         updated_at     timestamptz NOT NULL DEFAULT now(),
-        updated_by     uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
+        updated_by     uuid        NOT NULL REFERENCES iam.users(id) ON DELETE RESTRICT,
         deleted_at     timestamptz,
-        deleted_by     uuid        REFERENCES identity.users(id) ON DELETE RESTRICT,
+        deleted_by     uuid        REFERENCES iam.users(id) ON DELETE RESTRICT,
 
         CONSTRAINT plans_deleted_pair_check
           CHECK ((deleted_at IS NULL) = (deleted_by IS NULL))
@@ -55,11 +55,11 @@ export class CreateBilling1787190914695 implements MigrationInterface {
         seats_used          integer     NOT NULL DEFAULT 0,
 
         created_at          timestamptz NOT NULL DEFAULT now(),
-        created_by          uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
+        created_by          uuid        NOT NULL REFERENCES iam.users(id) ON DELETE RESTRICT,
         updated_at          timestamptz NOT NULL DEFAULT now(),
-        updated_by          uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
+        updated_by          uuid        NOT NULL REFERENCES iam.users(id) ON DELETE RESTRICT,
         deleted_at          timestamptz,
-        deleted_by          uuid        REFERENCES identity.users(id) ON DELETE RESTRICT,
+        deleted_by          uuid        REFERENCES iam.users(id) ON DELETE RESTRICT,
 
         CONSTRAINT subscriptions_deleted_pair_check
           CHECK ((deleted_at IS NULL) = (deleted_by IS NULL))
@@ -82,11 +82,11 @@ export class CreateBilling1787190914695 implements MigrationInterface {
         expires_at     timestamptz,
 
         created_at     timestamptz NOT NULL DEFAULT now(),
-        created_by     uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
+        created_by     uuid        NOT NULL REFERENCES iam.users(id) ON DELETE RESTRICT,
         updated_at     timestamptz NOT NULL DEFAULT now(),
-        updated_by     uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
+        updated_by     uuid        NOT NULL REFERENCES iam.users(id) ON DELETE RESTRICT,
         deleted_at     timestamptz,
-        deleted_by     uuid        REFERENCES identity.users(id) ON DELETE RESTRICT,
+        deleted_by     uuid        REFERENCES iam.users(id) ON DELETE RESTRICT,
 
         CONSTRAINT ai_wallet_deleted_pair_check
           CHECK ((deleted_at IS NULL) = (deleted_by IS NULL)),
@@ -105,7 +105,7 @@ export class CreateBilling1787190914695 implements MigrationInterface {
         id           uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
         org_id       uuid        NOT NULL REFERENCES organization.organizations(id) ON DELETE CASCADE,
 
-        user_id      uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
+        user_id      uuid        NOT NULL REFERENCES iam.users(id) ON DELETE RESTRICT,
         -- Plain dates: usage is bucketed by calendar day and week, and giving
         -- them a time would make the boundaries depend on the reader.
         period_day   date        NOT NULL,
@@ -115,9 +115,9 @@ export class CreateBilling1787190914695 implements MigrationInterface {
         feature      text        NOT NULL,
 
         created_at   timestamptz NOT NULL DEFAULT now(),
-        created_by   uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
+        created_by   uuid        NOT NULL REFERENCES iam.users(id) ON DELETE RESTRICT,
         updated_at   timestamptz NOT NULL DEFAULT now(),
-        updated_by   uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
+        updated_by   uuid        NOT NULL REFERENCES iam.users(id) ON DELETE RESTRICT,
 
         CONSTRAINT ai_usage_tokens_check
           CHECK (tokens_in >= 0 AND tokens_out >= 0)

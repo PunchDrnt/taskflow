@@ -29,9 +29,9 @@ export interface ActiveOrg {
 /**
  * Which organisations a person may act for.
  *
- * Lives here rather than in `identity/user/` — the plan's first home for it —
+ * Lives here rather than in `iam/user/` — the plan's first home for it —
  * because `organization.members` and `organization.organizations` are this
- * module's tables, and moving the query into identity would mean identity
+ * module's tables, and moving the query into iam would mean iam
  * importing two entities it does not own. The question is about a user; the
  * answer is entirely in organization's rows.
  */

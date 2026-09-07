@@ -44,7 +44,7 @@ export async function seedRequired(dataSource: DataSource): Promise<number> {
     // so its predicate is repeated here.
     const result = (await dataSource.query(
       `
-      INSERT INTO identity.permissions (key, description, created_by, updated_by)
+      INSERT INTO iam.permissions (key, description, created_by, updated_by)
       VALUES ($1, $2, $3, $3)
       ON CONFLICT (key) WHERE deleted_at IS NULL DO NOTHING
       RETURNING id

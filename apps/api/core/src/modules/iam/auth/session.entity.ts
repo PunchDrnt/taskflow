@@ -7,7 +7,7 @@ import { TimestampedEntity } from '#shared/entity/base.entity'
  * delete: `revokedAt` says it is finished with and retention removes it after
  * a week. `createdBy` is not `userId` — an impersonating admin differs.
  */
-@Entity({ schema: 'identity', name: 'sessions' })
+@Entity({ schema: 'iam', name: 'sessions' })
 export class Session extends TimestampedEntity {
   @Column('uuid')
   userId!: string

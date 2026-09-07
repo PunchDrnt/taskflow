@@ -20,7 +20,7 @@ import { seedRequired } from './seed/required'
  * destructive command for a local Postgres, not a deploy tool.
  */
 const SCHEMAS = [
-  'identity',
+  'iam',
   'organization',
   'project',
   'task',

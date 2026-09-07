@@ -38,7 +38,7 @@ export class CreateTask1787190804974 implements MigrationInterface {
         -- only" need no recursive CTE.
         depth           integer     NOT NULL DEFAULT 0,
 
-        completed_by    uuid        REFERENCES identity.users(id) ON DELETE RESTRICT,
+        completed_by    uuid        REFERENCES iam.users(id) ON DELETE RESTRICT,
         completed_at    timestamptz,
 
         -- NULL means Backlog.
@@ -48,11 +48,11 @@ export class CreateTask1787190804974 implements MigrationInterface {
         custom_fields   jsonb       NOT NULL DEFAULT '{}'::jsonb,
 
         created_at      timestamptz NOT NULL DEFAULT now(),
-        created_by      uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
+        created_by      uuid        NOT NULL REFERENCES iam.users(id) ON DELETE RESTRICT,
         updated_at      timestamptz NOT NULL DEFAULT now(),
-        updated_by      uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
+        updated_by      uuid        NOT NULL REFERENCES iam.users(id) ON DELETE RESTRICT,
         deleted_at      timestamptz,
-        deleted_by      uuid        REFERENCES identity.users(id) ON DELETE RESTRICT,
+        deleted_by      uuid        REFERENCES iam.users(id) ON DELETE RESTRICT,
 
         CONSTRAINT tasks_deleted_pair_check
           CHECK ((deleted_at IS NULL) = (deleted_by IS NULL)),
@@ -140,13 +140,13 @@ export class CreateTask1787190804974 implements MigrationInterface {
         -- a table the id never came from, with nothing to catch it.
         assignee_type  text        NOT NULL
                                    CHECK (assignee_type IN ('user', 'team')),
-        -- identity.users or organization.teams depending on assignee_type,
+        -- iam.users or organization.teams depending on assignee_type,
         -- so no FK — the index below stands in for it.
         assignee_id    uuid        NOT NULL,
 
         -- assigned_at is created_at under another name, so it is not repeated.
         created_at     timestamptz NOT NULL DEFAULT now(),
-        created_by     uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
+        created_by     uuid        NOT NULL REFERENCES iam.users(id) ON DELETE RESTRICT,
 
         CONSTRAINT assignees_task_fkey
           FOREIGN KEY (task_id, org_id)

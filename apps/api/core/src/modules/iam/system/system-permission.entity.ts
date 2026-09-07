@@ -7,7 +7,7 @@ import { SoftDeletableEntity } from '#shared/entity/base.entity'
  * role → permission mapping lives in the database so it can change without a
  * deploy.
  */
-@Entity({ schema: 'identity', name: 'permissions' })
+@Entity({ schema: 'iam', name: 'permissions' })
 export class SystemPermission extends SoftDeletableEntity {
   /** 'org.read' | 'org.suspend' | 'user.impersonate' | … */
   @Column('text')

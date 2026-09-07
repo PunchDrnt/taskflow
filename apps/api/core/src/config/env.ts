@@ -64,6 +64,18 @@ const envSchema = z
     // to receive, which is the abuse this endpoint enables — it answers 204
     // whether or not the account exists, so there is nothing else to limit on.
     PASSWORD_RESET_MAX_PER_HOUR: z.coerce.number().int().positive().default(3),
+    // Encrypts the TOTP secrets in iam.totp_credentials. 32 bytes, base64 —
+    // `openssl rand -base64 32`. A shared secret cannot be hashed the way a
+    // password is, so the only thing standing between a stolen dump and every
+    // second factor is that this key is not in the dump. Losing it means
+    // everybody re-enrols; rotating it needs a re-encrypt pass, so it is not
+    // the same kind of knob as JWT_SECRET.
+    TOTP_ENCRYPTION_KEY: z
+      .string()
+      .refine(
+        (value) => Buffer.from(value, 'base64').length === 32,
+        'must be 32 bytes, base64-encoded (openssl rand -base64 32)',
+      ),
     // Where the emailed link points. Not derivable from the request: mail is
     // rendered by OutboxWorker long after it, and behind Caddy the Host header
     // is whatever the proxy passed on.

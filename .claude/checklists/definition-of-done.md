@@ -18,7 +18,7 @@
 ## 2. Database (ถ้าแตะ schema)
 
 - [ ] 🔒 วันเวลาเป็น `timestamptz` · เก็บ UTC
-- [ ] 🔒 มี `org_id` (ยกเว้น schema `identity` และ `billing.plans`)
+- [ ] 🔒 มี `org_id` (ยกเว้น schema `iam` และ `billing.plans`)
 - [ ] 🔒 unique constraint ของตารางที่ soft delete เป็น **partial index**
 - [ ] 🔒 `created_by` / `updated_by` / `completed_by` เป็น `RESTRICT`
 - [ ] 🔒 `sort_order` เป็น `text COLLATE "C"`

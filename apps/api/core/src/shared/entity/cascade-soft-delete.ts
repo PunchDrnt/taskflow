@@ -64,11 +64,11 @@ export const AGGREGATE_CHILDREN: Record<string, ChildLink[]> = {
 export const ROOTS = [
   'organization.organizations',
   'billing.plans',
-  // identity is outside org scoping and has its own lifecycle: a user is
+  // iam is outside org scoping and has its own lifecycle: a user is
   // anonymised, never soft-deleted through an aggregate.
-  'identity.users',
-  'identity.roles',
-  'identity.permissions',
+  'iam.users',
+  'iam.roles',
+  'iam.permissions',
 ]
 
 /**

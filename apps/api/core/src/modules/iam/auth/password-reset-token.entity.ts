@@ -13,7 +13,7 @@ import { TimestampedEntity } from '#shared/entity/base.entity'
  * No soft delete: `usedAt` says it is spent, and retention removes the row
  * after a day.
  */
-@Entity({ schema: 'identity', name: 'password_reset_tokens' })
+@Entity({ schema: 'iam', name: 'password_reset_tokens' })
 export class PasswordResetToken extends TimestampedEntity {
   @Column('uuid')
   userId!: string

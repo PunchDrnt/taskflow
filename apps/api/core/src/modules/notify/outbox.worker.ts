@@ -129,9 +129,9 @@ export class OutboxWorker {
        SELECT c.id, u.email::text AS recipient_email, c.template,
               c.payload_json, c.attempts
          FROM claimed c
-         -- recipient_id is ON DELETE RESTRICT and identity.users is never
+         -- recipient_id is ON DELETE RESTRICT and iam.users is never
          -- hard-deleted, so this join cannot silently drop a claimed row.
-         JOIN identity.users u ON u.id = c.recipient_id
+         JOIN iam.users u ON u.id = c.recipient_id
         ORDER BY c.created_at`,
       [BACKOFF_BASE_SECONDS, limit, SYSTEM_USER_ID],
     )) as Claimed[]

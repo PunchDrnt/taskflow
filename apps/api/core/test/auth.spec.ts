@@ -10,20 +10,28 @@ import { createOrgScopedRepository } from '#shared/org-scope/org-scoped.reposito
 import { SYSTEM_USER_ID } from '#shared/system-user'
 
 import type { Env } from '../src/config/env'
-import { AuthService } from '../src/modules/identity/auth/auth.service'
-import { LockoutService } from '../src/modules/identity/auth/lockout.service'
-import { PasswordService } from '../src/modules/identity/auth/password.service'
-import { Session } from '../src/modules/identity/auth/session.entity'
+import {
+  AuthService,
+  isTwoFactorChallenge,
+  type LoginResult,
+} from '../src/modules/iam/auth/auth.service'
+import { LockoutService } from '../src/modules/iam/auth/lockout.service'
+import { PasswordService } from '../src/modules/iam/auth/password.service'
+import { RecoveryCode } from '../src/modules/iam/auth/recovery-code.entity'
+import { Session } from '../src/modules/iam/auth/session.entity'
 import {
   ROTATION_GRACE_MS,
   SessionService,
-} from '../src/modules/identity/auth/session.service'
+} from '../src/modules/iam/auth/session.service'
 import {
   ACCESS_TOKEN_TTL_SECONDS,
   TokenService,
-} from '../src/modules/identity/auth/token.service'
-import { User } from '../src/modules/identity/user/user.entity'
-import { UserService } from '../src/modules/identity/user/user.service'
+} from '../src/modules/iam/auth/token.service'
+import { TotpCredential } from '../src/modules/iam/auth/totp-credential.entity'
+import { TotpService } from '../src/modules/iam/auth/totp.service'
+import { TwoFactorService } from '../src/modules/iam/auth/two-factor.service'
+import { User } from '../src/modules/iam/user/user.entity'
+import { UserService } from '../src/modules/iam/user/user.service'
 import { OrganizationMember } from '../src/modules/organization/member.entity'
 import { MembershipService } from '../src/modules/organization/membership.service'
 import { createMigratedTestDataSource, hasTestDatabase } from './database'
@@ -32,6 +40,33 @@ const MAX_ATTEMPTS = 3
 const LOCK_MINUTES = 15
 const PASSWORD = 'correct horse battery staple'
 const ORIGIN = { userAgent: 'vitest', ipAddress: '127.0.0.1' }
+
+/**
+ * The real service, so `login` takes the branch it takes in production. Its
+ * own behaviour is covered in two-factor.spec.ts; here it is a dependency, and
+ * a stub that always answered "off" would make every login test prove less
+ * than it looks like it proves.
+ */
+function buildTwoFactor(
+  dataSource: DataSource,
+  users: UserService,
+  sessions: SessionService,
+): TwoFactorService {
+  return new TwoFactorService(
+    createOrgScopedRepository(dataSource, TotpCredential),
+    createOrgScopedRepository(dataSource, RecoveryCode),
+    dataSource,
+    users,
+    new PasswordService(),
+    sessions,
+    new TotpService({
+      get: () => Buffer.alloc(32, 7).toString('base64'),
+    } as unknown as ConfigService<Env, true>),
+    {
+      get: (key: keyof Env) => (key === 'LOGIN_MAX_ATTEMPTS' ? 5 : 15),
+    } as unknown as ConfigService<Env, true>,
+  )
+}
 
 /** The three services above AuthService that hold no state worth rebuilding. */
 function build(dataSource: DataSource) {
@@ -44,6 +79,7 @@ function build(dataSource: DataSource) {
   const sessions = new SessionService(
     createOrgScopedRepository(dataSource, Session),
   )
+  const twoFactor = buildTwoFactor(dataSource, users, sessions)
 
   return {
     users,
@@ -66,6 +102,7 @@ function build(dataSource: DataSource) {
           verifyOptions: { algorithms: ['HS256'] },
         }),
       ),
+      twoFactor,
     ),
   }
 }
@@ -99,10 +136,18 @@ describe.skipIf(!hasTestDatabase)('auth', () => {
         : overrides.passwordHash
 
     const [user] = (await dataSource.query(
-      `INSERT INTO identity.users
-         (email, password_hash, name, nickname, status, created_by, updated_by)
-       VALUES ($1, $2, $3, $3, $4, $5, $5) RETURNING id`,
-      [emailOf(name), hash, name, overrides.status ?? 'active', SYSTEM_USER_ID],
+      `INSERT INTO iam.users
+         (email, username, password_hash, name, nickname, status, created_by,
+          updated_by)
+       VALUES ($1, $2, $3, $4, $4, $5, $6, $6) RETURNING id`,
+      [
+        emailOf(name),
+        name,
+        hash,
+        name,
+        overrides.status ?? 'active',
+        SYSTEM_USER_ID,
+      ],
     )) as { id: string }[]
 
     return user!.id
@@ -125,8 +170,27 @@ describe.skipIf(!hasTestDatabase)('auth', () => {
       [orgId, userId, role, SYSTEM_USER_ID],
     )
 
-  const login = (name: string, password = PASSWORD, rememberMe = false) =>
-    auth.login({ email: emailOf(name), password, rememberMe }, ORIGIN)
+  /**
+   * Every account in this file signs in in one step — the two-step path has
+   * its own file. Narrowing here rather than casting means a stray challenge
+   * fails loudly instead of surfacing as `undefined.tokens` three lines later.
+   */
+  const login = async (
+    name: string,
+    password = PASSWORD,
+    rememberMe = false,
+  ): Promise<LoginResult> => {
+    const outcome = await auth.login(
+      { login: emailOf(name), password, rememberMe },
+      ORIGIN,
+    )
+
+    if (isTwoFactorChallenge(outcome)) {
+      throw new Error('did not expect a two-factor challenge here')
+    }
+
+    return outcome
+  }
 
   /**
    * Through the repository rather than `dataSource.query`, so the row arrives
@@ -139,7 +203,7 @@ describe.skipIf(!hasTestDatabase)('auth', () => {
 
   const userRow = async (id: string) => {
     const [row] = (await dataSource.query(
-      `SELECT failed_login_attempts, locked_until FROM identity.users WHERE id = $1`,
+      `SELECT failed_login_attempts, locked_until FROM iam.users WHERE id = $1`,
       [id],
     )) as { failed_login_attempts: number; locked_until: Date | null }[]
 
@@ -163,9 +227,9 @@ describe.skipIf(!hasTestDatabase)('auth', () => {
     auth = built.auth
     sessions = built.sessions
 
-    await dataSource.query(`DELETE FROM identity.sessions`)
+    await dataSource.query(`DELETE FROM iam.sessions`)
     await dataSource.query(`DELETE FROM organization.members`)
-    await dataSource.query(`DELETE FROM identity.users WHERE id <> $1`, [
+    await dataSource.query(`DELETE FROM iam.users WHERE id <> $1`, [
       SYSTEM_USER_ID,
     ])
   })
@@ -295,7 +359,7 @@ describe.skipIf(!hasTestDatabase)('auth', () => {
       await failUntilLocked('ivan')
 
       await dataSource.query(
-        `UPDATE identity.users SET locked_until = now() - interval '1 minute' WHERE id = $1`,
+        `UPDATE iam.users SET locked_until = now() - interval '1 minute' WHERE id = $1`,
         [userId],
       )
 
@@ -380,7 +444,7 @@ describe.skipIf(!hasTestDatabase)('auth', () => {
       )
 
       const [row] = (await dataSource.query(
-        `SELECT revoked_reason FROM identity.sessions WHERE user_id = $1`,
+        `SELECT revoked_reason FROM iam.sessions WHERE user_id = $1`,
         [userId],
       )) as { revoked_reason: string | null }[]
 
@@ -466,7 +530,7 @@ describe.skipIf(!hasTestDatabase)('auth', () => {
       expect(await auth.authenticate(sid)).not.toBeNull()
 
       await dataSource.query(
-        `UPDATE identity.users SET status = 'deactivated' WHERE id = $1`,
+        `UPDATE iam.users SET status = 'deactivated' WHERE id = $1`,
         [userId],
       )
 
@@ -523,7 +587,7 @@ describe.skipIf(!hasTestDatabase)('auth', () => {
       const sid = decodeSid(tokens.accessToken)
 
       await dataSource.query(
-        `UPDATE identity.sessions SET expires_at = now() - interval '1 day' WHERE id = $1`,
+        `UPDATE iam.sessions SET expires_at = now() - interval '1 day' WHERE id = $1`,
         [sid],
       )
 
@@ -557,7 +621,7 @@ describe.skipIf(!hasTestDatabase)('auth', () => {
       const { tokens } = await login('vera')
 
       const [row] = (await dataSource.query(
-        `SELECT current_token_hash FROM identity.sessions`,
+        `SELECT current_token_hash FROM iam.sessions`,
       )) as { current_token_hash: string }[]
 
       expect(row!.current_token_hash).not.toBe(tokens.refreshToken)
@@ -592,7 +656,7 @@ describe.skipIf(!hasTestDatabase)('auth', () => {
 
   async function sessionsOf(userId: string): Promise<number> {
     const [row] = (await dataSource.query(
-      `SELECT count(*)::int AS count FROM identity.sessions WHERE user_id = $1`,
+      `SELECT count(*)::int AS count FROM iam.sessions WHERE user_id = $1`,
       [userId],
     )) as { count: number }[]
 

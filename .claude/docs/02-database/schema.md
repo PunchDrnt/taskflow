@@ -11,14 +11,17 @@
 
 ---
 
-## Schema `identity`
+## Schema `iam`
 
 ```
 users
   email                       citext   unique (partial — ดูด้านล่าง)
+  username                    citext   unique (partial) · อีกทางที่ใช้ล็อกอิน · เก็บตัวเล็กเสมอ
+                                       CHECK (username::text ~ '^[a-z][a-z0-9_]{2,29}$')
   password_hash               text     null · NULL = login ด้วยรหัสผ่านไม่ได้ (system user · เผื่อ OAuth ทีหลัง)
   name                        text
-  nickname                    text     คนไทยเรียกชื่อเล่น — ต้องค้นได้
+  nickname                    text     คนไทยเรียกชื่อเล่น — ต้องค้นได้ · **คนละอย่างกับ username**
+  phone                       text     null · unique (partial) · E.164 · CHECK (phone ~ '^\+[1-9][0-9]{7,14}$')
   avatar_url                  text     null
   status                      text     'active' | 'deactivated' | 'pending_deletion' | 'deleted'
   deletion_requested_at       timestamptz null · วันที่เจ้าตัวกดลบบัญชี — ตัวนับ 30 วันของ grace period
@@ -34,8 +37,8 @@ users
   CHECK (NOT is_system OR password_hash IS NULL)
   CHECK ((status = 'deleted') = (deleted_at IS NOT NULL))
   CHECK ((status = 'pending_deletion') = (deletion_requested_at IS NOT NULL))
-  CREATE UNIQUE INDEX ON identity.users (email) WHERE status != 'deleted';
-  CREATE UNIQUE INDEX ON identity.users (is_system) WHERE is_system;
+  CREATE UNIQUE INDEX ON iam.users (email) WHERE status != 'deleted';
+  CREATE UNIQUE INDEX ON iam.users (is_system) WHERE is_system;
 ```
 
 **ทำไมต้องมี `deletion_requested_at` ทั้งที่มี `deleted_at` อยู่แล้ว**
@@ -48,7 +51,7 @@ CHECK เป็น biconditional เหมือนคู่ `deleted_at`/`delet
 
 **System user** — `id` คงที่ `00000000-0000-0000-0000-000000000000`
 
-`created_by` เป็น `NOT NULL` ทุกตาราง แต่มีแถวที่ระบบสร้างเองจริง ๆ (migration ที่ seed status เริ่มต้น, outbox worker, cron สร้าง partition) จึงต้องมี "คน" ให้ชี้ · แถวแรกของ `identity.users` ชี้ `created_by` มาที่ตัวเอง — Postgres ทำได้ใน `INSERT` เดียวถ้าใส่ `id` เป็นค่าคงที่ ไม่ต้อง `DEFERRABLE` ไม่ต้องแยกสองคำสั่ง
+`created_by` เป็น `NOT NULL` ทุกตาราง แต่มีแถวที่ระบบสร้างเองจริง ๆ (migration ที่ seed status เริ่มต้น, outbox worker, cron สร้าง partition) จึงต้องมี "คน" ให้ชี้ · แถวแรกของ `iam.users` ชี้ `created_by` มาที่ตัวเอง — Postgres ทำได้ใน `INSERT` เดียวถ้าใส่ `id` เป็นค่าคงที่ ไม่ต้อง `DEFERRABLE` ไม่ต้องแยกสองคำสั่ง
 
 ล็อกไว้ที่ schema ไม่ใช่ที่วินัย:
 
@@ -61,7 +64,7 @@ CHECK เป็น biconditional เหมือนคู่ `deleted_at`/`delet
 
 > ⚠️ `ON DELETE RESTRICT` **กัน system user ไม่ได้** — แถวนี้อ้างถึงตัวเองเป็นรายเดียว พอลบ ตัวที่อ้างก็หายไปพร้อมกัน Postgres จึงยอมให้ลบ (ลองแล้ว `DELETE 1` ผ่านฉลุย) · FK จากตารางอื่นจะช่วยได้ก็ต่อเมื่อตารางนั้นมีแถวที่ระบบสร้างแล้วเท่านั้น จึงต้องมี trigger กันไว้ตรง ๆ
 
-**`deleted_at` กับ `status` ต้องตรงกันเสมอ** — `identity.users` มีตัวบอกการลบสองตัว (base entity ให้ `deleted_at` มา ส่วน lifecycle จริงของ user เดินด้วย `status` ตาม [User States](../04-features/phase-1.md#user-states--three-different-things)) · CHECK ผูกไว้ให้ขัดกันไม่ได้ ถ้าปล่อยไว้จะมีแถวที่ `deleted_at` ตั้งแล้วแต่ `status` ยังเป็น `active` แล้วอีเมลนั้นจะถูกจองค้างตลอดไป
+**`deleted_at` กับ `status` ต้องตรงกันเสมอ** — `iam.users` มีตัวบอกการลบสองตัว (base entity ให้ `deleted_at` มา ส่วน lifecycle จริงของ user เดินด้วย `status` ตาม [User States](../04-features/phase-1.md#user-states--three-different-things)) · CHECK ผูกไว้ให้ขัดกันไม่ได้ ถ้าปล่อยไว้จะมีแถวที่ `deleted_at` ตั้งแล้วแต่ `status` ยังเป็น `active` แล้วอีเมลนั้นจะถูกจองค้างตลอดไป
 
 ```
 sessions                                 -- 1 แถว = 1 การ login จาก 1 เครื่อง
@@ -79,10 +82,10 @@ sessions                                 -- 1 แถว = 1 การ login จ�
   revoked_reason         text  null    'logout' | 'logout_all' | 'password_change'
                                        | 'password_reset' | 'token_reuse' | 'admin'
 
-  CREATE INDEX ON identity.sessions (current_token_hash) WHERE revoked_at IS NULL;
-  CREATE INDEX ON identity.sessions (user_id, revoked_at);
+  CREATE INDEX ON iam.sessions (current_token_hash) WHERE revoked_at IS NULL;
+  CREATE INDEX ON iam.sessions (user_id, revoked_at);
   -- ตัวจับ token reuse: หา session จาก token ที่ถูก rotate ไปแล้ว
-  CREATE INDEX ON identity.sessions (previous_token_hash)
+  CREATE INDEX ON iam.sessions (previous_token_hash)
     WHERE previous_token_hash IS NOT NULL;
 
   -- rotation ไม่สร้างแถวใหม่ — แถวเดียวอยู่ตลอด 15 วัน แค่เปลี่ยน token hash
@@ -93,21 +96,48 @@ password_reset_tokens
   token_hash          text          hash ไม่เก็บ plain
   expires_at          timestamptz   +30 นาที · เก็บเป็น env var ไม่ hardcode
   used_at             timestamptz null   ใช้ได้ครั้งเดียว
-  CREATE INDEX ON identity.password_reset_tokens (token_hash) WHERE used_at IS NULL;
+  CREATE INDEX ON iam.password_reset_tokens (token_hash) WHERE used_at IS NULL;
+
+totp_credentials      2FA แบบ TOTP · มีแถวเฉพาะคนที่เปิดใช้ · hard delete
+  user_id             uuid  FK · UNIQUE — คนละหนึ่งแถว ตั้งใหม่ = แทนที่ของเดิม
+  secret_encrypted    text        AES-256-GCM ด้วย TOTP_ENCRYPTION_KEY · hash ไม่ได้เพราะเป็น shared secret
+  confirmed_at        timestamptz null · null = ตั้งค้างไว้ ยังไม่บังคับ (เปิดจอแล้วปิดแท็บ ห้ามล็อกคนออก)
+  last_used_step      bigint      null · step ล่าสุดที่รับไปแล้ว — กัน replay ในหน้าต่าง 30 วิ
+  failed_attempts     int         default 0 · ใช้ LOGIN_MAX_ATTEMPTS ชุดเดียวกับรหัสผ่าน
+  locked_until        timestamptz null
+
+recovery_codes        ทางกลับเข้าเมื่อมือถือหาย · 10 อันตอนเปิด · เห็นครั้งเดียว
+  user_id             uuid  FK
+  code_hash           text        sha256 · ตอนใช้มันมีค่าเท่ารหัสผ่าน
+  used_at             timestamptz null · ใช้ได้ครั้งเดียว
+  CREATE INDEX ON iam.recovery_codes (code_hash) WHERE used_at IS NULL;
 
 oauth_accounts        ⚠ ยังไม่สร้าง — migrate ใน Phase 1 แต่ Google login ยังไม่เปิดใช้
                       -- 1 แถว = 1 provider ที่ user คนนั้นผูกไว้
-  user_id             uuid  FK → identity.users · ON DELETE CASCADE
+  user_id             uuid  FK → iam.users · ON DELETE CASCADE
   provider            text        'google' (เผื่อ 'line' ทีหลัง)
   provider_user_id    text        `sub` ที่ provider ให้มา — ไม่ใช่อีเมล เพราะอีเมลเปลี่ยนได้
   provider_email      text        อีเมลฝั่ง provider ตอน link · ไว้สืบย้อน ไม่ใช่ตัวจับคู่
 
   CHECK (provider IN ('google'))
   -- กัน Google account เดียวถูกอ้างโดยสอง user — ถ้าไม่มี คือช่องยึดบัญชี
-  CREATE UNIQUE INDEX ON identity.oauth_accounts (provider, provider_user_id);
+  CREATE UNIQUE INDEX ON iam.oauth_accounts (provider, provider_user_id);
   -- 1 คน ผูก provider ละบัญชีเดียว · ผ่อนทีหลังแค่ drop index
-  CREATE UNIQUE INDEX ON identity.oauth_accounts (user_id, provider);
+  CREATE UNIQUE INDEX ON iam.oauth_accounts (user_id, provider);
 ```
+
+**`username` กับ `nickname` แยกหน้าที่กันชัดๆ** (ตัดสิน 2026-09-07)
+
+| | `username` | `nickname` |
+| --- | --- | --- |
+| คือ | ตัวล็อกอิน · โผล่ใน URL และ @-mention | ชื่อที่เพื่อนร่วมงานเรียก |
+| ซ้ำได้ไหม | **ไม่ได้** unique ทั้งระบบ | ได้ · มี "พี่หนึ่ง" กี่คนก็ได้ |
+| ตัวอักษร | `a-z 0-9 _` ยาว 3-30 ขึ้นต้นด้วยตัวอักษร | อะไรก็ได้ รวมภาษาไทย |
+| ใครใช้ | คนล็อกอิน · ระบบ resolve @mention | assignee picker ค้นและแสดง |
+
+⚠️ **`::text` ใน CHECK ของ username เป็นตัวสำคัญ** — วัดแล้ว: `citext` ทำให้ operator `~` case-insensitive ด้วย ไม่ใช่แค่ `=` · ถ้าไม่ cast `Anong` จะผ่าน check แล้วถูกเก็บทั้งตัวใหญ่ กลายเป็นบัญชีเดียวที่สะกดสองแบบใน URL กับ mention · cast แล้วความหมายตรงกับที่อ่าน: เก็บตัวเล็ก จับคู่แบบไม่สนตัวพิมพ์ด้วยชนิดคอลัมน์
+
+**`phone` unique แต่ null ได้** — unique index ของ Postgres ยอมให้มี NULL กี่แถวก็ได้ แถวส่วนใหญ่จะไม่มีเบอร์ · ที่ unique เพราะสองคนใช้เบอร์เดียวกันคือกรอกผิด ไม่ใช่เคสที่ต้องรองรับ · **ไม่ใช่ credential** — 2FA เป็น TOTP ไม่มีอะไร authenticate กับคอลัมน์นี้ จึงไม่ต้อง verify
 
 **`CreatedEntity` — hard delete และไม่มี `updated_at`/`updated_by`** ([สามคำถาม](./rules.md#base-entity))
 
@@ -117,11 +147,11 @@ index จึงเป็น `UNIQUE` ธรรมดา ไม่ใช่ parti
 
 > ⚠️ **`ON DELETE CASCADE` บน `user_id` ไม่มีวันทำงาน — ต้อง `DELETE` เองตอน anonymise**
 >
-> CASCADE ยิงตอน hard delete เท่านั้น แต่ `identity.users` อยู่ใน [`NEVER_PURGED`](../../../apps/api/core/src/maintenance/retention.policy.ts) และการ anonymise เป็น `UPDATE` ไม่ใช่ `DELETE` · แถว oauth จึงค้างอยู่ถ้าไม่มีใครลบ แล้วเจอปัญหาข้างบนพอดี
+> CASCADE ยิงตอน hard delete เท่านั้น แต่ `iam.users` อยู่ใน [`NEVER_PURGED`](../../../apps/api/core/src/maintenance/retention.policy.ts) และการ anonymise เป็น `UPDATE` ไม่ใช่ `DELETE` · แถว oauth จึงค้างอยู่ถ้าไม่มีใครลบ แล้วเจอปัญหาข้างบนพอดี
 >
 > FK ยังคง `CASCADE` ไว้เป็นตาข่ายตอนลบ org ทิ้งจริง แต่**ห้ามพึ่งมันในเส้นทาง anonymise**
 
-**ตารางนี้ยังไม่มีในฐานข้อมูล — Phase 1 migrate แต่ยังไม่เปิดใช้** เป็นแพทเทิร์นเดียวกับ `identity.roles` / `permissions` / `role_permissions` / `user_roles` ที่ลงตั้งแต่ Phase 0 แล้วไม่มีใครอ่านจนถึง Phase 7 · schema ข้างบนตัดสินแล้ว ไม่ใช่ร่าง เขียน migration ตามนี้ได้เลย
+**ตารางนี้ยังไม่มีในฐานข้อมูล — Phase 1 migrate แต่ยังไม่เปิดใช้** เป็นแพทเทิร์นเดียวกับ `iam.roles` / `permissions` / `role_permissions` / `user_roles` ที่ลงตั้งแต่ Phase 0 แล้วไม่มีใครอ่านจนถึง Phase 7 · schema ข้างบนตัดสินแล้ว ไม่ใช่ร่าง เขียน migration ตามนี้ได้เลย
 
 > ⚠️ **"ปิดไว้" ต้องปิดด้วยกลไกที่ปิดได้จริง** — `FeatureService.isEnabled()` เป็น allow-list ที่ว่างเปล่าแล้ว (Phase 1) ดักด้วยมันจึงเท่ากับปิดจริง · แต่ Google login ยังไม่มีโค้ดอ่านตารางนี้เลย ซึ่งเป็นกลไกที่ปิดแน่นกว่า
 
@@ -140,14 +170,14 @@ roles                            -- 'support' | 'engineer' | 'admin'
   name                text
   description         text
   -- partial ทั้งคู่: สองตารางนี้ soft delete ได้ (🔒)
-  CREATE UNIQUE INDEX ON identity.roles (name) WHERE deleted_at IS NULL;
+  CREATE UNIQUE INDEX ON iam.roles (name) WHERE deleted_at IS NULL;
 
 permissions                      -- seed จาก migration ตาม key ที่นิยามในโค้ด
   key                 text        'org.read' | 'org.suspend'
                                   | 'user.impersonate' | 'billing.refund'
                                   | 'log.read' | 'role.manage'
   description         text
-  CREATE UNIQUE INDEX ON identity.permissions (key) WHERE deleted_at IS NULL;
+  CREATE UNIQUE INDEX ON iam.permissions (key) WHERE deleted_at IS NULL;
 
 role_permissions
   role_id             uuid  FK
@@ -157,7 +187,7 @@ role_permissions
 user_roles
   user_id             uuid  FK
   role_id             uuid  FK
-  granted_by          uuid  null · FK → identity.users · SET NULL
+  granted_by          uuid  null · FK → iam.users · SET NULL
                             -- เก็บไว้แม้ดูซ้ำกับ created_by เพราะ ON DELETE ต่างกัน:
                             -- created_by เป็น RESTRICT → ลบ admin ที่เคยให้สิทธิ์ไม่ได้เลย
                             -- granted_by เป็น SET NULL → สิทธิ์อยู่ต่อได้แม้ admin หายไป
@@ -165,7 +195,7 @@ user_roles
   UNIQUE (user_id, role_id)   -- granted_at คือ created_at
 ```
 
-> ชื่อตารางไม่ต้องมี `system_` นำหน้า — schema `identity` บอกบริบทอยู่แล้ว และไม่ชนกับ role ใน org ที่อยู่ `organization.members.role`
+> ชื่อตารางไม่ต้องมี `system_` นำหน้า — schema `iam` บอกบริบทอยู่แล้ว และไม่ชนกับ role ใน org ที่อยู่ `organization.members.role`
 >
 > แต่ในโค้ด TypeScript ตั้งชื่อ class ว่า `SystemRole` / `SystemPermission` กันสับสน
 
@@ -182,7 +212,7 @@ organizations                            -- ไม่มี org_id (เท่า
   CREATE UNIQUE INDEX ON organization.organizations (slug) WHERE deleted_at IS NULL;
 
 members                                  -- สมาชิกของ org
-  user_id             uuid  FK → identity.users
+  user_id             uuid  FK → iam.users
   role                text  'owner' | 'admin' | 'member'   (string ไม่ใช่ enum)
   UNIQUE (org_id, user_id)   -- วันที่เข้า org คือ created_at ไม่ต้องมี joined_at
   -- ต้องมี role='owner' อย่างน้อย 1 แถวเสมอ (บังคับที่ application)
@@ -194,7 +224,7 @@ invitations                              -- ตารางมาตั้งแ
   token_hash          text          hash ไม่เก็บ plain (ทรงเดียวกับ password_reset_tokens)
   expires_at          timestamptz
   accepted_at         timestamptz null
-  accepted_by         uuid        null · FK → identity.users · คนที่กดรับ
+  accepted_by         uuid        null · FK → iam.users · คนที่กดรับ
   revoked_at          timestamptz null
 
   CHECK (role IN ('admin', 'member'))
@@ -210,7 +240,7 @@ teams
 
 team_members
   team_id             uuid  FK
-  user_id             uuid  FK → identity.users
+  user_id             uuid  FK → iam.users
   role                text  'admin' | 'member'   (admin มีได้หลายคน)
   UNIQUE (team_id, user_id)
 ```
@@ -321,7 +351,7 @@ tasks
 assignees
   task_id             uuid  FK
   assignee_type       text  'user' | 'team'
-  assignee_id         uuid  ชี้ไป identity.users หรือ organization.teams ตาม type (ไม่มี FK)
+  assignee_id         uuid  ชี้ไป iam.users หรือ organization.teams ตาม type (ไม่มี FK)
   UNIQUE (task_id, assignee_type, assignee_id)   -- assigned_at คือ created_at
 
 dependencies                                     -- Phase 5 · คู่กับ Gantt
@@ -460,7 +490,7 @@ views
   name                text
   type                text  'list' | 'board' | 'calendar'   -- ไม่มี 'table' ตัดไปแล้ว
   owner_id            uuid  null = view กลางของ project · มีค่า = view ส่วนตัว
-                            FK → identity.users · ON DELETE CASCADE (ดูด้านล่าง)
+                            FK → iam.users · ON DELETE CASCADE (ดูด้านล่าง)
   filter_json         jsonb  default '{}'
   sort_json           jsonb  default '[]'   -- array: เรียงหลายชั้นตามลำดับ ไม่ใช่ object
   group_by            text   null
@@ -478,9 +508,9 @@ columns
   is_visible          boolean
 ```
 
-> ⚠️ **`views.owner_id` เป็น `CASCADE` ที่ไม่มีวันทำงาน — กับดักตัวเดียวกับ [`oauth_accounts.user_id`](#schema-identity)**
+> ⚠️ **`views.owner_id` เป็น `CASCADE` ที่ไม่มีวันทำงาน — กับดักตัวเดียวกับ [`oauth_accounts.user_id`](#schema-iam)**
 >
-> `identity.users` อยู่ใน [`NEVER_PURGED`](../../../apps/api/core/src/maintenance/retention.policy.ts) และการ anonymise เป็น `UPDATE` ไม่ใช่ `DELETE` · view ส่วนตัวของคนที่ลาออกจึงค้างอยู่ ต้องลบเองตอน anonymise
+> `iam.users` อยู่ใน [`NEVER_PURGED`](../../../apps/api/core/src/maintenance/retention.policy.ts) และการ anonymise เป็น `UPDATE` ไม่ใช่ `DELETE` · view ส่วนตัวของคนที่ลาออกจึงค้างอยู่ ต้องลบเองตอน anonymise
 >
 > ต่างจาก `oauth_accounts` ตรงที่นี่ไม่ใช่ช่องโหว่สิทธิ์ — เป็นแค่แถวที่ไม่มีเจ้าของ แต่ต้องรู้ว่า FK ไม่ได้เก็บกวาดให้
 

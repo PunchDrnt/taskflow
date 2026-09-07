@@ -6,12 +6,20 @@ import type { Env } from '../../../config/env'
 import {
   ACCESS_TOKEN_TTL_SECONDS,
   REFRESH_TOKEN_TTL_SECONDS,
+  TWO_FACTOR_CHALLENGE_TTL_SECONDS,
   type Tokens,
 } from './token.service'
 
 export const ACCESS_TOKEN_COOKIE = 'access_token'
 export const REFRESH_TOKEN_COOKIE = 'refresh_token'
 export const ACTIVE_ORG_COOKIE = 'active_org'
+
+/**
+ * Carries a half-finished login between the password step and the code step.
+ * Scoped to the auth path like the refresh token, and for the same reason:
+ * nothing outside those two endpoints has any use for it.
+ */
+export const TWO_FACTOR_COOKIE = 'two_factor_challenge'
 
 /**
  * Where the browser sends the refresh token, and nowhere else. This is the
@@ -61,12 +69,25 @@ export class AuthCookies {
       httpOnly: true,
       secure: this.secure,
       sameSite: 'lax',
-      path: name === REFRESH_TOKEN_COOKIE ? REFRESH_TOKEN_PATH : '/',
-      maxAge:
-        (name === ACCESS_TOKEN_COOKIE
-          ? ACCESS_TOKEN_TTL_SECONDS
-          : REFRESH_TOKEN_TTL_SECONDS) * 1000,
+      path:
+        name === REFRESH_TOKEN_COOKIE || name === TWO_FACTOR_COOKIE
+          ? REFRESH_TOKEN_PATH
+          : '/',
+      maxAge: ttlSecondsFor(name) * 1000,
     }
+  }
+
+  /** The challenge, and only for as long as the challenge is good for. */
+  setTwoFactorChallenge(response: Response, challenge: string): void {
+    response.cookie(
+      TWO_FACTOR_COOKIE,
+      challenge,
+      this.optionsFor(TWO_FACTOR_COOKIE),
+    )
+  }
+
+  clearTwoFactorChallenge(response: Response): void {
+    this.clear(response, TWO_FACTOR_COOKIE)
   }
 
   setSession(response: Response, tokens: Tokens): void {
@@ -105,6 +126,9 @@ export class AuthCookies {
     this.clear(response, ACCESS_TOKEN_COOKIE)
     this.clear(response, REFRESH_TOKEN_COOKIE)
     this.clear(response, ACTIVE_ORG_COOKIE)
+    // A challenge that was never spent has no business outliving the session
+    // it was going to create.
+    this.clear(response, TWO_FACTOR_COOKIE)
   }
 
   /**
@@ -117,4 +141,12 @@ export class AuthCookies {
 
     response.clearCookie(name, options)
   }
+}
+
+/** One place, so a new cookie cannot quietly inherit another's lifetime. */
+function ttlSecondsFor(name: string): number {
+  if (name === ACCESS_TOKEN_COOKIE) return ACCESS_TOKEN_TTL_SECONDS
+  if (name === TWO_FACTOR_COOKIE) return TWO_FACTOR_CHALLENGE_TTL_SECONDS
+
+  return REFRESH_TOKEN_TTL_SECONDS
 }

@@ -125,7 +125,7 @@ describe('reset', () => {
   })
 
   it('writes nothing when there is nothing to clear', async () => {
-    // Every successful login would otherwise be an UPDATE on identity.users,
+    // Every successful login would otherwise be an UPDATE on iam.users,
     // which is the hot-table problem sessions.last_used_at already has.
     await lockoutService().reset(user())
 

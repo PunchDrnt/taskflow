@@ -14,9 +14,9 @@ import { CreatedEntity } from '#shared/entity/base.entity'
  * signs back in. A deleted row cannot be forgotten. Relinking is one click,
  * and `audit.logs` already records who unlinked what.
  *
- * See docs/02-database/schema.md#schema-identity.
+ * See docs/02-database/schema.md#schema-iam.
  */
-@Entity({ schema: 'identity', name: 'oauth_accounts' })
+@Entity({ schema: 'iam', name: 'oauth_accounts' })
 export class OauthAccount extends CreatedEntity {
   @Column('uuid')
   userId!: string

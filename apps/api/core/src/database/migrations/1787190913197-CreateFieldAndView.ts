@@ -25,11 +25,11 @@ export class CreateFieldAndView1787190913197 implements MigrationInterface {
         sort_order   text        COLLATE "C" NOT NULL,
 
         created_at   timestamptz NOT NULL DEFAULT now(),
-        created_by   uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
+        created_by   uuid        NOT NULL REFERENCES iam.users(id) ON DELETE RESTRICT,
         updated_at   timestamptz NOT NULL DEFAULT now(),
-        updated_by   uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
+        updated_by   uuid        NOT NULL REFERENCES iam.users(id) ON DELETE RESTRICT,
         deleted_at   timestamptz,
-        deleted_by   uuid        REFERENCES identity.users(id) ON DELETE RESTRICT,
+        deleted_by   uuid        REFERENCES iam.users(id) ON DELETE RESTRICT,
 
         CONSTRAINT definitions_deleted_pair_check
           CHECK ((deleted_at IS NULL) = (deleted_by IS NULL)),
@@ -58,7 +58,7 @@ export class CreateFieldAndView1787190913197 implements MigrationInterface {
         type         text        NOT NULL,
         -- NULL means a shared view belonging to the project; a value makes it
         -- that person's private view.
-        owner_id     uuid        REFERENCES identity.users(id) ON DELETE CASCADE,
+        owner_id     uuid        REFERENCES iam.users(id) ON DELETE CASCADE,
         filter_json  jsonb       NOT NULL DEFAULT '{}'::jsonb,
         -- An array, not an object: sorting is ordered, and JSON object key
         -- order is not something to lean on.
@@ -70,11 +70,11 @@ export class CreateFieldAndView1787190913197 implements MigrationInterface {
         is_default   boolean     NOT NULL DEFAULT false,
 
         created_at   timestamptz NOT NULL DEFAULT now(),
-        created_by   uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
+        created_by   uuid        NOT NULL REFERENCES iam.users(id) ON DELETE RESTRICT,
         updated_at   timestamptz NOT NULL DEFAULT now(),
-        updated_by   uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
+        updated_by   uuid        NOT NULL REFERENCES iam.users(id) ON DELETE RESTRICT,
         deleted_at   timestamptz,
-        deleted_by   uuid        REFERENCES identity.users(id) ON DELETE RESTRICT,
+        deleted_by   uuid        REFERENCES iam.users(id) ON DELETE RESTRICT,
 
         CONSTRAINT views_deleted_pair_check
           CHECK ((deleted_at IS NULL) = (deleted_by IS NULL)),
@@ -117,11 +117,11 @@ export class CreateFieldAndView1787190913197 implements MigrationInterface {
         is_visible   boolean     NOT NULL DEFAULT true,
 
         created_at   timestamptz NOT NULL DEFAULT now(),
-        created_by   uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
+        created_by   uuid        NOT NULL REFERENCES iam.users(id) ON DELETE RESTRICT,
         updated_at   timestamptz NOT NULL DEFAULT now(),
-        updated_by   uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
+        updated_by   uuid        NOT NULL REFERENCES iam.users(id) ON DELETE RESTRICT,
         deleted_at   timestamptz,
-        deleted_by   uuid        REFERENCES identity.users(id) ON DELETE RESTRICT,
+        deleted_by   uuid        REFERENCES iam.users(id) ON DELETE RESTRICT,
 
         CONSTRAINT columns_deleted_pair_check
           CHECK ((deleted_at IS NULL) = (deleted_by IS NULL)),

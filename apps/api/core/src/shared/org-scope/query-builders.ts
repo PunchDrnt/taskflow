@@ -2,7 +2,7 @@ import type { ObjectLiteral, Repository, SelectQueryBuilder } from 'typeorm'
 
 import { requireOrgContext } from './request-context'
 
-/** `identity.*` and `billing.plans` have no `org_id` and so fail this. */
+/** `iam.*` and `billing.plans` have no `org_id` and so fail this. */
 type OrgScoped = { orgId: string }
 
 /** `where` replaces every condition set so far; `orWhere` widens past them. */
@@ -75,7 +75,7 @@ export class QueryBuilders<T extends ObjectLiteral> {
 
   /**
    * Unscoped. Correct — not an escape — for the tables with no `org_id`:
-   * `identity.*` and `billing.plans`. On a table that has one this crosses
+   * `iam.*` and `billing.plans`. On a table that has one this crosses
    * orgs, and the call should be able to say why `withOrg` could not do it.
    */
   base(alias: string): SelectQueryBuilder<T> {

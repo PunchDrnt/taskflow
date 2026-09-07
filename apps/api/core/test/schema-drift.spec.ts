@@ -23,7 +23,7 @@ const COLUMN_STATEMENT =
 /**
  * Constraints, indexes and foreign keys live in migrations and are absent from
  * the entities on purpose, so the schema builder always wants to drop them —
- * no entity declares a relation for `created_by` (that would import identity's
+ * no entity declares a relation for `created_by` (that would import iam's
  * User into every module), and partial indexes and CHECKs are things
  * `synchronize` cannot express anyway.
  *

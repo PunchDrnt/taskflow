@@ -20,7 +20,7 @@
 
 | Schema         | ตาราง                                                                                    | Module          |
 | -------------- | ---------------------------------------------------------------------------------------- | --------------- |
-| `identity`     | users, sessions, password_reset_tokens, roles, permissions, role_permissions, user_roles · oauth_accounts _(ยังไม่สร้าง)_ | `identity/`     |
+| `iam`          | users, sessions, password_reset_tokens, roles, permissions, role_permissions, user_roles · oauth_accounts _(ยังไม่สร้าง)_ | `iam/`          |
 | `organization` | organizations, members, invitations, teams, team_members                                 | `organization/` |
 | `project`      | projects, members, statuses, sprints                                                     | `project/`      |
 | `task`         | tasks, assignees · dependencies, task_embeddings _(Phase 5)_                             | `task/`         |
@@ -81,7 +81,7 @@ _ที่ไม่เข้าเกณฑ์ ปล่อยเป็น `text
 
 เกณฑ์ข้างบนใช้กับ `CHECK` ที่จำกัด**ชุดค่า**ของคอลัมน์เดียวเท่านั้น · อีกสองชนิดเป็นคนละเรื่อง ใส่ได้ตามที่จำเป็น ไม่ต้องเข้าเกณฑ์นี้:
 
-- **invariant ข้ามคอลัมน์** เช่น `identity.users` ที่บังคับ `password_hash IS NULL` เมื่อ `is_system`
+- **invariant ข้ามคอลัมน์** เช่น `iam.users` ที่บังคับ `password_hash IS NULL` เมื่อ `is_system`
   · หรือ `deleted_at`/`deleted_by` ที่ต้องตั้งพร้อมกัน
 - **รูปแบบของค่า** ไม่ใช่ชุดของค่า เช่น `project.projects.key_prefix ~ '^[A-Z][A-Z0-9]{1,5}$'`
   — ค่าที่ผิดรูปไม่ได้ทำให้ index ไหนเงียบ แต่ไปโผล่บนหน้าจอผู้ใช้เป็น task key ที่อ่านแล้วงง

@@ -5,9 +5,11 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import {
   changePasswordSchema,
+  phoneSchema,
   registerSchema,
   resetPasswordSchema,
   updateProfileSchema,
+  usernameSchema,
 } from '@repo/shared'
 
 import { ApiException } from '#shared/http/api-exception'
@@ -16,22 +18,26 @@ import { SYSTEM_USER_ID } from '#shared/system-user'
 
 import type { Env } from '../src/config/env'
 import { FeatureService } from '../src/feature/feature.service'
-import { AuthService } from '../src/modules/identity/auth/auth.service'
-import { LockoutService } from '../src/modules/identity/auth/lockout.service'
-import { PasswordResetToken } from '../src/modules/identity/auth/password-reset-token.entity'
+import { AuthService } from '../src/modules/iam/auth/auth.service'
+import { LockoutService } from '../src/modules/iam/auth/lockout.service'
+import { PasswordResetToken } from '../src/modules/iam/auth/password-reset-token.entity'
 import {
   PASSWORD_RESET_TEMPLATE,
   PasswordResetService,
-} from '../src/modules/identity/auth/password-reset.service'
-import { PasswordService } from '../src/modules/identity/auth/password.service'
-import { Session } from '../src/modules/identity/auth/session.entity'
-import { SessionService } from '../src/modules/identity/auth/session.service'
+} from '../src/modules/iam/auth/password-reset.service'
+import { PasswordService } from '../src/modules/iam/auth/password.service'
+import { RecoveryCode } from '../src/modules/iam/auth/recovery-code.entity'
+import { Session } from '../src/modules/iam/auth/session.entity'
+import { SessionService } from '../src/modules/iam/auth/session.service'
 import {
   ACCESS_TOKEN_TTL_SECONDS,
   TokenService,
-} from '../src/modules/identity/auth/token.service'
-import { User } from '../src/modules/identity/user/user.entity'
-import { UserService } from '../src/modules/identity/user/user.service'
+} from '../src/modules/iam/auth/token.service'
+import { TotpCredential } from '../src/modules/iam/auth/totp-credential.entity'
+import { TotpService } from '../src/modules/iam/auth/totp.service'
+import { TwoFactorService } from '../src/modules/iam/auth/two-factor.service'
+import { User } from '../src/modules/iam/user/user.entity'
+import { UserService } from '../src/modules/iam/user/user.service'
 import { EmailService } from '../src/modules/notify/email.service'
 import { Outbox } from '../src/modules/notify/outbox.entity'
 import { OrganizationMember } from '../src/modules/organization/member.entity'
@@ -52,12 +58,40 @@ const RESET_MAX_PER_HOUR = 3
  * asks whether somebody may get in, this one asks what they may change once
  * they are in.
  */
+/**
+ * The real service, so `login` takes the branch it takes in production. Its
+ * own behaviour is covered in two-factor.spec.ts; here it is a dependency, and
+ * a stub that always answered "off" would make every login test prove less
+ * than it looks like it proves.
+ */
+function buildTwoFactor(
+  dataSource: DataSource,
+  users: UserService,
+  sessions: SessionService,
+): TwoFactorService {
+  return new TwoFactorService(
+    createOrgScopedRepository(dataSource, TotpCredential),
+    createOrgScopedRepository(dataSource, RecoveryCode),
+    dataSource,
+    users,
+    new PasswordService(),
+    sessions,
+    new TotpService({
+      get: () => Buffer.alloc(32, 7).toString('base64'),
+    } as unknown as ConfigService<Env, true>),
+    {
+      get: (key: keyof Env) => (key === 'LOGIN_MAX_ATTEMPTS' ? 5 : 15),
+    } as unknown as ConfigService<Env, true>,
+  )
+}
+
 describe.skipIf(!hasTestDatabase)('account', () => {
   let dataSource: DataSource
   let users: UserService
   let sessions: SessionService
   let auth: AuthService
   let resets: PasswordResetService
+  let twoFactor: TwoFactorService
   let counter = 0
 
   const newUser = async (withPassword = false): Promise<string> => {
@@ -66,11 +100,13 @@ describe.skipIf(!hasTestDatabase)('account', () => {
       ? await new PasswordService().hash(PASSWORD)
       : null
     const [user] = (await dataSource.query(
-      `INSERT INTO identity.users
-         (email, password_hash, name, nickname, status, created_by, updated_by)
-       VALUES ($1, $2, $3, $3, 'active', $4, $4) RETURNING id`,
+      `INSERT INTO iam.users
+         (email, username, password_hash, name, nickname, status, created_by,
+          updated_by)
+       VALUES ($1, $2, $3, $4, $4, 'active', $5, $5) RETURNING id`,
       [
         `account-${counter}@example.test`,
+        `account_${counter}`,
         hash,
         `user-${counter}`,
         SYSTEM_USER_ID,
@@ -117,6 +153,8 @@ describe.skipIf(!hasTestDatabase)('account', () => {
       get: (key: keyof Env) => (key === 'LOGIN_MAX_ATTEMPTS' ? 5 : 15),
     } as unknown as ConfigService<Env, true>
 
+    twoFactor = buildTwoFactor(dataSource, users, sessions)
+
     auth = new AuthService(
       users,
       new MembershipService(
@@ -135,6 +173,7 @@ describe.skipIf(!hasTestDatabase)('account', () => {
           verifyOptions: { algorithms: ['HS256'] },
         }),
       ),
+      twoFactor,
     )
 
     const resetConfig = {
@@ -180,6 +219,8 @@ describe.skipIf(!hasTestDatabase)('account', () => {
       const id = await newUser()
 
       await users.updateProfile(id, {
+        username: `renamed_${(counter += 1)}`,
+        phone: null,
         name: 'Anong Wattana',
         nickname: 'หนึ่ง',
         avatarUrl: 'https://cdn.example.test/a.png',
@@ -195,12 +236,16 @@ describe.skipIf(!hasTestDatabase)('account', () => {
     it('clears the avatar with null rather than leaving the old one', async () => {
       const id = await newUser()
       await users.updateProfile(id, {
+        username: `renamed_${(counter += 1)}`,
+        phone: null,
         name: 'a',
         nickname: 'a',
         avatarUrl: 'https://cdn.example.test/a.png',
       })
 
       await users.updateProfile(id, {
+        username: `renamed_${(counter += 1)}`,
+        phone: null,
         name: 'a',
         nickname: 'a',
         avatarUrl: null,
@@ -217,7 +262,13 @@ describe.skipIf(!hasTestDatabase)('account', () => {
 
       await users.updateProfile(
         id,
-        { name: 'b', nickname: 'b', avatarUrl: null },
+        {
+          username: `renamed_${(counter += 1)}`,
+          name: 'b',
+          nickname: 'b',
+          phone: null,
+          avatarUrl: null,
+        },
         new Date(Date.now() + 60_000),
       )
 
@@ -231,13 +282,15 @@ describe.skipIf(!hasTestDatabase)('account', () => {
     it('does not touch a soft-deleted row', async () => {
       const id = await newUser()
       await dataSource.query(
-        `UPDATE identity.users
+        `UPDATE iam.users
             SET status = 'deleted', deleted_at = now(), deleted_by = $2
           WHERE id = $1`,
         [id, SYSTEM_USER_ID],
       )
 
       await users.updateProfile(id, {
+        username: `renamed_${(counter += 1)}`,
+        phone: null,
         name: 'ghost',
         nickname: 'ghost',
         avatarUrl: null,
@@ -591,6 +644,7 @@ describe.skipIf(!hasTestDatabase)('account', () => {
       // working endpoint rather than a first bug report.
       const created = await auth.register({
         email: `register-${(counter += 1)}@example.test`,
+        username: `register_${counter}`,
         password: PASSWORD,
         confirmPassword: PASSWORD,
         name: 'Somchai Ura',
@@ -612,6 +666,7 @@ describe.skipIf(!hasTestDatabase)('account', () => {
     it('stores a hash of the password, not the password', async () => {
       const created = await auth.register({
         email: `register-${(counter += 1)}@example.test`,
+        username: `register_${counter}`,
         password: PASSWORD,
         confirmPassword: PASSWORD,
         name: 'a',
@@ -627,6 +682,7 @@ describe.skipIf(!hasTestDatabase)('account', () => {
       const email = `register-${(counter += 1)}@example.test`
       const person = {
         email,
+        username: `register_${counter}`,
         password: PASSWORD,
         confirmPassword: PASSWORD,
         name: 'a',
@@ -642,6 +698,7 @@ describe.skipIf(!hasTestDatabase)('account', () => {
   describe('registerSchema', () => {
     const valid = {
       email: 'someone@example.test',
+      username: 'someone',
       password: PASSWORD,
       confirmPassword: PASSWORD,
       name: 'Somchai',
@@ -666,8 +723,156 @@ describe.skipIf(!hasTestDatabase)('account', () => {
     })
   })
 
+  describe('username and phone', () => {
+    it('finds the same person by either identifier', async () => {
+      // One sign-in field, and `findByLogin` picks the query from the shape
+      // rather than asking which the person typed.
+      const id = await newUser(true)
+      const email = await emailOf(id)
+      const username = (await rowOf(id))!.username
+
+      expect((await users.findByLogin(email))?.id).toBe(id)
+      expect((await users.findByLogin(username))?.id).toBe(id)
+    })
+
+    it('matches a username whatever case it is typed in', async () => {
+      // citext on the column. The CHECK keeps what is *stored* lower case;
+      // this is about what someone types into the form at 7am.
+      const id = await newUser(true)
+      const username = (await rowOf(id))!.username
+
+      expect((await users.findByLogin(username.toUpperCase()))?.id).toBe(id)
+    })
+
+    it('refuses a second account on one phone number', async () => {
+      // 🔒 Unique among live accounts. Mapped from the constraint rather than
+      // checked first, so two requests a millisecond apart cannot both pass.
+      const first = await newUser(true)
+      const second = await newUser(true)
+      const profile = {
+        name: 'a',
+        nickname: 'a',
+        phone: '+66899999999',
+        avatarUrl: null,
+      }
+
+      await users.updateProfile(first, {
+        ...profile,
+        username: `phone_a_${(counter += 1)}`,
+      })
+
+      expect(
+        await codeOf(
+          users.updateProfile(second, {
+            ...profile,
+            username: `phone_b_${(counter += 1)}`,
+          }),
+        ),
+      ).toBe('PHONE_TAKEN')
+    })
+
+    it('refuses a username somebody already answers to', async () => {
+      const first = await newUser(true)
+      const second = await newUser(true)
+      const taken = `taken_${(counter += 1)}`
+
+      await users.updateProfile(first, {
+        username: taken,
+        name: 'a',
+        nickname: 'a',
+        phone: null,
+        avatarUrl: null,
+      })
+
+      expect(
+        await codeOf(
+          users.updateProfile(second, {
+            username: taken,
+            name: 'a',
+            nickname: 'a',
+            phone: null,
+            avatarUrl: null,
+          }),
+        ),
+      ).toBe('USERNAME_TAKEN')
+    })
+
+    it('lets many accounts have no phone at all', async () => {
+      // A unique index admits any number of NULLs; most rows will be one.
+      const a = await newUser(true)
+      const b = await newUser(true)
+      const blank = { name: 'a', nickname: 'a', phone: null, avatarUrl: null }
+
+      await users.updateProfile(a, {
+        ...blank,
+        username: `nophone_a_${(counter += 1)}`,
+      })
+      await expect(
+        users.updateProfile(b, {
+          ...blank,
+          username: `nophone_b_${(counter += 1)}`,
+        }),
+      ).resolves.toBeUndefined()
+    })
+  })
+
+  describe('usernameSchema', () => {
+    it('lower-cases rather than rejecting, so the stored form is canonical', () => {
+      expect(usernameSchema.parse('  Anong  ')).toBe('anong')
+    })
+
+    it('refuses what would have to be escaped in a URL or an @-mention', () => {
+      for (const bad of [
+        'an ong',
+        'an.ong',
+        'อนงค์',
+        'a',
+        'ab',
+        '1anong',
+        'a'.repeat(31),
+      ]) {
+        expect(usernameSchema.safeParse(bad).success).toBe(false)
+      }
+    })
+
+    it('accepts the shapes the CHECK accepts, and no others', () => {
+      for (const good of ['anong', 'a_b_c', 'user_01', 'abc']) {
+        expect(usernameSchema.safeParse(good).success).toBe(true)
+      }
+    })
+  })
+
+  describe('phoneSchema', () => {
+    it('reads a leading zero as Thai, since this is a Thai company', () => {
+      expect(phoneSchema.parse('0812345678')).toBe('+66812345678')
+    })
+
+    it('normalises the punctuation people actually type', () => {
+      for (const typed of ['081-234-5678', '081 234 5678', '(081) 234-5678']) {
+        expect(phoneSchema.parse(typed)).toBe('+66812345678')
+      }
+    })
+
+    it('keeps a number that already says which country it is', () => {
+      expect(phoneSchema.parse('+6621234567')).toBe('+6621234567')
+      expect(phoneSchema.parse('+14155552671')).toBe('+14155552671')
+    })
+
+    it('refuses what is not a phone number', () => {
+      for (const bad of ['12345', 'ไม่ใช่เบอร์', '+0812345678', '']) {
+        expect(phoneSchema.safeParse(bad).success).toBe(false)
+      }
+    })
+  })
+
   describe('updateProfileSchema', () => {
-    const valid = { name: 'Somchai', nickname: 'Chai', avatarUrl: null }
+    const valid = {
+      username: 'somchai',
+      name: 'Somchai',
+      nickname: 'Chai',
+      phone: null,
+      avatarUrl: null,
+    }
 
     it('trims rather than rejecting padded input', () => {
       const result = updateProfileSchema.parse({

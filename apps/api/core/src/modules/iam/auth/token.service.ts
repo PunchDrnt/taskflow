@@ -5,6 +5,15 @@ import { JwtService } from '@nestjs/jwt'
 /** docs/01-architecture.md#auth. Short, because the session check is what revokes. */
 export const ACCESS_TOKEN_TTL_SECONDS = 15 * 60
 /** The ceiling on `sessions.expires_at`. "Remember me" chooses a shorter one. */
+/**
+ * Long enough to find the phone, short enough that a challenge left in a
+ * browser is not a standing invitation.
+ */
+export const TWO_FACTOR_CHALLENGE_TTL_SECONDS = 5 * 60
+
+/** Marks a token as the 2FA challenge and nothing else. */
+const TWO_FACTOR_PURPOSE = 'two_factor'
+
 export const REFRESH_TOKEN_TTL_SECONDS = 15 * 24 * 60 * 60
 
 /**
@@ -74,6 +83,35 @@ export class TokenService {
   }
 
   /** The plaintext, handed to the browser once and never stored. */
+  /**
+   * The short-lived token that carries "this password was right, now prove the
+   * second factor" between the two halves of a login.
+   *
+   * `purpose` is checked on the way back, and there is no `sid`, so
+   * `verifyAccessToken` rejects it twice over: once for the missing claim and
+   * once because a challenge names no session. Either alone would do; both is
+   * what keeps a future refactor of one from quietly turning this into a way
+   * in without the second factor.
+   */
+  signTwoFactorChallenge(userId: string): string {
+    return this.jwt.sign(
+      { sub: userId, purpose: TWO_FACTOR_PURPOSE },
+      { expiresIn: TWO_FACTOR_CHALLENGE_TTL_SECONDS },
+    )
+  }
+
+  /** The user id the challenge names, or null for anything not one of ours. */
+  verifyTwoFactorChallenge(token: string): string | null {
+    try {
+      const claims = this.jwt.verify<{ sub?: string; purpose?: string }>(token)
+
+      if (claims.purpose !== TWO_FACTOR_PURPOSE) return null
+      return typeof claims.sub === 'string' ? claims.sub : null
+    } catch {
+      return null
+    }
+  }
+
   createRefreshToken(): string {
     return randomBytes(32).toString('base64url')
   }

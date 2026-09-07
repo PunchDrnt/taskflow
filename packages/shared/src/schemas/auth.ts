@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 import { idSchema } from './id.js'
+import { usernameSchema } from './user.js'
 
 /** docs/01-architecture.md#password--rate-limit */
 export const PASSWORD_MIN_LENGTH = 8
@@ -34,8 +35,26 @@ export const passwordSchema = z
  */
 const presentedPassword = z.string().min(1, 'กรุณากรอกรหัสผ่าน')
 
+/**
+ * One field, not two, and not a radio button. Whether somebody types their
+ * email or their username is not a question worth asking them — the two
+ * alphabets do not overlap, because a username may not contain `@` and a CHECK
+ * enforces that. `UserService.findByLogin` picks the query from the shape.
+ *
+ * Deliberately looser than `emailSchema`: trimmed and lower-cased, but not
+ * validated as an address, since most of the time it is not one. A value that
+ * matches nothing gets the same INVALID_CREDENTIALS as a wrong password, which
+ * is what stops this being a way to test which usernames exist.
+ */
+const loginIdentifier = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .min(1, 'กรุณากรอกอีเมลหรือชื่อผู้ใช้')
+  .max(320, 'ยาวเกินไป')
+
 export const loginSchema = z.object({
-  email: emailSchema,
+  login: loginIdentifier,
   password: presentedPassword,
   /**
    * "Remember me" is not a mechanism, only a number: how long
@@ -104,6 +123,7 @@ export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>
 export const registerSchema = z
   .object({
     email: emailSchema,
+    username: usernameSchema,
     password: passwordSchema,
     confirmPassword: z.string(),
     name: z.string().trim().min(1, 'กรุณากรอกชื่อ').max(200, 'ชื่อยาวเกินไป'),
@@ -119,6 +139,33 @@ export const registerSchema = z
   })
 
 export type RegisterInput = z.infer<typeof registerSchema>
+
+/** The six digits from the app, or one of the recovery codes. */
+const twoFactorCode = z
+  .string()
+  .trim()
+  .min(1, 'กรุณากรอกรหัสยืนยัน')
+  .max(64, 'รหัสยืนยันยาวเกินไป')
+
+/** `POST /v1/auth/login/2fa` — the second step, holding the challenge cookie. */
+export const twoFactorLoginSchema = z.object({ code: twoFactorCode })
+export type TwoFactorLoginInput = z.infer<typeof twoFactorLoginSchema>
+
+/**
+ * `POST /v1/me/2fa/setup` — the password is required even though the caller is
+ * signed in: somebody who has taken a session could otherwise enrol their own
+ * authenticator and lock the owner out of their account.
+ */
+export const twoFactorSetupSchema = z.object({ password: presentedPassword })
+export type TwoFactorSetupInput = z.infer<typeof twoFactorSetupSchema>
+
+/** `POST /v1/me/2fa/enable` — proves the secret reached the app. */
+export const twoFactorEnableSchema = z.object({ code: twoFactorCode })
+export type TwoFactorEnableInput = z.infer<typeof twoFactorEnableSchema>
+
+/** `DELETE /v1/me/2fa` — same reasoning as setup, in the other direction. */
+export const twoFactorDisableSchema = z.object({ password: presentedPassword })
+export type TwoFactorDisableInput = z.infer<typeof twoFactorDisableSchema>
 
 /**
  * The codes the sign-in screens branch on. Here rather than in
@@ -163,6 +210,21 @@ export const AUTH_ERROR_CODES = {
   REGISTRATION_DISABLED: 'REGISTRATION_DISABLED',
   /** Sign-up only: that address already has an account. */
   EMAIL_TAKEN: 'EMAIL_TAKEN',
+  /** Sign-up or a profile edit: somebody already answers to that name. */
+  USERNAME_TAKEN: 'USERNAME_TAKEN',
+  /** A profile edit: that number is on another live account. */
+  PHONE_TAKEN: 'PHONE_TAKEN',
+  /**
+   * The password was right and a second factor is now needed. Not an error —
+   * a step. The client shows the code field rather than a failure.
+   */
+  TWO_FACTOR_REQUIRED: 'TWO_FACTOR_REQUIRED',
+  /** Wrong, expired, or already used — one code for all three. */
+  INVALID_TWO_FACTOR_CODE: 'INVALID_TWO_FACTOR_CODE',
+  /** Setup asked for while it is already on. */
+  TWO_FACTOR_ALREADY_ENABLED: 'TWO_FACTOR_ALREADY_ENABLED',
+  /** Enable called before setup minted a secret. */
+  TWO_FACTOR_SETUP_NOT_STARTED: 'TWO_FACTOR_SETUP_NOT_STARTED',
 } as const
 
 export type AuthErrorCode =

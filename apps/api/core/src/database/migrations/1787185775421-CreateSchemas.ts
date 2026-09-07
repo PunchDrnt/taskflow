@@ -10,7 +10,7 @@ import { type MigrationInterface, type QueryRunner } from 'typeorm'
  * See docs/02-database/README.md#schema-map
  */
 const SCHEMAS = [
-  'identity', // users, sessions, password resets, system-level RBAC
+  'iam', // users, sessions, password resets, system-level RBAC
   'organization', // organizations, members, teams
   'project', // projects, members, statuses, sprints
   'task', // tasks, assignees
