@@ -2,6 +2,13 @@ import { Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import type { CookieOptions, Response } from 'express'
 
+import {
+  ACCESS_TOKEN_COOKIE,
+  ACTIVE_ORG_COOKIE,
+  REFRESH_TOKEN_COOKIE,
+  TWO_FACTOR_COOKIE,
+} from '@repo/shared'
+
 import type { Env } from '../../../config/env'
 import {
   ACCESS_TOKEN_TTL_SECONDS,
@@ -10,16 +17,25 @@ import {
   type Tokens,
 } from './token.service'
 
-export const ACCESS_TOKEN_COOKIE = 'access_token'
-export const REFRESH_TOKEN_COOKIE = 'refresh_token'
-export const ACTIVE_ORG_COOKIE = 'active_org'
-
 /**
- * Carries a half-finished login between the password step and the code step.
- * Scoped to the auth path like the refresh token, and for the same reason:
- * nothing outside those two endpoints has any use for it.
+ * The names come from `@repo/shared` and the attributes stay here.
+ *
+ * The split is the point: the web app's proxy has to recognise `access_token`
+ * to know whether to refresh before a render, so the *name* is shared state
+ * between two runtimes — and a name that drifts fails silently, with everyone
+ * signed out every fifteen minutes and nothing in any log. The *attributes*
+ * are still one place, this file, which is the 🔒 rule the docblock below
+ * describes.
+ *
+ * Re-exported so the four call sites in this module keep importing cookie
+ * names from the file that sets cookies.
  */
-export const TWO_FACTOR_COOKIE = 'two_factor_challenge'
+export {
+  ACCESS_TOKEN_COOKIE,
+  ACTIVE_ORG_COOKIE,
+  REFRESH_TOKEN_COOKIE,
+  TWO_FACTOR_COOKIE,
+}
 
 /**
  * Where the browser sends the refresh token, and nowhere else. This is the
