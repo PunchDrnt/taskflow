@@ -1,26 +1,47 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
   Param,
+  Patch,
   Post,
   Query,
 } from '@nestjs/common'
 import { ApiOperation, ApiTags } from '@nestjs/swagger'
 
 import {
+  addProjectMemberSchema,
+  changeProjectMemberRoleSchema,
   createProjectSchema,
   listProjectsQuerySchema,
   projectIdSchema,
+  projectMemberUserIdSchema,
+  type AddProjectMemberInput,
+  type ChangeProjectMemberRoleInput,
   type CreateProjectInput,
   type ListProjectsQuery,
 } from '@repo/shared'
 
 import { ZodValidationPipe } from '#shared/http/zod-validation.pipe'
 
+import { UserService } from '../iam/user/user.service'
+import {
+  ProjectMemberService,
+  type ProjectMemberRow,
+} from './project-member.service'
 import { ProjectService, type ProjectView } from './project.service'
+
+/** A project member as the members panel draws them. */
+interface ProjectMemberView extends ProjectMemberRow {
+  /** Null when the account has been anonymised but the membership remains. */
+  name: string | null
+  nickname: string | null
+  email: string | null
+  avatarUrl: string | null
+}
 
 /**
  * Projects in the organisation this request is acting for.
@@ -39,7 +60,11 @@ import { ProjectService, type ProjectView } from './project.service'
 @ApiTags('project')
 @Controller('projects')
 export class ProjectController {
-  constructor(private readonly projects: ProjectService) {}
+  constructor(
+    private readonly projects: ProjectService,
+    private readonly members: ProjectMemberService,
+    private readonly users: UserService,
+  ) {}
 
   /**
    * Not every project in the organisation — every project *this caller* may
@@ -71,5 +96,67 @@ export class ProjectController {
     body: CreateProjectInput,
   ): Promise<ProjectView> {
     return this.projects.create(body)
+  }
+
+  @Get(':id/members')
+  @ApiOperation({ summary: 'Who is in this project' })
+  async listMembers(
+    @Param('id', new ZodValidationPipe(projectIdSchema)) id: string,
+  ): Promise<ProjectMemberView[]> {
+    const members = await this.members.list(id)
+
+    // Names come from iam through its service, never from a join: this module
+    // does not own `iam.users`, and the assignee picker will want the same
+    // shape. Same arrangement as the organisation's members list.
+    const people = await this.users.findByIds(
+      members.map((member) => member.userId),
+    )
+    const byId = new Map(people.map((person) => [person.id, person]))
+
+    return members.map((member) => {
+      const person = byId.get(member.userId)
+
+      return {
+        ...member,
+        name: person?.name ?? null,
+        nickname: person?.nickname ?? null,
+        email: person?.email ?? null,
+        avatarUrl: person?.avatarUrl ?? null,
+      }
+    })
+  }
+
+  @Post(':id/members')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Add somebody in this organisation to the project' })
+  addMember(
+    @Param('id', new ZodValidationPipe(projectIdSchema)) id: string,
+    @Body(new ZodValidationPipe(addProjectMemberSchema))
+    body: AddProjectMemberInput,
+  ): Promise<ProjectMemberRow> {
+    return this.members.add(id, body.userId, body.role)
+  }
+
+  @Patch(':id/members/:userId')
+  @ApiOperation({ summary: "Change somebody's role in this project" })
+  changeMemberRole(
+    @Param('id', new ZodValidationPipe(projectIdSchema)) id: string,
+    @Param('userId', new ZodValidationPipe(projectMemberUserIdSchema))
+    userId: string,
+    @Body(new ZodValidationPipe(changeProjectMemberRoleSchema))
+    body: ChangeProjectMemberRoleInput,
+  ): Promise<ProjectMemberRow> {
+    return this.members.changeRole(id, userId, body.role)
+  }
+
+  @Delete(':id/members/:userId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Take somebody out of the project' })
+  removeMember(
+    @Param('id', new ZodValidationPipe(projectIdSchema)) id: string,
+    @Param('userId', new ZodValidationPipe(projectMemberUserIdSchema))
+    userId: string,
+  ): Promise<void> {
+    return this.members.remove(id, userId)
   }
 }

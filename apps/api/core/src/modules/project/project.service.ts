@@ -15,6 +15,7 @@ import { OrgScopedRepository } from '#shared/org-scope/org-scoped.repository'
 import { requireOrgContext } from '#shared/org-scope/request-context'
 import { sequence } from '#shared/sort-order'
 
+import type { Action } from '../../permission/ability'
 import { actorFromContext, type Actor } from '../../permission/actor'
 import { PermissionService } from '../../permission/permission.service'
 import { AuditService } from '../audit/audit.service'
@@ -170,6 +171,27 @@ export class ProjectService {
     const { project, role } = await this.findVisible(id)
 
     return view(project, role)
+  }
+
+  /**
+   * The project, having checked the caller may do `action` to it — the entry
+   * point for everything that changes one, and for the endpoints that hang off
+   * it.
+   *
+   * Two questions in a fixed order, because they have different answers: can
+   * this caller *see* it (404 if not, so a refusal does not confirm the row),
+   * and then may they do this to it (403, because at that point they can see
+   * it and deserve to be told plainly). Running them the other way round would
+   * leak the row's existence through the 403.
+   */
+  async requireProject(id: string, action: Action): Promise<VisibleProject> {
+    const visible = await this.findVisible(id)
+
+    this.permissions.assert(actorFor(visible.role, id), action, 'Project', {
+      id,
+    })
+
+    return visible
   }
 
   /**

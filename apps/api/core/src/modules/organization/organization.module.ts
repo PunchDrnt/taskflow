@@ -20,9 +20,13 @@ import { OrganizationService } from './organization.service'
  * equal `id`.
  *
  * `MembershipService` is exported for `AuthModule`, which needs it to answer
- * "which org is this request for" before any context exists. Nothing else
- * here is exported: member management is reached through this module's own
- * controller.
+ * "which org is this request for" before any context exists.
+ *
+ * `MemberService` is exported for `ProjectModule`, which has to answer one
+ * question about this module's tables and must not read them itself: adding
+ * somebody to a project requires that they are in the organisation, and
+ * `project.members.user_id` references `iam.users` alone — so nothing in the
+ * database stops a person from another company being written in.
  */
 @Module({
   imports: [AuditModule, UserModule],
@@ -34,6 +38,6 @@ import { OrganizationService } from './organization.service'
     MemberService,
     OrganizationService,
   ],
-  exports: [MembershipService],
+  exports: [MembershipService, MemberService],
 })
 export class OrganizationModule {}

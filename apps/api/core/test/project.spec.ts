@@ -10,6 +10,10 @@ import { SYSTEM_USER_ID } from '#shared/system-user'
 
 import { AuditService } from '../src/modules/audit/audit.service'
 import { AuditLog } from '../src/modules/audit/log.entity'
+import { OrganizationMember } from '../src/modules/organization/member.entity'
+import { MemberService } from '../src/modules/organization/member.service'
+import { ProjectMember } from '../src/modules/project/project-member.entity'
+import { ProjectMemberService } from '../src/modules/project/project-member.service'
 import { Project } from '../src/modules/project/project.entity'
 import { ProjectService } from '../src/modules/project/project.service'
 import { PermissionService } from '../src/permission/permission.service'
@@ -27,11 +31,13 @@ import { createMigratedTestDataSource, hasTestDatabase } from './database'
 describe.skipIf(!hasTestDatabase)('project', () => {
   let dataSource: DataSource
   let projects: ProjectService
+  let projectMembers: ProjectMemberService
   let acme: string
   let globex: string
   let owner: string
   let admin: string
   let plain: string
+  let outsider: string
 
   /** A request, as the guard would have set it up. */
   const as = <R>(
@@ -100,6 +106,14 @@ describe.skipIf(!hasTestDatabase)('project', () => {
     }
   }
 
+  const joinOrg = (orgId: string, userId: string, role: OrgRole) =>
+    dataSource.query(
+      `INSERT INTO organization.members
+         (org_id, user_id, role, created_by, updated_by)
+       VALUES ($1, $2, $3, $4, $4)`,
+      [orgId, userId, role, SYSTEM_USER_ID],
+    )
+
   const joinProject = (projectId: string, userId: string, role: string) =>
     dataSource.query(
       `INSERT INTO project.members
@@ -122,16 +136,34 @@ describe.skipIf(!hasTestDatabase)('project', () => {
   beforeAll(async () => {
     dataSource = await createMigratedTestDataSource()
 
+    const permissions = new PermissionService()
+    const audit = new AuditService(
+      createOrgScopedRepository(dataSource, AuditLog),
+    )
+
     projects = new ProjectService(
       createOrgScopedRepository(dataSource, Project),
       dataSource,
-      new PermissionService(),
-      new AuditService(createOrgScopedRepository(dataSource, AuditLog)),
+      permissions,
+      audit,
+    )
+    projectMembers = new ProjectMemberService(
+      createOrgScopedRepository(dataSource, ProjectMember),
+      dataSource,
+      projects,
+      new MemberService(
+        createOrgScopedRepository(dataSource, OrganizationMember),
+        dataSource,
+        permissions,
+        audit,
+      ),
+      audit,
     )
 
     owner = await newUser('p_owner')
     admin = await newUser('p_admin')
     plain = await newUser('p_plain')
+    outsider = await newUser('p_outsider')
   }, 60_000)
 
   afterAll(async () => {
@@ -143,8 +175,21 @@ describe.skipIf(!hasTestDatabase)('project', () => {
     await dataSource.query(`DELETE FROM project.projects`)
     await dataSource.query(`DELETE FROM organization.organizations`)
 
+    await dataSource.query(`DELETE FROM organization.members`)
+
     acme = await newOrg('acme')
     globex = await newOrg('globex')
+
+    // Everyone but `outsider` belongs to Acme; `outsider` belongs to Globex.
+    // That split is what the cross-org case below turns on.
+    for (const [userId, role] of [
+      [owner, 'owner'],
+      [admin, 'admin'],
+      [plain, 'member'],
+    ] as [string, OrgRole][]) {
+      await joinOrg(acme, userId, role)
+    }
+    await joinOrg(globex, outsider, 'member')
   })
 
   describe('who may create one', () => {
@@ -434,6 +479,171 @@ describe.skipIf(!hasTestDatabase)('project', () => {
       await expect(
         as(acme, owner, 'owner', () => projects.findById(apollo)),
       ).resolves.toMatchObject({ name: 'Apollo' })
+    })
+  })
+
+  describe('members', () => {
+    let apollo: string
+
+    beforeEach(async () => {
+      apollo = (await create(owner, 'owner', 'Apollo')).id
+    })
+
+    const membersOf = (userId: string, orgRole: OrgRole) =>
+      as(acme, userId, orgRole, () => projectMembers.list(apollo))
+
+    it('starts with the creator alone', async () => {
+      expect(await membersOf(owner, 'owner')).toMatchObject([
+        { userId: owner, role: 'admin' },
+      ])
+    })
+
+    it('adds somebody in the organisation', async () => {
+      await as(acme, owner, 'owner', () =>
+        projectMembers.add(apollo, plain, 'member'),
+      )
+
+      expect(await membersOf(owner, 'owner')).toMatchObject([
+        { userId: owner, role: 'admin' },
+        { userId: plain, role: 'member' },
+      ])
+    })
+
+    it('🔒 refuses somebody who is not in the organisation', async () => {
+      // The database will not catch this. `project.members.user_id` references
+      // `iam.users(id)` on its own — only `project_id` is composite with
+      // `org_id` — so a person from another company inserts cleanly and then
+      // holds a real membership that `ProjectService.list` honours.
+      expect(
+        await codeOf(
+          as(acme, owner, 'owner', () =>
+            projectMembers.add(apollo, outsider, 'member'),
+          ),
+        ),
+      ).toBe('NOT_FOUND')
+
+      expect(await countOf('project.members')).toBe(1)
+    })
+
+    it('refuses a second row for the same person', async () => {
+      expect(
+        await codeOf(
+          as(acme, owner, 'owner', () =>
+            projectMembers.add(apollo, owner, 'member'),
+          ),
+        ),
+      ).toBe('ALREADY_MEMBER')
+    })
+
+    it('lets a project admin manage the members', async () => {
+      // An org member who runs this project — the case that separates project
+      // permissions from org ones.
+      await joinProject(apollo, plain, 'admin')
+
+      await expect(
+        as(acme, plain, 'member', () =>
+          projectMembers.add(apollo, admin, 'member'),
+        ),
+      ).resolves.toMatchObject({ userId: admin })
+    })
+
+    it('does not let a project member manage them', async () => {
+      await joinProject(apollo, plain, 'member')
+
+      // They can see the project, so this is 403 rather than 404: being told
+      // "no such project" about one you are looking at reads as a bug.
+      expect(
+        await codeOf(
+          as(acme, plain, 'member', () =>
+            projectMembers.add(apollo, admin, 'member'),
+          ),
+        ),
+      ).toBe('FORBIDDEN')
+    })
+
+    it('does not let an outsider to the project even see the list', async () => {
+      // Not in the project and not running the org: 404, so the refusal does
+      // not confirm the project exists.
+      expect(
+        await codeOf(
+          as(acme, plain, 'member', () => projectMembers.list(apollo)),
+        ),
+      ).toBe('NOT_FOUND')
+    })
+
+    it('changes a role, and says nothing changed when it has not', async () => {
+      await as(acme, owner, 'owner', () =>
+        projectMembers.add(apollo, plain, 'member'),
+      )
+
+      await as(acme, owner, 'owner', () =>
+        projectMembers.changeRole(apollo, plain, 'admin'),
+      )
+
+      expect(await membersOf(owner, 'owner')).toMatchObject([
+        { userId: owner, role: 'admin' },
+        { userId: plain, role: 'admin' },
+      ])
+
+      // Setting the role it already holds is a no-op rather than a second
+      // audit row describing no change.
+      await as(acme, owner, 'owner', () =>
+        projectMembers.changeRole(apollo, plain, 'admin'),
+      )
+
+      expect(
+        await countOf('audit.logs', `entity_type = 'project_member'`),
+      ).toBe(2)
+    })
+
+    it('removes somebody outright, since the row keeps no history', async () => {
+      await as(acme, owner, 'owner', () =>
+        projectMembers.add(apollo, plain, 'member'),
+      )
+      await as(acme, owner, 'owner', () => projectMembers.remove(apollo, plain))
+
+      expect(await membersOf(owner, 'owner')).toHaveLength(1)
+      // `project.members` has no `deleted_at` — the work the person did is on
+      // the tasks and stays there — so the audit row is the only record.
+      expect(
+        await countOf(
+          'audit.logs',
+          `entity_type = 'project_member' AND action = 'deleted'`,
+        ),
+      ).toBe(1)
+    })
+
+    it('stops seeing the project once they are removed', async () => {
+      await as(acme, owner, 'owner', () =>
+        projectMembers.add(apollo, plain, 'member'),
+      )
+
+      expect(
+        (await as(acme, plain, 'member', () => projects.list())).map(
+          (one) => one.name,
+        ),
+      ).toEqual(['Apollo'])
+
+      await as(acme, owner, 'owner', () => projectMembers.remove(apollo, plain))
+
+      expect(await as(acme, plain, 'member', () => projects.list())).toEqual([])
+      expect(
+        await codeOf(
+          as(acme, plain, 'member', () => projects.findById(apollo)),
+        ),
+      ).toBe('NOT_FOUND')
+    })
+
+    it('allows a project with no admins left', async () => {
+      // Deliberately no last-admin rule, unlike the organisation's last-owner
+      // one: the org's owners and admins see every project, so one with nobody
+      // in it is still fully administrable.
+      await as(acme, owner, 'owner', () => projectMembers.remove(apollo, owner))
+
+      expect(await membersOf(admin, 'admin')).toEqual([])
+      await expect(
+        as(acme, admin, 'admin', () => projects.findById(apollo)),
+      ).resolves.toMatchObject({ name: 'Apollo', role: null })
     })
   })
 })

@@ -222,7 +222,14 @@ unique เต็ม · `views.sort_order` / `is_default`
       · ✅ `keyPrefixSchema` ใน `@repo/shared` ใช้ regex ของ docs ตรงกับ CHECK ในตาราง — ค่าที่ API รับแต่ DB ปฏิเสธจะโผล่มาเป็น 500
 - [ ] `color` เป็น token จาก palette 8 สี (ไม่ใช่ hex) — คอลัมน์ลงแล้ว `icon` เอาออกแล้ว
       · ✅ `paletteColorSchema` อ่านจาก `STATUS_COLORS` ตัวเดียวกับ status — ลิสต์เดียว สีที่ project ใช้ได้แต่ status ใช้ไม่ได้จึงเป็นไปไม่ได้
-- [ ] Project member อิสระจากทีม (แบบ Slack channel) — role `admin` / `member`
+- [x] Project member อิสระจากทีม (แบบ Slack channel) — role `admin` / `member`
+      · `GET/POST /v1/projects/:id/members` · `PATCH|DELETE .../:userId` · ชื่อดึงผ่าน `UserService.findByIds` ไม่ใช่ join (แบบเดียวกับ org members)
+      · 🔒 **ต้องเช็คเองว่าคนที่เพิ่มอยู่ใน org จริง — FK ไม่ได้ครอบ** · `project.members.user_id` ชี้ `iam.users(id)` เดี่ยวๆ
+        มีแค่ `project_id` ที่เป็น composite กับ `org_id` · แปลว่าใส่ user ของบริษัทอื่นเข้าไป insert ผ่านสบายๆ แล้วเขาได้ membership จริงที่ `list` นับให้ด้วย
+        · `ProjectMemberService.add` เลยถาม `MemberService.findByUserId` ก่อน (export เพิ่มจาก `OrganizationModule`) → ไม่อยู่ใน org = 404
+      · ลบสมาชิกเป็น **hard `DELETE`** ถูกแล้ว — `project.members` เป็น `OrgScopedEntity` ไม่มี `deleted_at`
+        เพราะ membership ที่จบไปแล้วไม่มีอะไรให้อ่านย้อน · งานที่เขาทำอยู่บน task ผูกด้วย `created_by` ไม่ได้หายไปไหน
+      · audit row เขียน**ก่อน** delete ในทรานแซกชันเดียวกัน — เขียนทีหลังจะหาแถวไม่เจอแล้ว
 - [x] 🔒 **กั้นสิทธิ์ระดับ project จริงตั้งแต่ phase นี้ ไม่ใช่แค่ซ่อนใน sidebar**
       · member เห็นเฉพาะ project ที่ตัวเองเป็นสมาชิก · org owner/admin เห็นทุก project ใน org ตัวเอง
       · กั้นแค่ที่ UI = คนที่รู้ URL ก็ยังเปิดเข้าไปได้
