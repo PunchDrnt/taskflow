@@ -7,8 +7,10 @@ import {
   type CreateProjectInput,
   type ListProjectsQuery,
   type ScopedRole,
+  type UpdateProjectInput,
 } from '@repo/shared'
 
+import { CascadeSoftDelete } from '#shared/entity/cascade-soft-delete'
 import { ApiException } from '#shared/http/api-exception'
 import { InjectOrgRepository } from '#shared/org-scope/org-repository.provider'
 import { OrgScopedRepository } from '#shared/org-scope/org-scoped.repository'
@@ -19,6 +21,7 @@ import type { Action } from '../../permission/ability'
 import { actorFromContext, type Actor } from '../../permission/actor'
 import { PermissionService } from '../../permission/permission.service'
 import { AuditService } from '../audit/audit.service'
+import { changesBetween } from '../audit/changes'
 import { DEFAULT_STATUSES } from './default-statuses'
 import { ProjectMember } from './project-member.entity'
 import { Project } from './project.entity'
@@ -58,6 +61,7 @@ export class ProjectService {
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly permissions: PermissionService,
     private readonly audit: AuditService,
+    private readonly cascade: CascadeSoftDelete,
   ) {}
 
   /**
@@ -268,6 +272,125 @@ export class ProjectService {
       })
 
       return view(project, 'admin')
+    })
+  }
+
+  /**
+   * Renames a project, or changes its colour, description or key prefix.
+   *
+   * Changing `key_prefix` re-keys every task in the project at once — `DEV-120`
+   * becomes `OPS-120` the moment this commits — and that is the design, not an
+   * oversight: the key is composed at display time from the prefix and
+   * `tasks.number`, never stored, so there is nothing to backfill. What it
+   * costs is that a key someone pasted into chat last week now reads
+   * differently. docs/04-features/phase-1.md#task-key accepts that.
+   *
+   * Archiving is not here — it is its own endpoint, so that "rename this
+   * project" and "hide it from everyone's sidebar" cannot arrive as the same
+   * request with one extra field.
+   */
+  async update(id: string, patch: UpdateProjectInput): Promise<ProjectView> {
+    const { project, role } = await this.requireProject(id, 'update')
+
+    const after = { ...project, ...patch }
+    const changes = changesBetween({ ...project }, after)
+
+    // The schema already refuses a body with no fields; this catches a body
+    // whose fields hold what they already hold. An audit row describing no
+    // change is worse than none.
+    if (Object.keys(changes).length === 0) return view(project, role)
+
+    await this.dataSource.transaction(async (manager) => {
+      try {
+        await manager.update(Project, id, {
+          ...patch,
+          updatedBy: requireOrgContext().userId,
+        })
+      } catch (error) {
+        throw nameClash(error, patch.name)
+      }
+
+      await this.audit.record(manager, {
+        entityType: 'project',
+        entityId: id,
+        action: 'updated',
+        changes,
+      })
+    })
+
+    return view(after as Project, role)
+  }
+
+  /**
+   * Hides a project from the sidebar and from every picker, without taking
+   * anything away.
+   *
+   * ⚠️ **`archived_at` is not `deleted_at`.** Members keep their access and
+   * the history stays readable — which is why the column has no `archived_by`
+   * beside it and no CHECK pairing the two, unlike every soft-delete column in
+   * this schema. Confusing the two is how "we archived it" turns into "where
+   * did our tasks go".
+   */
+  async setArchived(id: string, archived: boolean): Promise<ProjectView> {
+    const { project, role } = await this.requireProject(id, 'update')
+
+    if ((project.archivedAt !== null) === archived) return view(project, role)
+
+    const archivedAt = archived ? new Date() : null
+
+    await this.dataSource.transaction(async (manager) => {
+      await manager.update(Project, id, {
+        archivedAt,
+        updatedBy: requireOrgContext().userId,
+      })
+
+      await this.audit.record(manager, {
+        entityType: 'project',
+        // Its own action rather than an `updated` row with one field in it:
+        // this is the entry somebody scans the log for.
+        action: archived ? 'archived' : 'unarchived',
+        entityId: id,
+        changes: { archivedAt: { from: project.archivedAt, to: archivedAt } },
+      })
+    })
+
+    return view({ ...project, archivedAt }, role)
+  }
+
+  /**
+   * Soft-deletes the project and everything under it — statuses, sprints,
+   * tasks and their sub-tasks, comments, attachments, views.
+   *
+   * Through `CascadeSoftDelete` rather than `softDeleteById`, because
+   * `ON DELETE CASCADE` fires only on a hard delete: without it the tasks
+   * outlive the project, keep showing up in every list that reads tasks
+   * directly, and then jam the retention purge ninety days later, since
+   * `tasks.project_id` is RESTRICT.
+   *
+   * The cascade and the audit row share this transaction, which is what the
+   * manager parameter on both is for.
+   */
+  async remove(id: string): Promise<void> {
+    const { project } = await this.requireProject(id, 'delete')
+
+    await this.dataSource.transaction(async (manager) => {
+      const deleted = await this.cascade.softDelete(
+        manager,
+        'project.projects',
+        id,
+      )
+
+      await this.audit.record(manager, {
+        entityType: 'project',
+        entityId: id,
+        action: 'deleted',
+        changes: {
+          name: { from: project.name, to: null },
+          // What went with it, so the log answers "and the tasks?" without
+          // anybody having to reason about the cascade map.
+          cascaded: { from: null, to: deleted },
+        },
+      })
     })
   }
 

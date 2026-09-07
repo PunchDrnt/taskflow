@@ -19,10 +19,12 @@ import {
   listProjectsQuerySchema,
   projectIdSchema,
   projectMemberUserIdSchema,
+  updateProjectSchema,
   type AddProjectMemberInput,
   type ChangeProjectMemberRoleInput,
   type CreateProjectInput,
   type ListProjectsQuery,
+  type UpdateProjectInput,
 } from '@repo/shared'
 
 import { ZodValidationPipe } from '#shared/http/zod-validation.pipe'
@@ -96,6 +98,51 @@ export class ProjectController {
     body: CreateProjectInput,
   ): Promise<ProjectView> {
     return this.projects.create(body)
+  }
+
+  @Patch(':id')
+  @ApiOperation({ summary: 'Rename a project, or change its colour or prefix' })
+  update(
+    @Param('id', new ZodValidationPipe(projectIdSchema)) id: string,
+    @Body(new ZodValidationPipe(updateProjectSchema))
+    body: UpdateProjectInput,
+  ): Promise<ProjectView> {
+    return this.projects.update(id, body)
+  }
+
+  /**
+   * Archiving is its own endpoint rather than a field on `PATCH`, so that
+   * hiding a project from everyone's sidebar cannot arrive as a rename with
+   * one extra key — and so the activity log gets an entry somebody can scan
+   * for. `DELETE` on the same path is the way back.
+   */
+  @Post(':id/archive')
+  // 200, not Nest's POST default of 201: nothing is created, and the body is
+  // the project as it now stands.
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Hide the project from sidebars and pickers' })
+  archive(
+    @Param('id', new ZodValidationPipe(projectIdSchema)) id: string,
+  ): Promise<ProjectView> {
+    return this.projects.setArchived(id, true)
+  }
+
+  @Delete(':id/archive')
+  @ApiOperation({ summary: 'Bring an archived project back' })
+  unarchive(
+    @Param('id', new ZodValidationPipe(projectIdSchema)) id: string,
+  ): Promise<ProjectView> {
+    return this.projects.setArchived(id, false)
+  }
+
+  /** Takes the statuses, sprints, tasks and everything under them with it. */
+  @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Delete a project and everything in it' })
+  remove(
+    @Param('id', new ZodValidationPipe(projectIdSchema)) id: string,
+  ): Promise<void> {
+    return this.projects.remove(id)
   }
 
   @Get(':id/members')

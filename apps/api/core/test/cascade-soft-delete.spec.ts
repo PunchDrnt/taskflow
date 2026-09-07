@@ -41,6 +41,16 @@ describe.skipIf(!hasTestDatabase)('cascade soft delete', () => {
     return org.id
   }
 
+  /**
+   * `softDelete` takes the caller's transaction, so every case here opens one
+   * — the same shape a service uses, where the audit row goes in beside it.
+   */
+  const softDelete = (
+    table: string,
+    id: string,
+  ): Promise<Record<string, number>> =>
+    dataSource.transaction((manager) => cascade.softDelete(manager, table, id))
+
   const live = async (table: string): Promise<number> => {
     const [row] = (await dataSource.query(
       `SELECT count(*)::int AS count FROM ${table} WHERE deleted_at IS NULL`,
@@ -241,7 +251,7 @@ describe.skipIf(!hasTestDatabase)('cascade soft delete', () => {
 
     it('takes everything belonging to it, down every level', async () => {
       const deleted = await asOrg(orgA, () =>
-        cascade.softDelete('project.projects', projectId),
+        softDelete('project.projects', projectId),
       )
 
       expect(deleted).toEqual({
@@ -264,7 +274,7 @@ describe.skipIf(!hasTestDatabase)('cascade soft delete', () => {
       // that it happened. Cascading into them would mean a restored project
       // came back with nobody in it, and a soft-deleted membership row is an
       // access-control bug waiting for one query that forgets the filter.
-      await asOrg(orgA, () => cascade.softDelete('project.projects', projectId))
+      await asOrg(orgA, () => softDelete('project.projects', projectId))
 
       const [members] = (await dataSource.query(
         `SELECT count(*)::int AS count FROM project.members WHERE project_id = $1`,
@@ -288,9 +298,7 @@ describe.skipIf(!hasTestDatabase)('cascade soft delete', () => {
         [orgA, taskId, SYSTEM_USER_ID, projectId],
       )
 
-      const deleted = await asOrg(orgA, () =>
-        cascade.softDelete('task.tasks', taskId),
-      )
+      const deleted = await asOrg(orgA, () => softDelete('task.tasks', taskId))
 
       // Polymorphic, so entity_type has to be part of the match — without it
       // this would take the comment on the project too.
@@ -300,7 +308,7 @@ describe.skipIf(!hasTestDatabase)('cascade soft delete', () => {
 
     it('refuses an id belonging to another organisation', async () => {
       const deleted = await asOrg(orgB, () =>
-        cascade.softDelete('project.projects', projectId),
+        softDelete('project.projects', projectId),
       )
 
       expect(deleted).toEqual({})
@@ -322,7 +330,7 @@ describe.skipIf(!hasTestDatabase)('cascade soft delete', () => {
       )) as { deleted_at: Date }[]
 
       const deleted = await asOrg(orgA, () =>
-        cascade.softDelete('project.projects', projectId),
+        softDelete('project.projects', projectId),
       )
 
       const after = (await dataSource.query(
@@ -337,17 +345,15 @@ describe.skipIf(!hasTestDatabase)('cascade soft delete', () => {
     })
 
     it('does nothing on a second pass', async () => {
-      await asOrg(orgA, () => cascade.softDelete('project.projects', projectId))
+      await asOrg(orgA, () => softDelete('project.projects', projectId))
 
       expect(
-        await asOrg(orgA, () =>
-          cascade.softDelete('project.projects', projectId),
-        ),
+        await asOrg(orgA, () => softDelete('project.projects', projectId)),
       ).toEqual({})
     })
 
     it('leaves a tree that retention can then purge', async () => {
-      await asOrg(orgA, () => cascade.softDelete('project.projects', projectId))
+      await asOrg(orgA, () => softDelete('project.projects', projectId))
 
       // The point of the whole exercise: tasks.project_id is RESTRICT, so a
       // project whose tasks were left behind can never be hard-deleted.

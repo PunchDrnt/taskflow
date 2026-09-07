@@ -208,7 +208,7 @@ unique เต็ม · `views.sort_order` / `is_default`
 
 ## 4. Project
 
-- [ ] สร้าง / แก้ไข / ลบ project (soft delete)
+- [x] สร้าง / แก้ไข / ลบ project (soft delete)
       · ✅ **สร้างแล้ว** — `POST /v1/projects` สร้าง project + status ตั้งต้น 4 อัน + แถว member ของคนสร้าง **ในทรานแซกชันเดียว**
         `tasks.status_id` เป็น NOT NULL ฉะนั้น project ที่ไม่มี status ไม่ใช่ project ว่าง แต่เป็น project ที่รับงานใบแรกไม่ได้ และดูปกติทุกอย่างจนกว่าจะมีคนลอง
       · ⚠️ **`ability.ts` เคยเขียนกลับข้างกับ docs** — `can('create', 'Project')` อยู่ใน block ของ `member`
@@ -244,8 +244,16 @@ unique เต็ม · `views.sort_order` / `is_default`
       · **มองไม่เห็น = 404 · เห็นแต่ทำไม่ได้ = 403** — 403 บน project ที่ member ไม่ได้อยู่ = ยืนยันว่ามี id นั้นใน org
       · `actor.projectRoles` ใส่ทีละ project ที่ service โหลดมาแล้ว **ไม่ได้โหลดทั้งหมดใส่ context** — guard ไม่ต้องแตะ
         และไม่มี query เพิ่มต่อ request สำหรับ endpoint ที่ไม่ได้ถามเรื่อง project
-- [ ] ลบ project → ลูกทั้งต้นไปด้วย ผ่าน `CascadeSoftDelete` (inject เป็น service) ที่มีอยู่แล้ว
+- [x] ลบ project → ลูกทั้งต้นไปด้วย ผ่าน `CascadeSoftDelete` (inject เป็น service) ที่มีอยู่แล้ว
       · ถ้าเพิ่มตารางใหม่ใน phase นี้ **ต้องใส่ใน `AGGREGATE_CHILDREN` หรือ `ROOTS`** ไม่งั้น test ฟ้อง
+      · ⚠️ **การใช้งานจริงครั้งแรกของ `CascadeSoftDelete`** (เขียนไว้ตั้งแต่ Phase 0 มีแต่ test เรียก) และเจอว่ามันเปิด transaction ของตัวเอง
+        ซึ่งแปลว่าเขียน audit row ให้อยู่ทรานแซกชันเดียวกันไม่ได้เลย — ขัดกฎ 🔒
+        · เปลี่ยนเป็น `softDelete(manager, table, id)` **บังคับรับ manager และ throw ถ้าไม่มี transaction** ทรงเดียวกับ `AuditService.record`
+        · compiler หา call site ให้ครบ 8 จุด · แก้ [`CLAUDE.md`](../CLAUDE.md) ในคอมมิตเดียวกัน
+      · audit row บันทึกว่าอะไรไปด้วยกี่แถว (`cascaded`) — log ตอบ "แล้ว task ล่ะ" ได้โดยไม่ต้องไปไล่ `AGGREGATE_CHILDREN` เอง
+      · **archive ไม่ใช่ delete** — `POST|DELETE /v1/projects/:id/archive` แยก endpoint ไม่ใช่ field ใน `PATCH`
+        เพราะ "เปลี่ยนชื่อ" กับ "ซ่อนจาก sidebar ทุกคน" ไม่ควรมาในรูป request เดียวกันที่ต่างกันแค่หนึ่ง key
+        และ activity log ควรมี action ให้คนไล่หา · `archived_at` ไม่มี `archived_by` และไม่มี CHECK คู่ ต่างจาก soft delete ทุกตัว
 
 ---
 

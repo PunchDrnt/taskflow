@@ -3,6 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
 import type { OrgRole } from '@repo/shared'
 
+import { CascadeSoftDelete } from '#shared/entity/cascade-soft-delete'
 import { ApiException } from '#shared/http/api-exception'
 import { createOrgScopedRepository } from '#shared/org-scope/org-scoped.repository'
 import { runWithRequestContext } from '#shared/org-scope/request-context'
@@ -146,6 +147,7 @@ describe.skipIf(!hasTestDatabase)('project', () => {
       dataSource,
       permissions,
       audit,
+      new CascadeSoftDelete(dataSource),
     )
     projectMembers = new ProjectMemberService(
       createOrgScopedRepository(dataSource, ProjectMember),
@@ -644,6 +646,205 @@ describe.skipIf(!hasTestDatabase)('project', () => {
       await expect(
         as(acme, admin, 'admin', () => projects.findById(apollo)),
       ).resolves.toMatchObject({ name: 'Apollo', role: null })
+    })
+  })
+
+  describe('changing one', () => {
+    let apollo: string
+
+    beforeEach(async () => {
+      apollo = (await create(owner, 'owner', 'Apollo')).id
+    })
+
+    it('renames it', async () => {
+      await expect(
+        as(acme, owner, 'owner', () =>
+          projects.update(apollo, { name: 'Apollo II' }),
+        ),
+      ).resolves.toMatchObject({ name: 'Apollo II' })
+    })
+
+    it('re-keys every task at once when the prefix changes', async () => {
+      // Nothing to backfill: the key is composed at display time from the
+      // prefix and `tasks.number`, never stored. What it costs is that a key
+      // pasted into chat last week now reads differently — accepted in
+      // docs/04-features/phase-1.md#task-key.
+      await as(acme, owner, 'owner', () =>
+        projects.update(apollo, { keyPrefix: 'OPS' }),
+      )
+
+      expect(
+        await as(acme, owner, 'owner', () => projects.findById(apollo)),
+      ).toMatchObject({ keyPrefix: 'OPS' })
+    })
+
+    it('writes no audit row when nothing actually changed', async () => {
+      await dataSource.query(`DELETE FROM audit.logs`)
+
+      await as(acme, owner, 'owner', () =>
+        projects.update(apollo, { name: 'Apollo' }),
+      )
+
+      expect(await countOf('audit.logs')).toBe(0)
+    })
+
+    it('refuses a name another live project holds', async () => {
+      await create(owner, 'owner', 'Mercury')
+
+      expect(
+        await codeOf(
+          as(acme, owner, 'owner', () =>
+            projects.update(apollo, { name: 'Mercury' }),
+          ),
+        ),
+      ).toBe('NAME_TAKEN')
+    })
+
+    it('lets a project admin rename it but not an org member outside it', async () => {
+      await joinProject(apollo, plain, 'admin')
+
+      await expect(
+        as(acme, plain, 'member', () =>
+          projects.update(apollo, { color: 'red' }),
+        ),
+      ).resolves.toMatchObject({ color: 'red' })
+
+      const mercury = (await create(owner, 'owner', 'Mercury')).id
+
+      // Not in Mercury at all: 404, so the refusal does not confirm it exists.
+      expect(
+        await codeOf(
+          as(acme, plain, 'member', () =>
+            projects.update(mercury, { color: 'red' }),
+          ),
+        ),
+      ).toBe('NOT_FOUND')
+    })
+
+    it('403s a project member who may see it but not change it', async () => {
+      await joinProject(apollo, plain, 'member')
+
+      expect(
+        await codeOf(
+          as(acme, plain, 'member', () =>
+            projects.update(apollo, { color: 'red' }),
+          ),
+        ),
+      ).toBe('FORBIDDEN')
+    })
+  })
+
+  describe('archiving', () => {
+    let apollo: string
+
+    beforeEach(async () => {
+      apollo = (await create(owner, 'owner', 'Apollo')).id
+    })
+
+    it('hides it from the list and lets it back', async () => {
+      await as(acme, owner, 'owner', () => projects.setArchived(apollo, true))
+
+      expect(await as(acme, owner, 'owner', () => projects.list())).toEqual([])
+
+      await as(acme, owner, 'owner', () => projects.setArchived(apollo, false))
+
+      expect(
+        (await as(acme, owner, 'owner', () => projects.list())).map(
+          (one) => one.name,
+        ),
+      ).toEqual(['Apollo'])
+    })
+
+    it('takes nothing away — the project still opens', async () => {
+      // ⚠️ `archived_at` is not `deleted_at`. Members keep their access and the
+      // history stays readable, which is why the column has no `archived_by`
+      // and no CHECK pairing the two.
+      await joinProject(apollo, plain, 'member')
+      await as(acme, owner, 'owner', () => projects.setArchived(apollo, true))
+
+      await expect(
+        as(acme, plain, 'member', () => projects.findById(apollo)),
+      ).resolves.toMatchObject({ name: 'Apollo' })
+    })
+
+    it('records its own action, not an update', async () => {
+      await dataSource.query(`DELETE FROM audit.logs`)
+      await as(acme, owner, 'owner', () => projects.setArchived(apollo, true))
+
+      expect(await countOf('audit.logs', `action = 'archived'`)).toBe(1)
+
+      // Archiving twice is a no-op rather than a second row.
+      await as(acme, owner, 'owner', () => projects.setArchived(apollo, true))
+
+      expect(await countOf('audit.logs', `action = 'archived'`)).toBe(1)
+    })
+  })
+
+  describe('deleting', () => {
+    let apollo: string
+
+    beforeEach(async () => {
+      apollo = (await create(owner, 'owner', 'Apollo')).id
+    })
+
+    it('takes the statuses down with it', async () => {
+      // `ON DELETE CASCADE` fires only on a hard delete, so without the
+      // cascade the statuses outlive the project — and `tasks.project_id` is
+      // RESTRICT, which jams the retention purge ninety days later.
+      await as(acme, owner, 'owner', () => projects.remove(apollo))
+
+      expect(await countOf('project.statuses', 'deleted_at IS NULL')).toBe(0)
+      expect(await countOf('project.projects', 'deleted_at IS NULL')).toBe(0)
+    })
+
+    it('writes the audit row in the same transaction as the cascade', async () => {
+      await dataSource.query(`DELETE FROM audit.logs`)
+      await as(acme, owner, 'owner', () => projects.remove(apollo))
+
+      const [entry] = (await dataSource.query(
+        `SELECT action, changes_json FROM audit.logs WHERE entity_type = 'project'`,
+      )) as { action: string; changes_json: Record<string, unknown> }[]
+
+      expect(entry?.action).toBe('deleted')
+      // What went with it, so the log answers "and the statuses?" without
+      // anybody having to reason about the cascade map.
+      expect(entry?.changes_json).toMatchObject({
+        cascaded: { to: { 'project.projects': 1, 'project.statuses': 4 } },
+      })
+    })
+
+    it('releases the name, since the unique index is partial', async () => {
+      await as(acme, owner, 'owner', () => projects.remove(apollo))
+
+      await expect(create(owner, 'owner', 'Apollo')).resolves.toMatchObject({
+        name: 'Apollo',
+      })
+    })
+
+    it('is gone from the list and from findById', async () => {
+      await as(acme, owner, 'owner', () => projects.remove(apollo))
+
+      expect(await as(acme, owner, 'owner', () => projects.list())).toEqual([])
+      expect(
+        await codeOf(as(acme, owner, 'owner', () => projects.findById(apollo))),
+      ).toBe('NOT_FOUND')
+    })
+
+    it('refuses a project member, and a project admin may', async () => {
+      await joinProject(apollo, plain, 'member')
+
+      expect(
+        await codeOf(as(acme, plain, 'member', () => projects.remove(apollo))),
+      ).toBe('FORBIDDEN')
+
+      await dataSource.query(
+        `UPDATE project.members SET role = 'admin' WHERE user_id = $1`,
+        [plain],
+      )
+
+      await expect(
+        as(acme, plain, 'member', () => projects.remove(apollo)),
+      ).resolves.toBeUndefined()
     })
   })
 })
