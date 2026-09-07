@@ -10,8 +10,12 @@ import { SYSTEM_USER_ID } from '#shared/system-user'
 
 import { AuditService } from '../src/modules/audit/audit.service'
 import { AuditLog } from '../src/modules/audit/log.entity'
+import { PasswordService } from '../src/modules/iam/auth/password.service'
+import { User } from '../src/modules/iam/user/user.entity'
+import { UserService } from '../src/modules/iam/user/user.service'
 import { OrganizationMember } from '../src/modules/organization/member.entity'
 import { MemberService } from '../src/modules/organization/member.service'
+import { MembershipService } from '../src/modules/organization/membership.service'
 import { Organization } from '../src/modules/organization/organization.entity'
 import { OrganizationService } from '../src/modules/organization/organization.service'
 import { PermissionService } from '../src/permission/permission.service'
@@ -106,6 +110,11 @@ describe.skipIf(!hasTestDatabase)('organization', () => {
       dataSource,
       new PermissionService(),
       audit,
+      new UserService(createOrgScopedRepository(dataSource, User)),
+      new PasswordService(),
+      new MembershipService(
+        createOrgScopedRepository(dataSource, OrganizationMember),
+      ),
     )
     organizations = new OrganizationService(
       createOrgScopedRepository(dataSource, Organization, 'id'),
@@ -374,6 +383,165 @@ describe.skipIf(!hasTestDatabase)('organization', () => {
       )) as { name: string }[]
 
       expect(row!.name).toBe('Globex')
+    })
+  })
+  describe('adding somebody', () => {
+    const details = (name: string) => ({
+      email: `${name}@example.com`,
+      username: name,
+      name,
+      nickname: name,
+      password: 'a-long-enough-password',
+      role: 'member' as const,
+    })
+
+    it('creates the account and the membership together', async () => {
+      const added = await asMember(acme, owner, 'owner', () =>
+        members.add(details('newcomer')),
+      )
+
+      expect(added.role).toBe('member')
+      expect(await roleOf(acme, added.userId)).toBe('member')
+
+      const [row] = (await dataSource.query(
+        `SELECT status FROM iam.users WHERE id = $1`,
+        [added.userId],
+      )) as { status: string }[]
+
+      expect(row!.status).toBe('active')
+    })
+
+    it('attaches an account that already exists rather than making a second', async () => {
+      // One person, several companies, from Phase 1.
+      const globex = await asMember(null, plain, null, () =>
+        organizations.create({ name: 'Globex 2', slug: 'globex-2' }),
+      )
+
+      const first = await asMember(acme, owner, 'owner', () =>
+        members.add(details('shared')),
+      )
+      const again = await asMember(globex.id, plain, 'owner', () =>
+        members.add(details('shared')),
+      )
+
+      expect(again.userId).toBe(first.userId)
+    })
+
+    it('refuses somebody already in this organisation', async () => {
+      await asMember(acme, owner, 'owner', () => members.add(details('twice')))
+
+      expect(
+        await codeOf(
+          asMember(acme, owner, 'owner', () => members.add(details('twice'))),
+        ),
+      ).toBe('ACCOUNT_EXISTS')
+    })
+
+    it('refuses an admin the power to appoint an owner', async () => {
+      const admin = await newUser('add_admin')
+      await join(acme, admin, 'admin')
+
+      expect(
+        await codeOf(
+          asMember(acme, admin, 'admin', () =>
+            members.add({ ...details('sneaky'), role: 'owner' }),
+          ),
+        ),
+      ).toBe('FORBIDDEN')
+    })
+  })
+
+  describe('deactivating somebody', () => {
+    const statusOf = async (userId: string): Promise<string> => {
+      const [row] = (await dataSource.query(
+        `SELECT status FROM iam.users WHERE id = $1`,
+        [userId],
+      )) as { status: string }[]
+
+      return row!.status
+    }
+
+    it('switches the account off and leaves the membership alone', async () => {
+      const staff = await newUser('leaver')
+      await join(acme, staff, 'member')
+
+      await asMember(acme, owner, 'owner', () =>
+        members.setActive(staff, false),
+      )
+
+      expect(await statusOf(staff)).toBe('deactivated')
+      // They stay in the list — that is the whole difference between this and
+      // removing somebody from the organisation.
+      expect(await roleOf(acme, staff)).toBe('member')
+    })
+
+    it('switches it back on', async () => {
+      const staff = await newUser('returner')
+      await join(acme, staff, 'member')
+
+      await asMember(acme, owner, 'owner', () =>
+        members.setActive(staff, false),
+      )
+      await asMember(acme, owner, 'owner', () => members.setActive(staff, true))
+
+      expect(await statusOf(staff)).toBe('active')
+    })
+
+    it('🔒 refuses when the account belongs to another organisation too', async () => {
+      const shared = await newUser('consultant')
+      await join(acme, shared, 'member')
+      const globex = await asMember(null, plain, null, () =>
+        organizations.create({ name: 'Globex 3', slug: 'globex-3' }),
+      )
+      await join(globex.id, shared, 'member')
+
+      // `iam.users.status` is account-level: one company switching it off
+      // would lock the person out of every other company they work with.
+      expect(
+        await codeOf(
+          asMember(acme, owner, 'owner', () =>
+            members.setActive(shared, false),
+          ),
+        ),
+      ).toBe('USER_IN_OTHER_ORGS')
+      expect(await statusOf(shared)).toBe('active')
+    })
+
+    it('refuses to switch off the last owner', async () => {
+      // An organisation whose only owner cannot sign in is one nobody can
+      // administer — the last-owner hole, reached by a different door.
+      expect(
+        await codeOf(
+          asMember(acme, owner, 'owner', () => members.setActive(owner, false)),
+        ),
+      ).toBe('LAST_OWNER')
+    })
+
+    it('refuses an admin the power to switch off an owner', async () => {
+      const admin = await newUser('deact_admin')
+      const second = await newUser('deact_owner')
+      await join(acme, admin, 'admin')
+      await join(acme, second, 'owner')
+
+      expect(
+        await codeOf(
+          asMember(acme, admin, 'admin', () =>
+            members.setActive(second, false),
+          ),
+        ),
+      ).toBe('FORBIDDEN')
+    })
+
+    it('answers "not found" for somebody in another organisation', async () => {
+      const outsider = await newUser('deact_outsider')
+
+      expect(
+        await codeOf(
+          asMember(acme, owner, 'owner', () =>
+            members.setActive(outsider, false),
+          ),
+        ),
+      ).toBe('NOT_FOUND')
     })
   })
 })

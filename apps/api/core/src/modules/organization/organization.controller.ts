@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -11,22 +12,27 @@ import {
 import { ApiOperation, ApiTags } from '@nestjs/swagger'
 
 import {
+  addOrgMemberSchema,
   changeMemberRoleSchema,
   createOrganizationSchema,
   memberUserIdSchema,
   updateOrganizationSchema,
+  wholeList,
+  type AddOrgMemberInput,
   type ChangeMemberRoleInput,
   type CreateOrganizationInput,
   type OrgRole,
+  type Page,
   type UpdateOrganizationInput,
 } from '@repo/shared'
 
+import { ApiZodBody } from '#shared/http/api-zod'
 import { SkipOrgScope } from '#shared/http/route-metadata'
 import { ZodValidationPipe } from '#shared/http/zod-validation.pipe'
 
 import { RequirePermission } from '../../permission/require-permission.decorator'
 import { UserService } from '../iam/user/user.service'
-import { MemberService } from './member.service'
+import { MemberService, type OrgMember } from './member.service'
 import {
   OrganizationService,
   type OrganizationView,
@@ -42,6 +48,12 @@ interface MemberView {
   nickname: string | null
   email: string | null
   avatarUrl: string | null
+  /**
+   * `active` | `deactivated` | … — a deactivated colleague stays in this
+   * list, which is the whole difference between switching an account off and
+   * removing somebody from the organisation.
+   */
+  status: string | null
 }
 
 /**
@@ -81,6 +93,7 @@ export class OrganizationController {
   @Patch()
   @RequirePermission('update', 'Organization')
   @ApiOperation({ summary: 'Rename the organisation, or change its slug' })
+  @ApiZodBody(updateOrganizationSchema)
   update(
     @Body(new ZodValidationPipe(updateOrganizationSchema))
     body: UpdateOrganizationInput,
@@ -99,6 +112,7 @@ export class OrganizationController {
   @SkipOrgScope()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create an organisation, owned by its creator' })
+  @ApiZodBody(createOrganizationSchema)
   create(
     @Body(new ZodValidationPipe(createOrganizationSchema))
     body: CreateOrganizationInput,
@@ -109,7 +123,7 @@ export class OrganizationController {
   @Get('members')
   @RequirePermission('read', 'Organization')
   @ApiOperation({ summary: 'Everyone in this organisation' })
-  async listMembers(): Promise<MemberView[]> {
+  async listMembers(): Promise<Page<MemberView>> {
     const members = await this.members.list()
 
     // Names come from iam through its service, never from a join: this module
@@ -120,17 +134,64 @@ export class OrganizationController {
     )
     const byId = new Map(people.map((person) => [person.id, person]))
 
-    return members.map((member) => {
-      const person = byId.get(member.userId)
+    return wholeList(
+      members.map((member) => {
+        const person = byId.get(member.userId)
 
-      return {
-        ...member,
-        name: person?.name ?? null,
-        nickname: person?.nickname ?? null,
-        email: person?.email ?? null,
-        avatarUrl: person?.avatarUrl ?? null,
-      }
-    })
+        return {
+          ...member,
+          name: person?.name ?? null,
+          nickname: person?.nickname ?? null,
+          email: person?.email ?? null,
+          avatarUrl: person?.avatarUrl ?? null,
+          status: person?.status ?? null,
+        }
+      }),
+    )
+  }
+
+  /**
+   * Adds somebody to this organisation, creating their account if the address
+   * is new.
+   *
+   * Phase 1's way of onboarding people: `organization.invitations` is
+   * migrated and unread until Phase 2, so somebody with the rights types the
+   * details in. The permission check needs the requested role, so it runs in
+   * the service rather than as a decorator.
+   */
+  @Post('members')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Add somebody to this organisation' })
+  @ApiZodBody(addOrgMemberSchema)
+  addMember(
+    @Body(new ZodValidationPipe(addOrgMemberSchema)) body: AddOrgMemberInput,
+  ): Promise<OrgMember> {
+    return this.members.add(body)
+  }
+
+  /**
+   * Switch a colleague's account off. They stay in this list, their name
+   * stays on their finished work, and the tasks they are holding stay with
+   * them — see `MemberService.setActive`, including why an account shared with
+   * another organisation is refused.
+   */
+  @Post('members/:userId/deactivate')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Switch a colleague's account off" })
+  deactivate(
+    @Param('userId', new ZodValidationPipe(memberUserIdSchema)) userId: string,
+  ): Promise<OrgMember> {
+    return this.members.setActive(userId, false)
+  }
+
+  /** And back on. Nothing was moved while they were away, so nothing returns. */
+  @Delete('members/:userId/deactivate')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Switch it back on' })
+  reactivate(
+    @Param('userId', new ZodValidationPipe(memberUserIdSchema)) userId: string,
+  ): Promise<OrgMember> {
+    return this.members.setActive(userId, true)
   }
 
   /**
@@ -142,6 +203,7 @@ export class OrganizationController {
    */
   @Patch('members/:userId')
   @ApiOperation({ summary: "Change somebody's role in this organisation" })
+  @ApiZodBody(changeMemberRoleSchema)
   changeMemberRole(
     @Param('userId', new ZodValidationPipe(memberUserIdSchema)) userId: string,
     @Body(new ZodValidationPipe(changeMemberRoleSchema))

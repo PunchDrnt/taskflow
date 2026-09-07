@@ -1,7 +1,9 @@
 import { z } from 'zod'
 
 import { ORG_ROLES } from '../constants.js'
+import { emailSchema, passwordSchema } from './auth.js'
 import { idSchema } from './id.js'
+import { nicknameSchema, personNameSchema, usernameSchema } from './user.js'
 
 /**
  * Codes the client branches on, kept with the module that raises them rather
@@ -13,6 +15,21 @@ export const ORGANIZATION_ERROR_CODES = {
   LAST_OWNER: 'LAST_OWNER',
   /** Another live organisation already uses this slug. */
   SLUG_TAKEN: 'SLUG_TAKEN',
+  /** That email or username is already taken by another account. */
+  ACCOUNT_EXISTS: 'ACCOUNT_EXISTS',
+  /**
+   * 🔒 The account belongs to more than one organisation, so this
+   * organisation cannot switch it off.
+   *
+   * Deactivating writes `iam.users.status`, which is account-level and not
+   * org-level: one company's admin doing it would lock the person out of
+   * every other company they work with. The specification never contemplated
+   * this — its own example routes the shared-account case to "remove from the
+   * organisation" instead, which is Phase 2. Refusing is the honest answer
+   * until that exists; doing it anyway would be a cross-org effect, and those
+   * are the ones this codebase treats as binding.
+   */
+  USER_IN_OTHER_ORGS: 'USER_IN_OTHER_ORGS',
 } as const
 
 /**
@@ -79,3 +96,29 @@ export type ChangeMemberRoleInput = z.infer<typeof changeMemberRoleSchema>
 
 /** The path parameter, validated rather than trusted into a query. */
 export const memberUserIdSchema = idSchema('user id ไม่ถูกต้อง')
+
+/**
+ * Adding somebody to the organisation, in the phase before invitations exist.
+ *
+ * `organization.invitations` is migrated and unread until Phase 2, and the
+ * checklist says Phase 1 adds people with a script. This is that, as an
+ * endpoint: an owner or admin types the details and the account and the
+ * membership are created together.
+ *
+ * A password is set here rather than emailed, because the reset flow already
+ * exists and is the safe way to hand one over — the admin tells the person to
+ * use "forgot password", or passes the initial one out of band. Inventing a
+ * second invitation mechanism now is what Phase 2 is for.
+ */
+export const addOrgMemberSchema = z.object({
+  email: emailSchema,
+  username: usernameSchema,
+  name: personNameSchema,
+  nickname: nicknameSchema,
+  password: passwordSchema,
+  role: z
+    .enum(ORG_ROLES, 'role ต้องเป็น owner, admin หรือ member')
+    .default('member'),
+})
+
+export type AddOrgMemberInput = z.infer<typeof addOrgMemberSchema>

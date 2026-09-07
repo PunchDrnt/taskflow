@@ -17,7 +17,7 @@ import { between } from '#shared/sort-order'
 
 import { AuditService } from '../audit/audit.service'
 import { changesBetween } from '../audit/changes'
-import { TaskService } from '../task/task.service'
+import { TasksInStatusService } from '../task/tasks-in-status.service'
 import { ProjectService } from './project.service'
 import { Status } from './status.entity'
 
@@ -62,7 +62,7 @@ export class StatusService {
     private readonly statuses: OrgScopedRepository<Status>,
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly projects: ProjectService,
-    private readonly tasks: TaskService,
+    private readonly tasks: TasksInStatusService,
     private readonly audit: AuditService,
   ) {}
 
@@ -129,8 +129,8 @@ export class StatusService {
    * makes it the default.
    *
    * The interesting part is `kind`. Changing it has to reach the tasks already
-   * sitting in this status — see `TaskService.reconcileCompletion` for why
-   * that direction is the one that gets forgotten — and it cannot take away
+   * sitting in this status — see `TasksInStatusService.reconcileCompletion`
+   * for why that direction is the one that gets forgotten — and it cannot take away
    * the project's last finished status.
    */
   async update(
@@ -306,6 +306,91 @@ export class StatusService {
         updatedBy: requireOrgContext().userId,
       })
     })
+  }
+
+  /**
+   * The status a new task starts in.
+   *
+   * 🔒 Exactly one row can satisfy this — the partial unique index on
+   * `(project_id) WHERE is_default AND deleted_at IS NULL` — and `remove`
+   * refuses to leave a project without it, so the absent case is a project
+   * whose statuses were tampered with outside these methods. Loud rather than
+   * silently filing the task in whatever sorts first.
+   *
+   * ⚠️ Takes an id, not a permission: the caller has already established that
+   * this person may work in the project. Same for `requireStatusOfProject`.
+   */
+  async defaultStatus(projectId: string): Promise<Status> {
+    const status = await this.statuses.queryBuilder
+      .withOrg('status')
+      .andWhere('status.projectId = :projectId', { projectId })
+      .andWhere('status.deletedAt IS NULL')
+      .andWhere('status.isDefault')
+      .getOne()
+
+    if (!status) {
+      throw new Error(
+        `Project ${projectId} has no default status. Every project is created ` +
+          'with one (DEFAULT_STATUSES) and StatusService.remove refuses to ' +
+          'delete the last one, so this means the table was edited elsewhere.',
+      )
+    }
+
+    return status
+  }
+
+  /**
+   * One status of this project, or 404.
+   *
+   * Scoped by `project_id` and not by id alone, so naming a status that exists
+   * in a *different* project of the same organisation is rejected rather than
+   * accepted — `tasks_status_fkey` is composite on `(status_id, org_id)` and
+   * would let it through, since both rows are in the same org. A task in one
+   * project pointing at another project's column would show up as a card in a
+   * board it does not belong to.
+   */
+  async requireStatusOfProject(
+    projectId: string,
+    statusId: string,
+  ): Promise<Status> {
+    const status = await this.statuses.queryBuilder
+      .withOrg('status')
+      .andWhere('status.projectId = :projectId', { projectId })
+      .andWhere('status.id = :statusId', { statusId })
+      .andWhere('status.deletedAt IS NULL')
+      .getOne()
+
+    if (!status) throw ApiException.notFound('ไม่พบสถานะนี้')
+
+    return status
+  }
+
+  /**
+   * The statuses that mean a piece of work is no longer open — finished or
+   * abandoned — for one project or for the whole organisation.
+   *
+   * My Tasks hides these by default, and it asks here rather than joining
+   * `project.statuses` itself: that table belongs to this module. An
+   * organisation this size has a few dozen statuses, so the list is short
+   * enough to hand over as ids.
+   *
+   * ⚠️ Takes an id, not a permission — the caller has already settled what
+   * they may see.
+   */
+  closedStatusIds(projectId?: string): Promise<string[]> {
+    const builder = this.statuses.queryBuilder
+      .withOrg('status')
+      .select('status.id', 'id')
+      .andWhere('status.deletedAt IS NULL')
+      .andWhere('(status.isDoneType OR status.isCancelledType)')
+
+    if (projectId !== undefined) {
+      builder.andWhere('status.projectId = :projectId', { projectId })
+    }
+
+    return builder
+      .getRawMany<{ id: string }>()
+      .then((rows) => rows.map((row) => row.id))
   }
 
   /** Live statuses of one project, in board order. */

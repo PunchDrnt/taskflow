@@ -33,18 +33,19 @@ unique เต็ม · `views.sort_order` / `is_default`
       · push ตรงเข้า main ได้ = ของที่ไม่เคยผ่านอะไรขึ้น production ได้ ([ผัง](../docs/01-architecture.md#branching))
 - [ ] **CI trigger `push: [main]`** — comment ไว้ใน `ci.yml` พร้อมเงื่อนไขปลดล็อกว่า _"Put this back once work arrives through pull requests"_ · **เงื่อนไขนั้นสำเร็จไปแล้ว** (Phase 0 จบ งานเข้าทาง PR ตั้งแต่ #2) เหลือแค่กด
       ช่องที่มันปิดคือ merge commit ที่ต่างจาก PR head · เปิด branch protection แบบ require up-to-date แทนก็ได้ เลือกอย่างใดอย่างหนึ่ง ไม่ต้องทำทั้งคู่
-- [ ] 🔒 **Test invariant ที่ DB บังคับเองไม่ได้** — Phase 0 เลื่อนมาเพราะยังไม่มี service ให้บังคับ **Phase 1 มีแล้ว หมดข้ออ้าง**
+- [x] 🔒 **Test invariant ที่ DB บังคับเองไม่ได้** — Phase 0 เลื่อนมาเพราะยังไม่มี service ให้บังคับ **Phase 1 มีแล้ว หมดข้ออ้าง**
   - [x] org ต้องมี `role='owner'` ≥1 แถวเสมอ (ห้ามลบ/ลดสิทธิ์คนสุดท้าย) — `test/organization.spec.ts` รวมเคสถอดพร้อมกันสองอัน
   - [x] project ต้องมี `is_done_type` ≥1 อัน — `test/status.spec.ts` ปฏิเสธทั้งการลบและการเปลี่ยน kind ของอันสุดท้าย
         · ถ้าไม่มีเลย = ไม่มีอะไรใน project นั้นถูกนับว่าเสร็จได้อีกเลย และตัวเลข progress ทุกอันอ่านเป็นศูนย์ตลอดไปโดยไม่มี error
-  - [ ] `completed_at`/`completed_by` มีค่า **ก็ต่อเมื่อ** status ของ task นั้น `is_done_type` — คุมสองทาง ดู §6
+  - [x] `completed_at`/`completed_by` มีค่า **ก็ต่อเมื่อ** status ของ task นั้น `is_done_type` — คุมสองทาง ดู §6
+        · ทาง A `test/task.spec.ts` · ทาง B `test/status.spec.ts` · ทั้งคู่ยิงจริงกับ Postgres
 - [x] 🔒 **`FeatureService.isEnabled()` เคย return `true` เสมอ — "ดักด้วย feature flag" จึงแปลว่า "เปิดอยู่"**
       · [`04-features/phase-1.md`](../docs/04-features/phase-1.md#auth--users) เขียนว่า `/register` ดักด้วย `isEnabled(org, 'public_registration')` "ซึ่ง return `false` ตั้งแต่บรรทัดแรก" — โค้ดตอนนั้น `return true`
       · ใครสร้าง `/register` ตามสเปกโดยไม่เปิดไฟล์ดู จะได้ public registration ที่เปิดอยู่ = ใครรู้ URL ก็สมัครเข้ามาแล้วรอให้ใครสักคนเผลอเพิ่มเข้า org
       · **ตัดสินแล้ว: allow-list ว่าง ปิดหมดเป็น default** — `ENABLED_FEATURES` เป็น `Set` เปล่า ชื่อที่ไม่ได้อยู่ในนั้นคือปิด · การเพิ่มชื่อเข้า `FEATURES` จึงเป็นการ**ดัก** feature ไม่ใช่การเปิด
       · doc ไม่ต้องแก้ — **โค้ดขยับมาตรงกับ doc** ไม่ใช่ทางกลับกัน
       · test ครอบว่าไม่มี feature ไหนเปิดอยู่จริง และชื่อที่ยังไม่มีใครเปิด return `false` — ไม่ใช่เชื่อคอมเมนต์
-- [ ] **`iam.oauth_accounts` — migrate ไว้ แต่ feature ปิด ยังไม่ใช้** (ตัดสินแล้ว)
+- [x] **`iam.oauth_accounts` — migrate ไว้ แต่ feature ปิด ยังไม่ใช้** (ตัดสินแล้ว)
       · ตารางลงตาม schema ใน [`02-database/schema.md`](../docs/02-database/schema.md#schema-iam) · เป็นแพทเทิร์นเดียวกับ `iam.roles`/`permissions` ที่ migrate ตั้งแต่ Phase 0 แล้วไม่มีใครอ่านจนถึง Phase 7
       · **Google login ยังไม่เปิดใช้** — ปิดด้วยกลไกที่ปิดได้จริง ดูข้อบน ไม่ใช่ `FeatureService` ตามสภาพปัจจุบัน
       · **hard delete** (`CreatedEntity`) ตามสามคำถามใน [`02-database/rules.md`](../docs/02-database/rules.md#base-entity) — ลืม `deleted_at IS NULL` ใน flow ล็อกอินคือช่องให้คนที่ unlink แล้วเข้ากลับมาได้ · จึงไม่ต้องแตะ `AGGREGATE_CHILDREN`/`ROOTS` เลย และ index เป็น `UNIQUE` ธรรมดาไม่ใช่ partial
@@ -167,10 +168,22 @@ unique เต็ม · `views.sort_order` / `is_default`
 - [x] โปรไฟล์: ชื่อจริง · **ชื่อเล่น** · รูป — `PATCH /v1/me` · ชื่อเล่นเป็น required เหมือนชื่อจริง
       · ชื่อเล่นไม่ใช่ของตกแต่ง — คนไทยเรียกชื่อเล่นเป็นหลัก ค้นด้วยชื่อจริงอย่างเดียวหาไม่เจอ
       · ⏳ **อีเมลยังแก้ไม่ได้** — ต้องยืนยันที่อยู่ใหม่ก่อนถึงจะเปลี่ยนได้ ยกไป Phase 2 พร้อม flow ยืนยัน
-- [ ] อัปโหลดรูปผ่าน `StorageService` (presigned) — เขียนรอไว้แล้ว Phase 1 ใช้จริงครั้งแรก
-      · `avatarUrl` รับค่าแล้วใน `PATCH /v1/me` · ที่ยังขาดคือ endpoint ขอ presigned PUT
-- [ ] Deactivate / Reactivate (admin/owner กด) — assign งานใหม่ให้ไม่ได้ งานเก่ายังอยู่
-- [ ] สร้าง user ช่วงแรกด้วย admin API หรือ seed script — **หน้าจอจัดการ user อยู่ Phase 2**
+- [x] อัปโหลดรูปผ่าน `StorageService` (presigned) — เขียนรอไว้แล้ว Phase 1 ใช้จริงครั้งแรก
+      · `POST /v1/me/avatar-upload` → `{ uploadUrl, key }` · browser PUT ตรงเข้า storage แล้วส่ง key กลับมาที่ `PATCH /v1/me`
+      · ไฟล์ไม่ผ่าน Node เลย — upload ที่ทิ้งกลางคันเหลือแค่ object ที่ไม่มีใครอ้างถึง
+        และ API ไม่กลายเป็น proxy ที่ memory limit คือ file size limit จริง
+      · **เก็บ key ไม่ใช่ URL** เพราะ bucket เป็น private · `GET /v1/users/:userId/avatar` เป็นที่เดียวที่แปลงกลับเป็นรูป
+- [x] Deactivate / Reactivate (admin/owner กด) — assign งานใหม่ให้ไม่ได้ งานเก่ายังอยู่
+      · `POST|DELETE /v1/org/members/:userId/deactivate` · ยังอยู่ในลิสต์สมาชิก (`status` บอกว่า deactivated)
+      · assign งานใหม่ → 409 `USER_INACTIVE` · assignee picker ไม่เสนอชื่อ · **งานที่ถืออยู่ไม่ขยับ**
+      · 🔒 **บัญชีที่อยู่หลาย org ปิดไม่ได้** 409 `USER_IN_OTHER_ORGS` — `iam.users.status` เป็นระดับบัญชี
+        org หนึ่งกดปิดจะล็อกเขาออกจากอีกบริษัทด้วย · ทางที่ถูกคือ remove จาก org ซึ่งอยู่ Phase 2
+      · ปิดบัญชี owner คนสุดท้ายไม่ได้ 409 `LAST_OWNER` — org ที่ owner เข้าไม่ได้คือ org ที่ไม่มีใครดูแล
+- [x] สร้าง user ช่วงแรกด้วย admin API หรือ seed script — **หน้าจอจัดการ user อยู่ Phase 2**
+      · `POST /v1/org/members` สร้าง account + membership ในทรานแซกชันเดียว · เลือก API ไม่ใช่ script
+        เพราะมี audit และไม่ต้องมี shell บน production
+      · อีเมลที่มี account อยู่แล้ว → ผูกเข้า org นี้ ไม่สร้างใบที่สอง
+      · admin ตั้งใครเป็น owner ไม่ได้ (กฎเดียวกับ `changeRole`)
 
 ---
 
@@ -299,27 +312,39 @@ unique เต็ม · `views.sort_order` / `is_default`
 
 ## 6. Task
 
-- [ ] CRUD — Title · Description · Due date · Priority
+- [x] CRUD — Title · Description · Due date · Priority
       · priority สี่ระดับจาก `TASK_PRIORITIES` ใน `@repo/shared` · **ไม่มี CHECK ใน DB**
         ไม่มี index ไหนอ่านค่านี้ zod เป็นคนกัน
-- [ ] **Quick add — เฉพาะในหน้า project** พิมพ์ชื่อ + Enter จบ ไม่บังคับ field อื่น
+      · `due_date` บังคับมี offset (`z.iso.datetime({ offset: true })`) — ไม่มี offset = เที่ยงคืน UTC
+        ซึ่งเร็วกว่ากรุงเทพ 7 ชม. งานเลยกำหนดตั้งแต่เย็นวันก่อน
+      · **project ที่ archive แล้วเขียนไม่ได้** 409 `PROJECT_ARCHIVED` — ตัดสินตอนทำ §6
+- [x] **Quick add — เฉพาะในหน้า project** พิมพ์ชื่อ + Enter จบ ไม่บังคับ field อื่น ⏳ หน้าจอยังไม่มี
+      · API พร้อมแล้ว: `POST /v1/projects/:id/tasks` รับแค่ `{ title }` · status มาจาก `is_default` ของ project
       · My Tasks ไม่มี quick add · ถ้าเพิ่มทีหลังใช้ `localStorage` จำ project ล่าสุด **ไม่ต้องมีตาราง user preference**
       · 🟡 ใน roadmap แต่**ตัดไม่ได้** — quick add คือสิ่งที่ทำให้คนกลับมาใช้
-- [ ] 🔒 **Task number + key** — `tasks.number` แจกจาก `projects.next_task_number` ที่เดินหน้าอย่างเดียว
+- [x] 🔒 **Task number + key** — `tasks.number` แจกจาก `projects.next_task_number` ที่เดินหน้าอย่างเดียว
       · **ห้ามใช้ `MAX(number)+1`** — ลบงานบนสุดแล้วเลขถูกแจกซ้ำทันที
       · unique `(project_id, number)` เป็น **index เต็ม ไม่ใช่ partial** — ข้อยกเว้นเดียวของกฎ soft delete
       · key ประกอบตอนแสดงผล (`key_prefix` + `number`) ไม่เก็บสตริงสำเร็จรูป · sub-task มีเลขของตัวเอง
-      · ✅ คอลัมน์ + index ลงแล้ว เหลือตัวแจกเลขในทรานแซกชันเดียวกับการสร้าง task
-- [ ] Assign ได้หลายคน (เฉพาะ user — ทีมอยู่ Phase 2)
-- [ ] จัดลำดับเอง (LexoRank)
-- [ ] 🔒 **`completed_at` / `completed_by` สอดคล้องกับ `is_done_type` เสมอ — คุมสองทาง**
-  - [ ] ทาง A: task เปลี่ยน status → ตั้งค่า/reset เป็น null
+      · ✅ คอลัมน์ + index ลงแล้ว · ✅ `ProjectService.allocateTaskNumber` แจกด้วย
+        `UPDATE ... RETURNING` ในทรานแซกชันเดียวกับการ insert — สองคนสร้างพร้อมกัน serialise ที่แถว project
+- [x] Assign ได้หลายคน (เฉพาะ user — ทีมอยู่ Phase 2)
+      · assign คนนอก project → 409 `NOT_PROJECT_MEMBER` แล้ว client ยิงซ้ำด้วย `addToProject: true`
+        (การยืนยันเป็น request ที่สอง ไม่ใช่การเขียนที่ซ่อนอยู่) · ดึงคนเข้า project เป็นสิทธิ์ project admin
+      · อีเมลแจ้งคนที่ถูก assign อยู่ §8 ยังไม่ลง
+- [x] จัดลำดับเอง (LexoRank) — API รับ `afterId` ไม่ใช่ sort key · เพื่อนบ้านคิด**ในคอลัมน์** ไม่ใช่ทั้ง project
+- [x] 🔒 **`completed_at` / `completed_by` สอดคล้องกับ `is_done_type` เสมอ — คุมสองทาง**
+  - [x] ทาง A: task เปลี่ยน status → ตั้งค่า/reset เป็น null · `TaskService.update`
+        · done อันหนึ่ง → done อีกอันไม่ใช่การปิดครั้งที่สอง เก็บวันเดิม
+        · สร้าง task ลงใน done ตรงๆ ก็นับว่าเสร็จทันที (quick add ในคอลัมน์ Done)
   - [x] ทาง B: **มีคนแก้ `is_done_type` ของ status ที่มี task ใช้อยู่แล้ว** ← ทางนี้ลืมง่ายกว่ามาก เพราะคนแก้กำลังมองหน้าจอตั้งค่า project ไม่ได้มองงานสักใบ
         · ลงไปพร้อม §5 เพราะจุดที่ trigger คือ endpoint แก้ status · `TaskService.reconcileCompletion(manager, statusId, counted)`
         · แตะเฉพาะแถวที่ค่าไม่ตรงจริงๆ — งานที่เสร็จอยู่แล้วเก็บวันเดิมไว้ และรันซ้ำไม่เปลี่ยนอะไร
         · `completed_by` ลงชื่อคนที่แก้ status เพราะเขาคือคนที่ทำให้มันเกิด · สองคอลัมน์ขยับพร้อมกันตาม `tasks_completed_pair_check`
   - [x] `CHECK` ทำแทนไม่ได้ เงื่อนไขข้ามตาราง (`tasks` ↔ `statuses`) — ยืนยันแล้วตอนทำทาง B
 - [ ] **Assignee picker** — type-ahead ค้นได้ทั้งชื่อจริง / ชื่อเล่น / อีเมล ไม่ใช่ dropdown รายชื่อยาว
+      ⏳ หน้าจอยังไม่มี · API ลงแล้ว: `GET /v1/projects/:id/assignable?scope=project|org&q=`
+        ค้นชื่อจริง/ชื่อเล่น/อีเมล/username · แต่ละแถวบอก `inProject` ให้ client รู้ว่าต้องถามยืนยันไหม
       · เรียงสองชั้นพอ: **คนใน project → ที่เหลือทั้ง org** · ชั้น "คนที่เพิ่ง assign ล่าสุด"
         ที่สเปกเดิมมี **ตัดออกแล้ว** — เป็น query ที่แพงที่สุดในหน้าจอที่เปิดบ่อยที่สุด
         เพื่อจัดลำดับที่ชั้นแรกตอบได้อยู่แล้วเกือบทุกครั้ง
@@ -331,11 +356,21 @@ unique เต็ม · `views.sort_order` / `is_default`
 
 ## 7. Activity log — ต่อของที่มีอยู่แล้ว
 
-- [ ] 🔒 **`AuditService.record(manager, entry)` ใน transaction เดียวกับ business logic**
+- [x] 🔒 **`AuditService.record(manager, entry)` ใน transaction เดียวกับ business logic**
       · service throw ให้เองถ้าไม่มี transaction เปิดอยู่ — เป็นการบังคับด้วยรูปทรง ไม่ใช่ความจำ
       · event listener ทำแทนไม่ได้ มันรันหลัง commit
-- [ ] เขียน log ตอน: สร้าง/แก้/ลบ task · เปลี่ยน status · assign · เปลี่ยน role · login ล้มเหลว
-- [ ] เก็บ id ของคนที่ถูก assign ไว้ใน `changes_json` — `entity_id` คือ task ไม่ใช่คน
+- [x] เขียน log ตอน: สร้าง/แก้/ลบ task · เปลี่ยน status · assign · เปลี่ยน role · login ล้มเหลว
+      · login ล้มเหลวไม่มี org (endpoint เป็น `@Public()`) แต่ `audit.logs.org_id` เป็น NOT NULL —
+        เขียน**หนึ่งแถวต่อ org ที่บัญชีนั้นอยู่** เพราะคนที่ต้องเห็น "มีคนพยายามเข้าบัญชี Kit" คือ admin ของบริษัท Kit
+        · บัญชีที่ไม่อยู่ org ไหนเลย ไม่เขียน — ไม่มีใครให้บอก
+      · `AuditService.recordFor(manager, { orgId, actorId }, entry)` — org กับ actor เป็น argument
+        เฉพาะ event ที่เกิดก่อนมี request context · ที่เหลือทั้งหมดต้องใช้ `record`
+      · ⚠️ **เขียนเฉพาะครั้งที่ lockout นับ** — ครั้งที่ยิงตอนกำลังโดนล็อกไม่เขียน เพราะไม่มีเพดาน
+        (ยิงได้เร็วเท่าที่เน็ตไหว) และ `audit.logs` เป็นตารางที่ห้ามลบ · ครั้งที่นับถูกจำกัดที่ `LOGIN_MAX_ATTEMPTS` ต่อรอบ
+- [x] **อ่านกลับได้** — `GET /v1/tasks/:taskId/activity` ผ่าน `AuditService.findForEntity`
+      · ไม่ join `audit.logs` จาก module อื่น · เห็น task ได้ = อ่านประวัติได้ (ไม่มีเงื่อนไขเพิ่ม)
+      · ข้อนี้ไม่ได้อยู่ในเช็คลิสต์เดิมซึ่งมีแต่ฝั่งเขียน — activity log ที่ไม่มีใครอ่านได้ไม่ใช่ฟีเจอร์
+- [x] เก็บ id ของคนที่ถูก assign ไว้ใน `changes_json` — `entity_id` คือ task ไม่ใช่คน
       และ `audit.logs` ไม่มีคอลัมน์อื่นให้ใส่ ([ทุกคอลัมน์](../docs/02-database/schema.md#schema-audit))
       · index `logs_actor_idx (org_id, actor_id, action, occurred_at DESC)` มีตั้งแต่ Phase 0 แล้ว
         แต่ **ผู้ใช้เดิมของมันคือ assignee picker ชั้นที่สองซึ่งถูกตัดไปแล้ว** — index ยังอยู่ ไม่ต้องลบ
@@ -346,47 +381,74 @@ unique เต็ม · `views.sort_order` / `is_default`
 
 ของหลังบ้านเสร็จหมดแล้วตั้งแต่ Phase 0 (`EmailService` + outbox + worker + retry + Sentry alert) · ที่เหลือคือ template กับจุดเรียก
 
-- [ ] อีเมลเมื่อถูก assign งาน
-- [ ] `EmailService.enqueue(manager, …)` รับ transaction ของ caller เหมือน `AuditService`
+- [x] อีเมลเมื่อถูก assign งาน — template `task_assigned` · queue ใน transaction ของ `TaskService.assign`
+      · ⚠️ **assign ตัวเองไม่ส่ง** — คนกดเองอยู่ตรงนั้นแล้ว · อีเมลบอกสิ่งที่ตัวเองเพิ่งทำคือฉบับแรกที่คนตั้ง filter ทิ้ง
+        แล้ว filter นั้นจะกินฉบับที่สำคัญไปด้วย
+      · ลิงก์เป็น `/tasks/{id}` ไม่ใช่ key — key ซ้ำข้าม project ได้ `WEB-12` ใน URL อาจเปิดงานผิดใบ
+- [x] `EmailService.enqueue(manager, …)` รับ transaction ของ caller เหมือน `AuditService`
       · assign สำเร็จแต่อีเมลไม่ออก = คนไม่รู้ว่ามีงาน · อีเมลออกแต่ assign rollback = แย่กว่า
-- [ ] Template ที่ยังไม่ implement **ไม่ throw** — ส่งแบบดิบไปก่อน ไม่งั้นวนใน retry loop จนถูก mark failed
+- [x] Template ที่ยังไม่ implement **ไม่ throw** — ส่งแบบดิบไปก่อน ไม่งั้นวนใน retry loop จนถูก mark failed
+      (`renderTemplate` ทำไว้ตั้งแต่ Phase 0 · มี test คุมอยู่)
 - [ ] ตั้ง `RESEND_API_KEY` จริงบน production (ไม่มี = boot ไม่ผ่านอยู่แล้ว)
 
 ---
 
 ## 9. List view + My Tasks
 
-- [ ] **List view รับ config คอลัมน์เป็น array จากที่เดียว** (hard-code ไว้ก่อนได้)
+- [ ] **List view รับ config คอลัมน์เป็น array จากที่เดียว** (hard-code ไว้ก่อนได้) ⏳ งาน web
       · ห้ามเขียน `<th>` ตายตัวใน JSX — Phase 4 ต่อ `view.columns` จะได้แก้จุดเดียว
-- [ ] Filter · sort · group · search — **เก็บสถานะใน URL ไม่ save เป็น view** (view ที่ตั้งชื่อได้อยู่ Phase 4)
+- [x] Filter · sort · group · search — **เก็บสถานะใน URL ไม่ save เป็น view** (view ที่ตั้งชื่อได้อยู่ Phase 4)
+      · API: `GET /v1/projects/:id/tasks?statusId=&assigneeId=&priority=&dueAfter=&dueBefore=&q=&sort=&dir=&limit=&cursor=`
+      · **AND ทุกข้อ · หลายค่าในข้อเดียว = "is in"** — ไม่มี OR ข้ามฟิลด์ นั่นคือ query builder ของ Phase 4
+      · sort: `order` `dueDate` `priority` `created` `title` — `priority` เรียงตาม rank ไม่ใช่ตัวอักษร
+        (ตัวอักษรจะได้ `high` อยู่ระหว่าง `low` กับ `urgent` ซึ่งผิดพอดีกับคำถามที่ถาม)
+      · group by ทำฝั่ง client จากผลลัพธ์ — ไม่ต้องมี endpoint (⏳ งาน web)
       · filter ตาม: คน · status · priority · วันที่
       · filter "งานของคนที่ inactive" **ตัดออกแล้ว** — ถามด้วย filter assignee ธรรมดาได้อยู่แล้ว
         และงานของคนที่ถูก deactivate คาไว้ที่เดิม ไม่ได้หายไปไหน
-- [ ] **My Tasks** — Phase 1 มีแค่งานที่ assign ให้ตัวเองโดยตรง · **default ซ่อน done/cancelled**
-- [ ] 🔒 **Pagination เป็น cursor ไม่ใช่ offset**
+- [x] **My Tasks** — Phase 1 มีแค่งานที่ assign ให้ตัวเองโดยตรง · **default ซ่อน done/cancelled**
+      · `GET /v1/tasks` · `includeClosed=true` ถึงจะเห็นของที่ปิดแล้ว
+      · 🔒 **กั้นด้วย project visibility ด้วย** — ถูกเอาออกจาก project แล้วแถว assignee ยังอยู่
+        ถ้าไม่กั้นจะยังอ่านงานของ project นั้นได้ต่อจากหน้าจอที่ไม่มีใครคิดว่าเป็นหน้า project
+      · project ที่ archive ไม่โผล่ (ตามสเปก)
+- [x] 🔒 **Pagination เป็น cursor ไม่ใช่ offset**
       · `OrgScopedRepository` ตัด `skip` ออกจาก type แล้ว (`ScopedFindManyOptions`) — เขียน offset ไม่ผ่าน compile
       · เหตุผล: `sort_order` เป็น LexoRank แทรกกลางได้ → page ถัดไปซ้ำแถวเดิมหรือข้ามแถว
-      · **ต้องเขียน cursor helper ใน `shared/`** เป็นงานจริงของ phase นี้ ไม่ใช่ของที่มีอยู่แล้ว
+      · ✅ `#shared/http/cursor` — `[ค่า expression ที่เรียง, id]` base64url ของ JSON · ทึบโดยตั้งใจ
+      · 🔒 **expression ที่เรียงต้อง NOT NULL** — `(a,b) > (NULL,c)` ได้ NULL ไม่ใช่ true → หน้าว่างเงียบๆ
+        `due_date` เลยเป็น `COALESCE(due_date,'infinity')` · priority เป็น rank
+      · ดึงเกิน 1 แถวตอบ `hasMore` ไม่ใช่ `COUNT(*)` ซ้ำ filter เดิม · cursor เพี้ยน = 400 ไม่ใช่ 500
 
 ---
 
 ## 10. API surface
 
-- [ ] `/api/v1/*` · path nested ชั้นเดียว · resource พหูพจน์ · แก้ไขใช้ `PATCH`
-- [ ] ⚠️ **`setGlobalPrefix('v1')` ไม่ใช่ `'api/v1'` · และต้อง `exclude` health** — บรรทัดเดียวที่ทำ deploy พังได้โดย dev ไม่มีทางเจอ
+- [x] `/api/v1/*` · path nested ชั้นเดียว · resource พหูพจน์ · แก้ไขใช้ `PATCH`
+- [x] ⚠️ **`setGlobalPrefix('v1')` ไม่ใช่ `'api/v1'` · และต้อง `exclude` health** — บรรทัดเดียวที่ทำ deploy พังได้โดย dev ไม่มีทางเจอ
       · `/api/v1/*` คือ path ที่ **browser** เห็น · Caddy `handle_path /api/*` [ตัด `/api` ทิ้งก่อนถึง Nest](../docs/01-architecture.md#path-ownership) แล้ว ใส่ `'api/v1'` จะได้ `/api/api/v1/...`
       · healthcheck ของ service `api` ยิง `127.0.0.1:4001/health/live` **ตรง ไม่ผ่าน Caddy** — ไม่ exclude แล้ว path กลายเป็น `/v1/health/live` → container unhealthy → `depends_on: service_healthy` บล็อก `web` กับ `caddy` ทั้งกอง
       · dev ไม่เจอเพราะไม่มี Caddy ในเครื่อง · ตอนนี้ `main.ts` ยังไม่มี `setGlobalPrefix` เลย บรรทัดนี้คือของใหม่ที่ phase นี้เพิ่ม
-- [ ] Error shape ตาม [`01-architecture.md`](../docs/01-architecture.md#api) — `code` เป็น string คงที่ให้ frontend เช็ค, `message` ภาษาไทยแสดงผู้ใช้ได้เลย
-- [ ] Swagger ครบทุก endpoint — `/docs` เป็นของที่คนอื่นในทีมใช้จริงแล้ว phase นี้
-- [ ] zod schema ที่ใช้ร่วมสองฝั่งอยู่ใน `@repo/shared` — อย่า duplicate ฝั่ง web
+- [x] Error shape ตาม [`01-architecture.md`](../docs/01-architecture.md#api) — `code` เป็น string คงที่ให้ frontend เช็ค, `message` ภาษาไทยแสดงผู้ใช้ได้เลย
+- [x] **ทุก list ห่อ `{ data, meta }` เหมือนกันหมด** แม้ตัวที่ไม่มีวันแบ่งหน้า (`wholeList()` ใน `@repo/shared`)
+      · client ที่ต้องจำว่า endpoint ไหนห่อไม่ห่อ คือ client ที่จำผิดในวันที่ endpoint นั้นเปลี่ยนไปแบ่งหน้า
+      · แก้ย้อนของ §3-§5 ที่คืน array เปล่าไปแล้วด้วย
+- [x] Swagger ครบทุก endpoint — `/docs` เป็นของที่คนอื่นในทีมใช้จริงแล้ว phase นี้
+      · ทุก route มี `@ApiOperation` · **และมี body/query schema ด้วย** ผ่าน `@ApiZodBody` / `@ApiZodQuery`
+        ซึ่งแปลง zod schema ตัวเดียวกับที่ `ZodValidationPipe` บังคับ — doc กับ validation แยกกันเพี้ยนไม่ได้
+      · ใช้ `z.toJSONSchema()` ที่ zod 4 มีมาให้ **ไม่เพิ่ม dependency**
+      · ⚠️ `io: 'input'` — สิ่งที่ caller ส่ง ไม่ใช่สิ่งที่ service ได้รับ · `dueDate` เป็น string ขาเข้า
+        เป็น `Date` หลัง parse · ถ้า doc เป็น `Date` = บอกให้ทุกคนส่งผิด
+- [x] zod schema ที่ใช้ร่วมสองฝั่งอยู่ใน `@repo/shared` — อย่า duplicate ฝั่ง web
 
 ---
 
 ## 11. ปิด Phase 1
 
 - [ ] `yarn build` / `lint` / `check-types` / `test` เขียวหมด
-- [ ] 🔒 `org-isolation.spec.ts` ยังไม่มีข้อยกเว้น และครอบ endpoint ใหม่ทั้งหมด
+- [x] 🔒 `org-isolation.spec.ts` ยังไม่มีข้อยกเว้น และครอบ endpoint ใหม่ทั้งหมด
+      · ทุก service เดินผ่าน `OrgScopedRepository` ซึ่งไฟล์นี้คุมทั้งชั้นอยู่แล้ว — endpoint ใหม่ได้การันตีมาฟรี
+      · **SQL ที่เขียนมือไม่ได้มาฟรี** จึงเพิ่มเคสเฉพาะสามอันของ §6: `allocateTaskNumber`
+        `reconcileCompletion` `countInStatus` — สองอันแรกเป็น `UPDATE` ซึ่งพลาดแล้วไป**เขียน**ทับบริษัทอื่น
 - [ ] `schema-drift.spec.ts` เขียว (ถ้ามี migration ใหม่)
 - [ ] Deploy ขึ้น Bangmod แล้วล็อกอินได้จริง — **ยังไม่ใช่การเปิดให้ทั้งบริษัทใช้**
       เส้นนั้นอยู่ท้าย Phase 3

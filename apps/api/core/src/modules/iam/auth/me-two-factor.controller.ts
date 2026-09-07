@@ -17,6 +17,7 @@ import {
   type TwoFactorSetupInput,
 } from '@repo/shared'
 
+import { ApiZodBody } from '#shared/http/api-zod'
 import { SkipOrgScope } from '#shared/http/route-metadata'
 import { ZodValidationPipe } from '#shared/http/zod-validation.pipe'
 import { requireRequestContext } from '#shared/org-scope/request-context'
@@ -48,6 +49,7 @@ export class MeTwoFactorController {
   @SkipOrgScope()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Begin enrolling an authenticator app' })
+  @ApiZodBody(twoFactorSetupSchema)
   async setup(
     @Body(new ZodValidationPipe(twoFactorSetupSchema))
     body: TwoFactorSetupInput,
@@ -66,6 +68,7 @@ export class MeTwoFactorController {
   @SkipOrgScope()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Confirm the app and switch two-factor on' })
+  @ApiZodBody(twoFactorEnableSchema)
   async enable(
     @Body(new ZodValidationPipe(twoFactorEnableSchema))
     body: TwoFactorEnableInput,
@@ -83,6 +86,7 @@ export class MeTwoFactorController {
   @SkipOrgScope()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Switch two-factor off' })
+  @ApiZodBody(twoFactorDisableSchema)
   async disable(
     @Body(new ZodValidationPipe(twoFactorDisableSchema))
     body: TwoFactorDisableInput,

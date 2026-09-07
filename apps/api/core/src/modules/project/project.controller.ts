@@ -14,24 +14,30 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger'
 
 import {
   addProjectMemberSchema,
+  assignableQuerySchema,
   changeProjectMemberRoleSchema,
   createProjectSchema,
   listProjectsQuerySchema,
   projectIdSchema,
   projectMemberUserIdSchema,
   updateProjectSchema,
+  wholeList,
   type AddProjectMemberInput,
+  type AssignableQuery,
   type ChangeProjectMemberRoleInput,
   type CreateProjectInput,
   type ListProjectsQuery,
+  type Page,
   type UpdateProjectInput,
 } from '@repo/shared'
 
+import { ApiZodBody, ApiZodQuery } from '#shared/http/api-zod'
 import { ZodValidationPipe } from '#shared/http/zod-validation.pipe'
 
 import { UserService } from '../iam/user/user.service'
 import {
   ProjectMemberService,
+  type AssignableUser,
   type ProjectMemberRow,
 } from './project-member.service'
 import { ProjectService, type ProjectView } from './project.service'
@@ -74,11 +80,12 @@ export class ProjectController {
    */
   @Get()
   @ApiOperation({ summary: 'The projects this caller may see' })
+  @ApiZodQuery(listProjectsQuerySchema)
   list(
     @Query(new ZodValidationPipe(listProjectsQuerySchema))
     query: ListProjectsQuery,
-  ): Promise<ProjectView[]> {
-    return this.projects.list(query)
+  ): Promise<Page<ProjectView>> {
+    return this.projects.list(query).then(wholeList)
   }
 
   /** 404 rather than 403 when the caller may not see it — see the service. */
@@ -93,6 +100,7 @@ export class ProjectController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a project, with its starting statuses' })
+  @ApiZodBody(createProjectSchema)
   create(
     @Body(new ZodValidationPipe(createProjectSchema))
     body: CreateProjectInput,
@@ -102,6 +110,7 @@ export class ProjectController {
 
   @Patch(':id')
   @ApiOperation({ summary: 'Rename a project, or change its colour or prefix' })
+  @ApiZodBody(updateProjectSchema)
   update(
     @Param('id', new ZodValidationPipe(projectIdSchema)) id: string,
     @Body(new ZodValidationPipe(updateProjectSchema))
@@ -149,7 +158,7 @@ export class ProjectController {
   @ApiOperation({ summary: 'Who is in this project' })
   async listMembers(
     @Param('id', new ZodValidationPipe(projectIdSchema)) id: string,
-  ): Promise<ProjectMemberView[]> {
+  ): Promise<Page<ProjectMemberView>> {
     const members = await this.members.list(id)
 
     // Names come from iam through its service, never from a join: this module
@@ -160,22 +169,43 @@ export class ProjectController {
     )
     const byId = new Map(people.map((person) => [person.id, person]))
 
-    return members.map((member) => {
-      const person = byId.get(member.userId)
+    return wholeList(
+      members.map((member) => {
+        const person = byId.get(member.userId)
 
-      return {
-        ...member,
-        name: person?.name ?? null,
-        nickname: person?.nickname ?? null,
-        email: person?.email ?? null,
-        avatarUrl: person?.avatarUrl ?? null,
-      }
-    })
+        return {
+          ...member,
+          name: person?.name ?? null,
+          nickname: person?.nickname ?? null,
+          email: person?.email ?? null,
+          avatarUrl: person?.avatarUrl ?? null,
+        }
+      }),
+    )
+  }
+
+  /**
+   * The assignee picker's list, one tier at a time.
+   *
+   * `scope=project` is the default and nearly always the answer;
+   * `scope=org` is what the picker's "search the whole organisation" button
+   * asks for, and it marks who is already in the project so the client knows
+   * which picks will need a confirmation first.
+   */
+  @Get(':id/assignable')
+  @ApiOperation({ summary: 'People this project can assign work to' })
+  @ApiZodQuery(assignableQuerySchema)
+  listAssignable(
+    @Param('id', new ZodValidationPipe(projectIdSchema)) id: string,
+    @Query(new ZodValidationPipe(assignableQuerySchema)) query: AssignableQuery,
+  ): Promise<Page<AssignableUser>> {
+    return this.members.assignable(id, query).then(wholeList)
   }
 
   @Post(':id/members')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Add somebody in this organisation to the project' })
+  @ApiZodBody(addProjectMemberSchema)
   addMember(
     @Param('id', new ZodValidationPipe(projectIdSchema)) id: string,
     @Body(new ZodValidationPipe(addProjectMemberSchema))
@@ -186,6 +216,7 @@ export class ProjectController {
 
   @Patch(':id/members/:userId')
   @ApiOperation({ summary: "Change somebody's role in this project" })
+  @ApiZodBody(changeProjectMemberRoleSchema)
   changeMemberRole(
     @Param('id', new ZodValidationPipe(projectIdSchema)) id: string,
     @Param('userId', new ZodValidationPipe(projectMemberUserIdSchema))

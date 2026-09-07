@@ -5,6 +5,8 @@ import {
   Injectable,
   Logger,
 } from '@nestjs/common'
+import { InjectDataSource } from '@nestjs/typeorm'
+import { DataSource } from 'typeorm'
 
 import {
   AUTH_ERROR_CODES,
@@ -16,6 +18,7 @@ import {
 import { ApiException } from '#shared/http/api-exception'
 import { alertsFor } from '#shared/jobs/alert'
 
+import { AuditService } from '../../audit/audit.service'
 import {
   MembershipService,
   resolveActiveOrg,
@@ -115,8 +118,10 @@ export class AuthService {
   private decoyHash: Promise<string> | null = null
 
   constructor(
+    @InjectDataSource() private readonly dataSource: DataSource,
     private readonly users: UserService,
     private readonly memberships: MembershipService,
+    private readonly audit: AuditService,
     private readonly sessions: SessionService,
     private readonly lockout: LockoutService,
     private readonly passwords: PasswordService,
@@ -141,9 +146,11 @@ export class AuthService {
     if (this.lockout.isLocked(user)) throw accountLocked()
 
     if (!(await this.passwords.verify(user.passwordHash, input.password))) {
-      throw (await this.lockout.recordFailure(user))
-        ? accountLocked()
-        : invalidCredentials()
+      const locked = await this.lockout.recordFailure(user)
+
+      await this.recordFailedLogin(user.id, locked)
+
+      throw locked ? accountLocked() : invalidCredentials()
     }
 
     // Only after a correct password, so a deactivated account is revealed to
@@ -167,6 +174,53 @@ export class AuthService {
     }
 
     return this.issueSession(user.id, origin, input.rememberMe)
+  }
+
+  /**
+   * Writes a failed sign-in to the activity log, once per organisation the
+   * account belongs to.
+   *
+   * **Per organisation, because that is who needs to read it.** A failed login
+   * has no active org — the endpoint is `@Public()` and runs before any
+   * context exists — but `audit.logs.org_id` is NOT NULL by the 🔒 rule that
+   * every org-owned row carries it, and the person who acts on "somebody is
+   * trying to get into Kit's account" is the admin of the company Kit works
+   * for. So the row lands in each of their organisations rather than nowhere.
+   * An account in no organisation produces no row; there is no one to tell.
+   *
+   * ⚠️ **Only the attempts the lockout counts.** An attempt made *during* a
+   * lock returns earlier and is deliberately not logged: those are unbounded
+   * — an attacker can make them as fast as the network allows — and
+   * `audit.logs` is partitioned, never deleted, and written in the same
+   * transaction as real work. Counted failures are capped at
+   * `LOGIN_MAX_ATTEMPTS` per window per account, which is a bound worth
+   * having in a table nothing ever removes rows from.
+   *
+   * The account is both the subject and the actor. Nothing here knows who was
+   * really typing, and claiming otherwise in a log that cannot be edited
+   * afterwards would be worse than saying only what is known.
+   */
+  private async recordFailedLogin(
+    userId: string,
+    locked: boolean,
+  ): Promise<void> {
+    const memberships = await this.memberships.listForUser(userId)
+
+    if (memberships.length === 0) return
+
+    await this.dataSource.transaction(async (manager) => {
+      for (const membership of memberships) {
+        await this.audit.recordFor(
+          manager,
+          { orgId: membership.orgId, actorId: userId },
+          {
+            entityType: 'user',
+            entityId: userId,
+            action: locked ? 'login_locked' : 'login_failed',
+          },
+        )
+      }
+    })
   }
 
   /**

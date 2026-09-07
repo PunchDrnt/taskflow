@@ -55,13 +55,7 @@ export class AuditService {
    * something that only looks atomic.
    */
   async record(manager: EntityManager, entry: AuditEntry): Promise<void> {
-    if (!manager.queryRunner?.isTransactionActive) {
-      throw new Error(
-        'AuditService.record needs the EntityManager of an open transaction — ' +
-          'the audit row has to commit or roll back with the change it ' +
-          'describes. Call it from inside dataSource.transaction(...).',
-      )
-    }
+    this.requireTransaction(manager)
 
     // org and actor come from the context rather than the caller, for the same
     // reason every other write does: an argument can be passed wrongly.
@@ -70,6 +64,38 @@ export class AuditService {
     await manager.insert(AuditLog, {
       orgId,
       actorId: userId,
+      entityType: entry.entityType,
+      entityId: entry.entityId,
+      action: entry.action,
+      changesJson: entry.changes ?? {},
+    })
+  }
+
+  /**
+   * The same row, for an event that happens **before a request context
+   * exists** — so the organisation and the actor are arguments rather than
+   * ambient.
+   *
+   * `login` is the case it exists for and, at the time of writing, the only
+   * one. It is `@Public()`, runs with no context and no active organisation,
+   * and its subject is an *account* rather than anything belonging to one
+   * company.
+   *
+   * ⚠️ Every other caller must use `record`. An argument can be passed
+   * wrongly and a context cannot, so widening this beyond the handful of
+   * pre-authentication events would give up the guarantee that an audit row
+   * names the org the request was actually acting for.
+   */
+  async recordFor(
+    manager: EntityManager,
+    who: { orgId: string; actorId: string },
+    entry: AuditEntry,
+  ): Promise<void> {
+    this.requireTransaction(manager)
+
+    await manager.insert(AuditLog, {
+      orgId: who.orgId,
+      actorId: who.actorId,
       entityType: entry.entityType,
       entityId: entry.entityId,
       action: entry.action,
@@ -116,5 +142,15 @@ export class AuditService {
       .getRawMany<{ entityId: string }>()
 
     return rows.map((row) => row.entityId)
+  }
+
+  private requireTransaction(manager: EntityManager): void {
+    if (!manager.queryRunner?.isTransactionActive) {
+      throw new Error(
+        'AuditService needs the EntityManager of an open transaction — the ' +
+          'audit row has to commit or roll back with the change it ' +
+          'describes. Call it from inside dataSource.transaction(...).',
+      )
+    }
   }
 }
