@@ -368,10 +368,14 @@ unique เต็ม · `views.sort_order` / `is_default`
 
 ของหลังบ้านเสร็จหมดแล้วตั้งแต่ Phase 0 (`EmailService` + outbox + worker + retry + Sentry alert) · ที่เหลือคือ template กับจุดเรียก
 
-- [ ] อีเมลเมื่อถูก assign งาน
-- [ ] `EmailService.enqueue(manager, …)` รับ transaction ของ caller เหมือน `AuditService`
+- [x] อีเมลเมื่อถูก assign งาน — template `task_assigned` · queue ใน transaction ของ `TaskService.assign`
+      · ⚠️ **assign ตัวเองไม่ส่ง** — คนกดเองอยู่ตรงนั้นแล้ว · อีเมลบอกสิ่งที่ตัวเองเพิ่งทำคือฉบับแรกที่คนตั้ง filter ทิ้ง
+        แล้ว filter นั้นจะกินฉบับที่สำคัญไปด้วย
+      · ลิงก์เป็น `/tasks/{id}` ไม่ใช่ key — key ซ้ำข้าม project ได้ `WEB-12` ใน URL อาจเปิดงานผิดใบ
+- [x] `EmailService.enqueue(manager, …)` รับ transaction ของ caller เหมือน `AuditService`
       · assign สำเร็จแต่อีเมลไม่ออก = คนไม่รู้ว่ามีงาน · อีเมลออกแต่ assign rollback = แย่กว่า
-- [ ] Template ที่ยังไม่ implement **ไม่ throw** — ส่งแบบดิบไปก่อน ไม่งั้นวนใน retry loop จนถูก mark failed
+- [x] Template ที่ยังไม่ implement **ไม่ throw** — ส่งแบบดิบไปก่อน ไม่งั้นวนใน retry loop จนถูก mark failed
+      (`renderTemplate` ทำไว้ตั้งแต่ Phase 0 · มี test คุมอยู่)
 - [ ] ตั้ง `RESEND_API_KEY` จริงบน production (ไม่มี = boot ไม่ผ่านอยู่แล้ว)
 
 ---

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common'
+import { ConfigService } from '@nestjs/config'
 import { InjectDataSource } from '@nestjs/typeorm'
-import { DataSource, QueryFailedError } from 'typeorm'
+import { DataSource, QueryFailedError, type EntityManager } from 'typeorm'
 
 import {
   TASK_ERROR_CODES,
@@ -17,12 +18,15 @@ import { OrgScopedRepository } from '#shared/org-scope/org-scoped.repository'
 import { requireOrgContext } from '#shared/org-scope/request-context'
 import { between } from '#shared/sort-order'
 
+import type { Env } from '../../config/env'
 import type { Action } from '../../permission/ability'
 import { actorForProject } from '../../permission/actor'
 import { PermissionService } from '../../permission/permission.service'
 import { AuditService } from '../audit/audit.service'
 import { changesBetween } from '../audit/changes'
 import type { AuditLog } from '../audit/log.entity'
+import { UserService } from '../iam/user/user.service'
+import { EmailService } from '../notify/email.service'
 import { ProjectMemberService } from '../project/project-member.service'
 import { Project } from '../project/project.entity'
 import { ProjectService } from '../project/project.service'
@@ -89,7 +93,15 @@ export class TaskService {
     private readonly permissions: PermissionService,
     private readonly audit: AuditService,
     private readonly cascade: CascadeSoftDelete,
-  ) {}
+    private readonly users: UserService,
+    private readonly email: EmailService,
+    config: ConfigService<Env, true>,
+  ) {
+    this.appUrl = config.get('APP_URL', { infer: true })
+  }
+
+  /** Where a task lives on the web, for the link in an assignment email. */
+  private readonly appUrl: string
 
   /**
    * Every live task in the project, in board order.
@@ -362,13 +374,24 @@ export class TaskService {
    * membership (a plain member is not), and 🔒 the target must already be in
    * the organisation — the FK does not cover that.
    *
-   * No email here. Notifying the assignee is §8, and it will hang off this
-   * transaction through `EmailService.enqueue(manager, …)`.
+   * The notification is queued **in this transaction**, through
+   * `EmailService.enqueue(manager, …)`. An assignment that commits without
+   * queuing the mail is somebody who never learns they have work; a mail that
+   * goes out for an assignment that then rolled back is worse. Nothing is
+   * *sent* here — `OutboxWorker` does that after the commit, because Resend
+   * cannot be rolled back.
+   *
+   * ⚠️ **Assigning yourself sends nothing.** You were there; an email telling
+   * you what you just did is the first one people write a filter for, and the
+   * filter catches the ones that matter too.
    */
   async assign(taskId: string, input: AssignTaskInput): Promise<string[]> {
     const { orgId, userId } = requireOrgContext()
 
-    const { task, assigneeIds } = await this.requireTask(taskId, 'update')
+    const { task, project, assigneeIds } = await this.requireTask(
+      taskId,
+      'update',
+    )
 
     if (!(await this.members.find(task.projectId, input.userId))) {
       if (!input.addToProject) {
@@ -406,6 +429,10 @@ export class TaskService {
         // would answer "what happened to this task" with nothing.
         changes: { assigneeId: { from: null, to: input.userId } },
       })
+
+      if (input.userId !== userId) {
+        await this.announce(manager, task, project, input.userId, userId)
+      }
     })
 
     return [...assigneeIds, input.userId]
@@ -438,6 +465,43 @@ export class TaskService {
     })
 
     return assigneeIds.filter((one) => one !== userId)
+  }
+
+  /**
+   * Queues the "you have been assigned" mail, in the caller's transaction.
+   *
+   * Everything the message says is put in the payload rather than looked up
+   * when it is sent: `OutboxWorker` renders it long after this request, with
+   * no organisation context. Storing a template name and a payload rather
+   * than a rendered subject and body is what lets wording be corrected
+   * afterwards — see `templates.ts`.
+   *
+   * The link is by task id, not by key. Keys are allowed to repeat across
+   * projects (docs/04-features/phase-1.md#task-key), so `WEB-12` in a URL
+   * could open the wrong piece of work.
+   */
+  private async announce(
+    manager: EntityManager,
+    task: Task,
+    project: Project,
+    recipientId: string,
+    actorId: string,
+  ): Promise<void> {
+    const people = await this.users.findByIds([recipientId, actorId])
+    const byId = new Map(people.map((person) => [person.id, person]))
+
+    await this.email.enqueue(manager, {
+      recipientId,
+      template: 'task_assigned',
+      payload: {
+        taskKey: `${project.keyPrefix}-${task.number}`,
+        title: task.title,
+        projectName: project.name,
+        recipientName: byId.get(recipientId)?.nickname ?? '',
+        assignedByName: byId.get(actorId)?.nickname ?? '',
+        url: `${this.appUrl}/tasks/${task.id}`,
+      },
+    })
   }
 
   /**

@@ -1,3 +1,4 @@
+import type { ConfigService } from '@nestjs/config'
 import type { DataSource } from 'typeorm'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
@@ -9,10 +10,12 @@ import { createOrgScopedRepository } from '#shared/org-scope/org-scoped.reposito
 import { runWithRequestContext } from '#shared/org-scope/request-context'
 import { SYSTEM_USER_ID } from '#shared/system-user'
 
+import type { Env } from '../src/config/env'
 import { AuditService } from '../src/modules/audit/audit.service'
 import { AuditLog } from '../src/modules/audit/log.entity'
 import { User } from '../src/modules/iam/user/user.entity'
 import { UserService } from '../src/modules/iam/user/user.service'
+import { EmailService } from '../src/modules/notify/email.service'
 import { OrganizationMember } from '../src/modules/organization/member.entity'
 import { MemberService } from '../src/modules/organization/member.service'
 import { ProjectMember } from '../src/modules/project/project-member.entity'
@@ -150,6 +153,11 @@ describe.skipIf(!hasTestDatabase)('tasks', () => {
       permissions,
       audit,
       new CascadeSoftDelete(dataSource),
+      users,
+      new EmailService(),
+      {
+        get: () => 'http://localhost:3000',
+      } as unknown as ConfigService<Env, true>,
     )
 
     owner = await newUser('t_owner')
@@ -163,6 +171,7 @@ describe.skipIf(!hasTestDatabase)('tasks', () => {
   })
 
   beforeEach(async () => {
+    await dataSource.query(`DELETE FROM notify.outbox`)
     await dataSource.query(`DELETE FROM task.assignees`)
     await dataSource.query(`DELETE FROM task.tasks`)
     await dataSource.query(`DELETE FROM audit.logs`)
@@ -653,6 +662,77 @@ describe.skipIf(!hasTestDatabase)('tasks', () => {
       )) as { deleted_at: Date | null }[]
 
       expect(row!.deleted_at).toBeInstanceOf(Date)
+    })
+  })
+
+  describe('the assignment email', () => {
+    const outbox = async (): Promise<
+      {
+        recipient_id: string
+        template: string
+        payload_json: Record<string, unknown>
+      }[]
+    > =>
+      (await dataSource.query(
+        `SELECT recipient_id, template, payload_json FROM notify.outbox
+          ORDER BY created_at ASC`,
+      )) as {
+        recipient_id: string
+        template: string
+        payload_json: Record<string, unknown>
+      }[]
+
+    it('queues one, with everything the message needs to say', async () => {
+      const task = await asOwner(() => tasks.create(apollo, { title: 'งาน' }))
+
+      await asOwner(() =>
+        tasks.assign(task.id, { userId: member, addToProject: false }),
+      )
+
+      const [queued] = await outbox()
+
+      expect(queued).toMatchObject({
+        recipient_id: member,
+        template: 'task_assigned',
+      })
+      // Rendered by OutboxWorker long after this request, with no org
+      // context — so every readable part travels in the payload.
+      expect(queued!.payload_json).toMatchObject({
+        taskKey: 'APL-1',
+        title: 'งาน',
+        projectName: 'Apollo',
+        url: `http://localhost:3000/tasks/${task.id}`,
+      })
+    })
+
+    it('⚠️ sends nothing when somebody assigns themselves', async () => {
+      const task = await asMember(() => tasks.create(apollo, { title: 'งาน' }))
+
+      await asMember(() =>
+        tasks.assign(task.id, { userId: member, addToProject: false }),
+      )
+
+      expect(await outbox()).toEqual([])
+    })
+
+    it('🔒 queues nothing when the assignment itself fails', async () => {
+      const task = await asOwner(() => tasks.create(apollo, { title: 'งาน' }))
+
+      await asOwner(() =>
+        tasks.assign(task.id, { userId: member, addToProject: false }),
+      )
+      const before = await outbox()
+
+      // The duplicate rolls the transaction back; the mail must go with it,
+      // or somebody is told about work they were not actually given.
+      expect(
+        await codeOf(
+          asOwner(() =>
+            tasks.assign(task.id, { userId: member, addToProject: false }),
+          ),
+        ),
+      ).toBe('ALREADY_ASSIGNED')
+      expect(await outbox()).toEqual(before)
     })
   })
 

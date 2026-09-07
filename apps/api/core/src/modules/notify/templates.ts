@@ -33,6 +33,28 @@ const TEMPLATES: Record<string, Renderer> = {
       'ถ้าไม่ได้เป็นคนขอ ไม่ต้องทำอะไร รหัสผ่านเดิมยังใช้ได้ตามปกติ',
     ].join('\n'),
   }),
+
+  /**
+   * Somebody was given a task. The only notification Phase 1 sends
+   * (docs/04-features/phase-1.md#notifications) — without it a person has no
+   * reason to come back to the tool, and with any more the mail becomes noise
+   * people filter away, taking this one with it.
+   *
+   * Everything readable is in the payload rather than looked up here: this
+   * renderer runs inside `OutboxWorker`, long after the request, with no
+   * organisation context and no right to read anybody's rows.
+   */
+  task_assigned: (payload) => ({
+    subject: `[${String(payload.taskKey ?? '')}] ${String(payload.title ?? '')}`,
+    text: [
+      `สวัสดีคุณ${String(payload.recipientName ?? '')}`,
+      '',
+      `${String(payload.assignedByName ?? 'มีคน')}มอบหมายงานให้คุณในโปรเจกต์ ${String(payload.projectName ?? '')}`,
+      '',
+      `${String(payload.taskKey ?? '')} · ${String(payload.title ?? '')}`,
+      String(payload.url ?? ''),
+    ].join('\n'),
+  }),
 }
 
 export function renderTemplate(
