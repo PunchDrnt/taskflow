@@ -342,6 +342,46 @@ Org  (ลูกค้าสร้างกันเอง)
 
 > **อย่าเอา RBAC มาใช้กับ org role** — org role มีแค่ 3 แบบและไม่ต้องการความยืดหยุ่น ใส่ RBAC จะซับซ้อนโดยไม่ได้อะไร
 
+#### org role ทำอะไรได้ และเช็คที่ไหน
+
+กติกาอยู่ที่ `src/permission/ability.ts` ที่เดียว เป็น CASL rule ไม่ใช่ `if (role === 'owner')` กระจายตาม controller
+· สองที่เขียนกติกาเดียวกันคือสองกติกา และอันที่เขียนทีหลังคือตัวที่ไม่มีใครกลับไปเทียบ
+
+| | member | admin | owner |
+| --- | --- | --- | --- |
+| อ่านทุกอย่างใน org | ✓ | ✓ | ✓ |
+| สร้าง project | ✓ | ✓ | ✓ |
+| จัดการคนใน org (`Member`) | | ✓ | ✓ |
+| **ตั้ง/ถอด owner** | | | ✓ |
+| แก้ชื่อ/slug ของ org | | | ✓ |
+| ลบ org | | | ✓ |
+
+**owner มีได้หลายคน (โมเดล GitHub) และ org ต้องมี owner อย่างน้อยหนึ่งคนเสมอ** — บังคับที่ application
+เพราะ "อย่างน้อยหนึ่งแถวในกลุ่มนี้ต้องเป็น owner" ไม่มี CHECK ไหนพูดได้
+· 🔒 **เงื่อนไขอยู่ใน `UPDATE` ไม่ใช่ `SELECT` นับก่อนแล้วค่อยเขียน** — สอง admin ถอด owner สองคนสุดท้ายพร้อมกัน
+จะอ่านเจอ "มี owner สองคน" ทั้งคู่ แล้วผ่านทั้งคู่ เหลือศูนย์ โดยไม่มี error ที่ไหน
+(ทรงเดียวกับ [session rotation](#auth) และ `OutboxWorker.claim()`)
+
+**`Member` เป็น subject แยกจาก `Organization`** เพราะสองอันนี้ให้คำตอบต่างกันสำหรับ admin —
+admin ดูแลคนใน org ได้ แต่จัดการตัว org ไม่ได้ · และ "ตั้ง/ถอด owner" เขียนเป็น `cannot` สองข้อ
+ทั้งขาขึ้นและขาลง: ห้ามเฉพาะขาขึ้น admin ก็ยังถอด owner ทิ้งได้จนไม่เหลือใครตั้งกลับ
+
+**เช็คที่ไหน — ขึ้นกับว่า resource รู้ได้ตอนไหน**
+
+| resource | เช็คที่ | ตัวอย่าง |
+| --- | --- | --- |
+| คือ org ที่กำลัง act อยู่ (รู้จาก context) | guard — `@RequirePermission(action, 'Organization')` | `PATCH /v1/org` |
+| คือแถวที่ต้อง load ก่อน | service หลัง load — `permissions.assert(...)` | `PATCH /v1/org/members/:userId` |
+
+`can()` บังคับส่ง resource ([เหตุผล](#permission-hierarchy)) และ guard ยังไม่ได้ load อะไร
+· ฉะนั้น `ContextResolvedSubject` จำกัดไว้ที่ `'Organization'` อย่างเดียว —
+`@RequirePermission('delete', 'Project')` **คอมไพล์ไม่ผ่าน** ไม่ใช่กติกาที่ต้องจำ
+
+> guard ตัวนี้ผูกกับ route ด้วย `UseGuards` ที่อยู่ใน decorator เอง **ไม่ใช่ `APP_GUARD`** —
+> มันอ่าน request context ที่ `AuthGuard` เติม จึงต้องรันทีหลัง และลำดับของ global guard
+> ตัดสินโดยลำดับที่ module ประกาศ provider ซึ่งแปลว่าความปลอดภัยของทุก route
+> ไปขึ้นกับลำดับ import ใน `app.module.ts` · route guard รันหลัง global guard เสมอไม่ว่าลำดับนั้นเป็นยังไง
+
 **คนที่มี system role ไม่ได้เป็นสมาชิก org โดยอัตโนมัติ** — เข้าถึงข้อมูล org ผ่าน permission ระดับ system หรือ impersonate เท่านั้น ห้ามแอบใส่ตัวเองเข้า `organization.members`
 
 **กติกาที่ต้องบังคับ**

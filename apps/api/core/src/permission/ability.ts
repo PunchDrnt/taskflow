@@ -12,6 +12,13 @@ export type Action = (typeof ACTIONS)[number]
 export const SUBJECTS = [
   'all',
   'Organization',
+  /**
+   * Somebody's membership of the organisation — the row, not the person. It
+   * is a subject of its own rather than part of `Organization` because the
+   * two have different answers for an admin: an admin manages the people in
+   * an org and cannot dispose of the org itself.
+   */
+  'Member',
   'Team',
   'Project',
   'Task',
@@ -49,6 +56,18 @@ export function defineAbilityFor(actor: Actor): AppAbility {
     // dispose of the organisation, or change who owns it.
     cannot('delete', 'Organization')
     cannot('update', 'Organization')
+
+    // ...and "who owns it" is these two rules, which is why a membership is
+    // its own subject. An admin runs the org's people — inviting, promoting
+    // to admin, demoting to member — but ownership is the one thing they
+    // cannot hand out or take away. Both directions are needed: an admin who
+    // could only be stopped from promoting would still demote every owner and
+    // leave nobody able to promote anyone back.
+    //
+    // The resource is the membership row with the request's intent attached:
+    // `role` is what it is now, `newRole` is what the caller asked for.
+    cannot('update', 'Member', { role: 'owner' })
+    cannot('update', 'Member', { newRole: 'owner' })
   }
 
   if (actor.orgRole === 'member') {
