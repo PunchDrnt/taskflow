@@ -72,4 +72,5 @@ each other's data and fail in ways that depend on timing.
 | `two-factor.spec.ts`          | TOTP enrolment, replay of a used step, recovery codes                |
 | `organization.spec.ts`        | 🔒 An organisation never ends up without an owner                    |
 | `project.spec.ts`             | Who may start a project, and that one arrives able to hold work      |
+| `status.spec.ts`              | 🔒 A project always keeps a status, and one that counts as finished  |
 | `docs-links.spec.ts`          | Every link in `.claude/docs` points at something that exists         |

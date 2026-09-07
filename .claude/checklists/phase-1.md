@@ -35,7 +35,8 @@ unique เต็ม · `views.sort_order` / `is_default`
       ช่องที่มันปิดคือ merge commit ที่ต่างจาก PR head · เปิด branch protection แบบ require up-to-date แทนก็ได้ เลือกอย่างใดอย่างหนึ่ง ไม่ต้องทำทั้งคู่
 - [ ] 🔒 **Test invariant ที่ DB บังคับเองไม่ได้** — Phase 0 เลื่อนมาเพราะยังไม่มี service ให้บังคับ **Phase 1 มีแล้ว หมดข้ออ้าง**
   - [x] org ต้องมี `role='owner'` ≥1 แถวเสมอ (ห้ามลบ/ลดสิทธิ์คนสุดท้าย) — `test/organization.spec.ts` รวมเคสถอดพร้อมกันสองอัน
-  - [ ] project ต้องมี `is_done_type` ≥1 อัน
+  - [x] project ต้องมี `is_done_type` ≥1 อัน — `test/status.spec.ts` ปฏิเสธทั้งการลบและการเปลี่ยน kind ของอันสุดท้าย
+        · ถ้าไม่มีเลย = ไม่มีอะไรใน project นั้นถูกนับว่าเสร็จได้อีกเลย และตัวเลข progress ทุกอันอ่านเป็นศูนย์ตลอดไปโดยไม่มี error
   - [ ] `completed_at`/`completed_by` มีค่า **ก็ต่อเมื่อ** status ของ task นั้น `is_done_type` — คุมสองทาง ดู §6
 - [x] 🔒 **`FeatureService.isEnabled()` เคย return `true` เสมอ — "ดักด้วย feature flag" จึงแปลว่า "เปิดอยู่"**
       · [`04-features/phase-1.md`](../docs/04-features/phase-1.md#auth--users) เขียนว่า `/register` ดักด้วย `isEnabled(org, 'public_registration')` "ซึ่ง return `false` ตั้งแต่บรรทัดแรก" — โค้ดตอนนั้น `return true`
@@ -262,20 +263,36 @@ unique เต็ม · `views.sort_order` / `is_default`
 
 ## 5. Status (custom ต่อ project)
 
-- [ ] สีเก็บเป็น **token จาก palette 8 สี ไม่ใช่ hex** (`gray` `red` `orange` `yellow` `green` `blue` `purple` `pink`)
-- [ ] Default ตอนสร้าง project ใหม่ **4 อัน**: To do (gray, `is_default`) · In progress (blue) ·
+- [x] สีเก็บเป็น **token จาก palette 8 สี ไม่ใช่ hex** (`gray` `red` `orange` `yellow` `green` `blue` `purple` `pink`)
+      · `paletteColorSchema` ตัวเดียวกับ project — hex ตอบ 400 (ยิงจริงแล้ว)
+- [x] Default ตอนสร้าง project ใหม่ **4 อัน**: To do (gray, `is_default`) · In progress (blue) ·
       Done (green, `is_done_type`) · **Cancelled (pink, `is_cancelled_type`)**
+      · ลงไปพร้อม §4 — อยู่ทรานแซกชันเดียวกับการสร้าง project เพราะ `tasks.status_id` เป็น NOT NULL
       · Cancelled ต้องมาตั้งแต่ตอนสร้าง เพราะ progress ของ sub-task (Phase 2) ตัดงานยกเลิกออกจากตัวหาร
       ถ้าไม่มี status ที่แปลว่ายกเลิก คนจะเอา Done ไปใช้แทนแล้วตัวเลขเพี้ยนย้อนหลังทั้งหมด
 - [ ] **หน้าจอแก้ status ต่อ project** — เพิ่ม/ลบ/เปลี่ยนชื่อ/เปลี่ยนสี/จัดลำดับ
       · กติกาข้างล่างไม่มีที่ให้กดถ้าไม่มีหน้านี้
-- [ ] `sort_order` เป็น LexoRank เหมือน task
+      · ✅ **API ครบแล้ว** — `GET|POST /v1/projects/:projectId/statuses` · `PATCH|DELETE .../:statusId`
+      · แก้ชื่อ/สี/ประเภท/ลำดับ/ตั้งต้น มาใน `PATCH` เดียว เพราะหน้าจอแก้ทั้งหมดนี้ในตารางเดียว
+      · ⏳ **ติ๊กไม่ได้เพราะยังไม่มีหน้าจอ** — เป็นงาน web
+- [x] `sort_order` เป็น LexoRank เหมือน task
+      · **ย้ายด้วย `afterId` ไม่ใช่ส่ง sort key มาเอง** — key เป็นเลขคณิตที่ถูกต้องก็ต่อเมื่ออ่าน neighbour ปัจจุบัน
+        client ที่คำนวณจากลิสต์เก่าจะเขียนแถวลงผิดที่โดยไม่มีอะไรฟ้อง · ตัวที่ client รู้จริงคือ "ให้อยู่ต่อจากอันไหน"
+      · ตัวที่ถูกย้ายถูกตัดออกจากลิสต์ neighbour ก่อน — ไม่งั้น `between` โดนถามหา key ระหว่างแถวกับตัวมันเอง แล้ว throw
       · ✅ **ตัวช่วยเขียนแล้ว** — `#shared/sort-order` (`between` / `sequence`) · fractional indexing base-62 เรียงตาม ASCII
         ให้ตรงกับ `COLLATE "C"` ของคอลัมน์ · แทรกกลางเขียนแถวเดียว ไม่ใช่เขียนใหม่ทั้งลิสต์
       · 🔒 key ห้ามลงท้ายด้วยหลักต่ำสุด — `'V'` กับ `'V0'` เป็นเลขเดียวกันแต่ไบต์ไม่เท่ากัน ลิสต์ที่มีทั้งคู่คือสองแถวที่คนอ่านแยกไม่ออกแต่ Postgres แยก
-- [ ] Partial unique index คุม "อย่างมากหนึ่ง" มีตั้งแต่ Phase 0 แล้ว — `is_default` ต่อ project
-- [ ] ห้ามลบ status ที่มี task ใช้อยู่ / ห้ามลบอันสุดท้าย
-- [ ] status เป็นทั้ง done และ cancelled พร้อมกันไม่ได้
+- [x] Partial unique index คุม "อย่างมากหนึ่ง" มีตั้งแต่ Phase 0 แล้ว — `is_default` ต่อ project
+      · ย้าย default = เคลียร์อันเก่าแล้วตั้งอันใหม่ใน transaction เดียว · สองคำขอพร้อมกันจึง serialise ที่แถวเก่า เหลือหนึ่งเสมอ
+      · index เป็น **backstop** ไม่ใช่กลไก — มันทำให้ "มีสอง default" เขียนลง DB ไม่ได้เลย
+- [x] ห้ามลบ status ที่มี task ใช้อยู่ / ห้ามลบอันสุดท้าย
+      · จำนวน task ถามผ่าน `TaskService.countInStatus` ไม่ได้ query `task.tasks` เอง — คนละ module
+        · `TaskModule` เกิดตรงนี้เป็น stub (ยังไม่มี controller) เพราะ §5 ต้องถามสองคำถามเกี่ยวกับ task ก่อนถึงจะลบ/เปลี่ยน kind ได้
+      · จำนวนอยู่ใน `details.tasks` ด้วย — หน้าจอจะได้ทำปุ่มจาง + tooltip บอกจำนวนตามสเปก ไม่ใช่กดแล้วค่อยขึ้น error
+      · **เพิ่มข้อที่สาม: ห้ามลบอันที่เป็น default** — ไม่ได้อยู่ในสเปกเดิม ตัดสินแล้วบันทึกใน [`04-features/phase-1.md`](../docs/04-features/phase-1.md#status-custom-per-project)
+- [x] status เป็นทั้ง done และ cancelled พร้อมกันไม่ได้
+      · **API รับ `kind` ตัวเดียวสามค่า ไม่ใช่ boolean สองตัว** — เปิดสองตัวให้ client ส่ง = ส่งคู่ที่ CHECK มีไว้ปฏิเสธได้ แล้วรู้ตัวตอนได้ 500
+        · service เป็นคนแปลงเป็นสองคอลัมน์ · บันทึกใน docs แล้ว
 - [ ] Badge สีอ่อน + ตัวอักษรเข้ม **พร้อมชื่อเสมอ** — คนตาบอดสีประมาณ 8% ของผู้ชาย สีอย่างเดียวไม่พอ
 
 ---
@@ -297,8 +314,11 @@ unique เต็ม · `views.sort_order` / `is_default`
 - [ ] จัดลำดับเอง (LexoRank)
 - [ ] 🔒 **`completed_at` / `completed_by` สอดคล้องกับ `is_done_type` เสมอ — คุมสองทาง**
   - [ ] ทาง A: task เปลี่ยน status → ตั้งค่า/reset เป็น null
-  - [ ] ทาง B: **มีคนแก้ `is_done_type` ของ status ที่มี task ใช้อยู่แล้ว** ← ทางนี้ลืมง่ายกว่ามาก เพราะคนแก้กำลังมองหน้าจอตั้งค่า project ไม่ได้มองงานสักใบ
-  - [ ] `CHECK` ทำแทนไม่ได้ เงื่อนไขข้ามตาราง (`tasks` ↔ `statuses`)
+  - [x] ทาง B: **มีคนแก้ `is_done_type` ของ status ที่มี task ใช้อยู่แล้ว** ← ทางนี้ลืมง่ายกว่ามาก เพราะคนแก้กำลังมองหน้าจอตั้งค่า project ไม่ได้มองงานสักใบ
+        · ลงไปพร้อม §5 เพราะจุดที่ trigger คือ endpoint แก้ status · `TaskService.reconcileCompletion(manager, statusId, counted)`
+        · แตะเฉพาะแถวที่ค่าไม่ตรงจริงๆ — งานที่เสร็จอยู่แล้วเก็บวันเดิมไว้ และรันซ้ำไม่เปลี่ยนอะไร
+        · `completed_by` ลงชื่อคนที่แก้ status เพราะเขาคือคนที่ทำให้มันเกิด · สองคอลัมน์ขยับพร้อมกันตาม `tasks_completed_pair_check`
+  - [x] `CHECK` ทำแทนไม่ได้ เงื่อนไขข้ามตาราง (`tasks` ↔ `statuses`) — ยืนยันแล้วตอนทำทาง B
 - [ ] **Assignee picker** — type-ahead ค้นได้ทั้งชื่อจริง / ชื่อเล่น / อีเมล ไม่ใช่ dropdown รายชื่อยาว
       · เรียงสองชั้นพอ: **คนใน project → ที่เหลือทั้ง org** · ชั้น "คนที่เพิ่ง assign ล่าสุด"
         ที่สเปกเดิมมี **ตัดออกแล้ว** — เป็น query ที่แพงที่สุดในหน้าจอที่เปิดบ่อยที่สุด
