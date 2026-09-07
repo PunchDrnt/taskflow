@@ -10,9 +10,14 @@ import { createOrgScopedRepository } from '#shared/org-scope/org-scoped.reposito
 import { SYSTEM_USER_ID } from '#shared/system-user'
 
 import type { Env } from '../src/config/env'
-import { AuthService } from '../src/modules/iam/auth/auth.service'
+import {
+  AuthService,
+  isTwoFactorChallenge,
+  type LoginResult,
+} from '../src/modules/iam/auth/auth.service'
 import { LockoutService } from '../src/modules/iam/auth/lockout.service'
 import { PasswordService } from '../src/modules/iam/auth/password.service'
+import { RecoveryCode } from '../src/modules/iam/auth/recovery-code.entity'
 import { Session } from '../src/modules/iam/auth/session.entity'
 import {
   ROTATION_GRACE_MS,
@@ -22,6 +27,9 @@ import {
   ACCESS_TOKEN_TTL_SECONDS,
   TokenService,
 } from '../src/modules/iam/auth/token.service'
+import { TotpCredential } from '../src/modules/iam/auth/totp-credential.entity'
+import { TotpService } from '../src/modules/iam/auth/totp.service'
+import { TwoFactorService } from '../src/modules/iam/auth/two-factor.service'
 import { User } from '../src/modules/iam/user/user.entity'
 import { UserService } from '../src/modules/iam/user/user.service'
 import { OrganizationMember } from '../src/modules/organization/member.entity'
@@ -32,6 +40,33 @@ const MAX_ATTEMPTS = 3
 const LOCK_MINUTES = 15
 const PASSWORD = 'correct horse battery staple'
 const ORIGIN = { userAgent: 'vitest', ipAddress: '127.0.0.1' }
+
+/**
+ * The real service, so `login` takes the branch it takes in production. Its
+ * own behaviour is covered in two-factor.spec.ts; here it is a dependency, and
+ * a stub that always answered "off" would make every login test prove less
+ * than it looks like it proves.
+ */
+function buildTwoFactor(
+  dataSource: DataSource,
+  users: UserService,
+  sessions: SessionService,
+): TwoFactorService {
+  return new TwoFactorService(
+    createOrgScopedRepository(dataSource, TotpCredential),
+    createOrgScopedRepository(dataSource, RecoveryCode),
+    dataSource,
+    users,
+    new PasswordService(),
+    sessions,
+    new TotpService({
+      get: () => Buffer.alloc(32, 7).toString('base64'),
+    } as unknown as ConfigService<Env, true>),
+    {
+      get: (key: keyof Env) => (key === 'LOGIN_MAX_ATTEMPTS' ? 5 : 15),
+    } as unknown as ConfigService<Env, true>,
+  )
+}
 
 /** The three services above AuthService that hold no state worth rebuilding. */
 function build(dataSource: DataSource) {
@@ -44,6 +79,7 @@ function build(dataSource: DataSource) {
   const sessions = new SessionService(
     createOrgScopedRepository(dataSource, Session),
   )
+  const twoFactor = buildTwoFactor(dataSource, users, sessions)
 
   return {
     users,
@@ -66,6 +102,7 @@ function build(dataSource: DataSource) {
           verifyOptions: { algorithms: ['HS256'] },
         }),
       ),
+      twoFactor,
     ),
   }
 }
@@ -133,8 +170,27 @@ describe.skipIf(!hasTestDatabase)('auth', () => {
       [orgId, userId, role, SYSTEM_USER_ID],
     )
 
-  const login = (name: string, password = PASSWORD, rememberMe = false) =>
-    auth.login({ login: emailOf(name), password, rememberMe }, ORIGIN)
+  /**
+   * Every account in this file signs in in one step — the two-step path has
+   * its own file. Narrowing here rather than casting means a stray challenge
+   * fails loudly instead of surfacing as `undefined.tokens` three lines later.
+   */
+  const login = async (
+    name: string,
+    password = PASSWORD,
+    rememberMe = false,
+  ): Promise<LoginResult> => {
+    const outcome = await auth.login(
+      { login: emailOf(name), password, rememberMe },
+      ORIGIN,
+    )
+
+    if (isTwoFactorChallenge(outcome)) {
+      throw new Error('did not expect a two-factor challenge here')
+    }
+
+    return outcome
+  }
 
   /**
    * Through the repository rather than `dataSource.query`, so the row arrives

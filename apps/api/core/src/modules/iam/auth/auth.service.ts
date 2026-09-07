@@ -1,4 +1,10 @@
-import { HttpStatus, Injectable, Logger } from '@nestjs/common'
+import {
+  forwardRef,
+  HttpStatus,
+  Inject,
+  Injectable,
+  Logger,
+} from '@nestjs/common'
 
 import {
   AUTH_ERROR_CODES,
@@ -25,6 +31,7 @@ import {
   type SessionRecord,
 } from './session.service'
 import { TokenService, type Tokens } from './token.service'
+import { TwoFactorService } from './two-factor.service'
 
 const alerts = alertsFor('auth')
 
@@ -52,6 +59,25 @@ export interface LoginResult {
   memberships: Membership[]
   /** Set when exactly one membership makes the choice for them. */
   activeOrgId: string | null
+}
+
+/**
+ * The password was right and a second factor is owed.
+ *
+ * A separate shape rather than a nullable `tokens`, so a caller cannot reach
+ * for the session that a half-finished login does not have.
+ */
+export interface TwoFactorChallenge {
+  challenge: string
+}
+
+export type LoginOutcome = LoginResult | TwoFactorChallenge
+
+/** Narrows the union at the one place the controller has to branch. */
+export function isTwoFactorChallenge(
+  outcome: LoginOutcome,
+): outcome is TwoFactorChallenge {
+  return 'challenge' in outcome
 }
 
 interface CacheEntry {
@@ -95,11 +121,13 @@ export class AuthService {
     private readonly lockout: LockoutService,
     private readonly passwords: PasswordService,
     private readonly tokens: TokenService,
+    @Inject(forwardRef(() => TwoFactorService))
+    private readonly twoFactor: TwoFactorService,
   ) {}
 
   // --- login -------------------------------------------------------------
 
-  async login(input: LoginInput, origin: SessionOrigin): Promise<LoginResult> {
+  async login(input: LoginInput, origin: SessionOrigin): Promise<LoginOutcome> {
     // Either identifier — the caller typed one field and never said which.
     const user = await this.users.findByLogin(input.login)
 
@@ -130,20 +158,41 @@ export class AuthService {
 
     await this.lockout.reset(user)
 
+    // The password is spent at this point — the counter is cleared and the
+    // account is known good — so a second factor is a *step*, not a failure.
+    // No session is created here: an account with 2FA on must not be reachable
+    // by a caller who only ever proved one thing.
+    if (await this.twoFactor.isEnabled(user.id)) {
+      return { challenge: this.tokens.signTwoFactorChallenge(user.id) }
+    }
+
+    return this.issueSession(user.id, origin, input.rememberMe)
+  }
+
+  /**
+   * Everything after the last check, shared by the one-step login and the
+   * second half of the two-step one — so the two cannot drift into issuing
+   * subtly different sessions.
+   */
+  async issueSession(
+    userId: string,
+    origin: SessionOrigin,
+    rememberMe: boolean,
+  ): Promise<LoginResult> {
     const refreshToken = this.tokens.createRefreshToken()
     const session = await this.sessions.create(
-      user.id,
+      userId,
       this.tokens.hashRefreshToken(refreshToken),
       origin,
-      input.rememberMe,
+      rememberMe,
     )
 
-    const memberships = await this.memberships.listForUser(user.id)
+    const memberships = await this.memberships.listForUser(userId)
 
     return {
       tokens: {
         accessToken: this.tokens.signAccessToken({
-          sub: user.id,
+          sub: userId,
           sid: session.id,
         }),
         refreshToken,

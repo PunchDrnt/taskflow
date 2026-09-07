@@ -360,7 +360,7 @@ Org  (ลูกค้าสร้างกันเอง)
 
 3. **Support ใช้ impersonate ดีกว่าเปิด API อ่านข้าม org** — สวมสิทธิ์ user ในบริบท org นั้น ปลอดภัยกว่าและ log ชัดว่าใครสวมเป็นใคร
 
-4. **บังคับ 2FA สำหรับคนที่มี system role** (Phase หลัง)
+4. **บังคับ 2FA สำหรับคนที่มี system role** (Phase หลัง — [กลไกลงแล้วตั้งแต่ Phase 1](#two-factor-totp) เหลือแค่ policy ที่บังคับ)
 
 **Back-office: app แยก คนละ registrable domain**
 
@@ -923,6 +923,30 @@ POST /auth/reset-password { code, newPassword, confirmNewPassword }
 - Token อายุ **30 นาที** (env var ไม่ hardcode) ใช้ได้ครั้งเดียว — [ทำไมไม่ใช่ 10](./04-features/phase-1.md#auth--users)
 - ขอใหม่ → invalidate อันเก่า
 - Rate limit 3 ครั้ง/ชั่วโมง/อีเมล
+
+### Two-factor (TOTP)
+
+**ตัดสิน 2026-09-07: ลงกลไกใน Phase 1 · เปิดเอง ไม่บังคับใคร**
+
+roadmap เขียนไว้ว่า 2FA เป็นของ "Phase หลัง" และ "บังคับสำหรับคนที่มี system role" — ที่ทำจริงคือครึ่งแรกลงก่อน · เหตุผล: การ**บังคับ**ต้องมี system role ให้บังคับ แต่ `iam.user_roles` ยังไม่มีแถวเลยตั้งแต่ Phase 0 · พอกลไกลงแล้ว การบังคับทีหลังกลายเป็น policy check ไม่ใช่ feature ใหม่
+
+```
+POST /api/v1/me/2fa/setup   { password }        → { secret, otpauthUrl }
+POST /api/v1/me/2fa/enable  { code }            → { recoveryCodes[10] }   ← เห็นครั้งเดียว
+DELETE /api/v1/me/2fa       { password }        → revoke ทุก session ยกเว้นอันปัจจุบัน
+
+POST /api/v1/auth/login      { login, password } → { twoFactorRequired: true }  + cookie challenge
+POST /api/v1/auth/login/2fa  { code }            → session
+```
+
+- **TOTP ไม่ใช่ SMS** — ไม่มีค่าส่ง ไม่พึ่งค่ายมือถือ ใช้ได้ตอนเน็ตล่ม และไม่โดน SIM swap · คอลัมน์ `phone` ที่เพิ่มมาพร้อมกัน **ไม่เกี่ยวกับ 2FA** เป็นข้อมูลโปรไฟล์ล้วนๆ
+- 🔒 **secret เข้ารหัส AES-256-GCM ด้วย `TOTP_ENCRYPTION_KEY`** — hash ไม่ได้เพราะเป็น shared secret · `deploy/backup.sh` เขียน dump ลงดิสก์ สิ่งเดียวที่กั้นระหว่าง dump ที่หลุดกับ second factor ของทุกคนคือกุญแจไม่ได้อยู่ใน dump · GCM ไม่ใช่ CBC เพราะมันยืนยันความถูกต้องด้วย ciphertext ที่ถูกแก้จะ decrypt ไม่ผ่านแทนที่จะได้ secret อื่นออกมา
+- 🔒 **กัน replay ด้วย `last_used_step`** — โค้ดหนึ่งอันใช้ได้ทั้งหน้าต่าง 30 วิ ถ้าไม่จำ step ที่ผ่านไปแล้ว โค้ดที่ถูกแอบมองครั้งเดียวใช้ได้สองรอบ
+- **ล็อกเมื่อใส่โค้ดผิดหลายครั้ง** ใช้ `LOGIN_MAX_ATTEMPTS` / `LOGIN_LOCK_MINUTES` ชุดเดียวกับรหัสผ่าน — 6 หลักคือหนึ่งล้านครั้ง และขอ challenge ใหม่ได้เรื่อยๆ ด้วยการ login ซ้ำ หน้าต่างเวลาจึงไม่ได้จำกัดตัวเอง
+- **challenge เป็น JWT อายุ 5 นาที มี `purpose: 'two_factor'`** และ **ไม่มี `sid`** — `verifyAccessToken` ปฏิเสธมันสองชั้น (claim ขาด และไม่ได้ระบุ session) ชั้นเดียวก็พอ แต่สองชั้นคือสิ่งที่กันไม่ให้การ refactor ชั้นใดชั้นหนึ่งวันหลังเปลี่ยนมันเป็นทางเข้าที่ไม่ต้องมี second factor
+- **recovery code 10 อัน เก็บแต่ hash** — ตอนใช้มันมีค่าเท่ารหัสผ่าน · ใช้ได้ครั้งเดียว 🔒 ตัดด้วย statement เดียวแบบเดียวกับ session rotation
+- **ปิด 2FA แล้ว revoke ทุก session ยกเว้นอันปัจจุบัน** — เป็นการลดการป้องกันของบัญชี ของที่ล็อกอินค้างที่อื่นเข้ามาตอนกฎเข้มกว่า
+- **ตาราง hard delete ทั้งคู่** — soft delete แล้วมีคนลืม `deleted_at IS NULL` เมื่อไหร่ = factor ที่ยังบังคับอยู่ทั้งที่เจ้าตัวปิดไปแล้ว (กับดักเดียวกับ `oauth_accounts`)
 
 **Password & Rate limit**
 

@@ -10,7 +10,9 @@ import { Comment } from '../modules/discussion/comment.entity'
 import { FieldDefinition } from '../modules/field/field-definition.entity'
 import { OauthAccount } from '../modules/iam/auth/oauth-account.entity'
 import { PasswordResetToken } from '../modules/iam/auth/password-reset-token.entity'
+import { RecoveryCode } from '../modules/iam/auth/recovery-code.entity'
 import { Session } from '../modules/iam/auth/session.entity'
+import { TotpCredential } from '../modules/iam/auth/totp-credential.entity'
 import { SystemPermission } from '../modules/iam/system/system-permission.entity'
 import { SystemRolePermission } from '../modules/iam/system/system-role-permission.entity'
 import { SystemRole } from '../modules/iam/system/system-role.entity'
@@ -52,6 +54,8 @@ export const entities: EntityList = [
   Session,
   OauthAccount,
   PasswordResetToken,
+  TotpCredential,
+  RecoveryCode,
   SystemRole,
   SystemPermission,
   SystemRolePermission,

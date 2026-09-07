@@ -27,16 +27,19 @@ import {
   MembershipService,
   type Membership,
 } from '../../organization/membership.service'
-import { AuthCookies } from '../auth/auth.cookies'
-import { UserService } from './user.service'
+import { UserService } from '../user/user.service'
+import { AuthCookies } from './auth.cookies'
+import { TwoFactorService } from './two-factor.service'
 
 /**
  * The signed-in person, across organisations rather than inside one — hence
  * `@SkipOrgScope()` on everything here.
  *
- * Only the org switch exists so far. `GET /v1/me` is the next commit's; this
- * one ships now because the guard is unusable for anybody in two organisations
- * without a way to say which they mean.
+ * In `auth/` rather than `user/`, like the password and two-factor controllers
+ * beside it: `/me` reads its own 2FA state and its own memberships, and having
+ * `UserModule` import `AuthModule` would close the cycle `AuthCookiesModule`
+ * was created to avoid. The path is what the screen calls; the module is where
+ * the dependencies already are.
  */
 /** What `GET /v1/me` answers with, and what `PATCH /v1/me` echoes back. */
 export interface Me {
@@ -48,6 +51,8 @@ export interface Me {
   phone: string | null
   avatarUrl: string | null
   status: string
+  /** Whether a second factor stands between this account and a session. */
+  twoFactorEnabled: boolean
   organizations: Membership[]
   /** Null while the caller is in several organisations and has picked none. */
   activeOrgId: string | null
@@ -61,6 +66,7 @@ export class MeController {
   constructor(
     private readonly memberships: MembershipService,
     private readonly users: UserService,
+    private readonly twoFactor: TwoFactorService,
     private readonly cookies: AuthCookies,
   ) {}
 
@@ -79,9 +85,10 @@ export class MeController {
   async me(): Promise<Me> {
     const { userId, orgId } = requireRequestContext()
 
-    const [user, memberships] = await Promise.all([
+    const [user, memberships, twoFactorEnabled] = await Promise.all([
       this.users.findById(userId),
       this.memberships.listForUser(userId),
+      this.twoFactor.isEnabled(userId),
     ])
 
     // The guard checked the session a moment ago, so this is a row deleted
@@ -97,6 +104,7 @@ export class MeController {
       phone: user.phone,
       avatarUrl: user.avatarUrl,
       status: user.status,
+      twoFactorEnabled,
       organizations: memberships,
       activeOrgId: orgId,
       // The role that applies to what this request can do. Null while no org

@@ -98,6 +98,20 @@ password_reset_tokens
   used_at             timestamptz null   ใช้ได้ครั้งเดียว
   CREATE INDEX ON iam.password_reset_tokens (token_hash) WHERE used_at IS NULL;
 
+totp_credentials      2FA แบบ TOTP · มีแถวเฉพาะคนที่เปิดใช้ · hard delete
+  user_id             uuid  FK · UNIQUE — คนละหนึ่งแถว ตั้งใหม่ = แทนที่ของเดิม
+  secret_encrypted    text        AES-256-GCM ด้วย TOTP_ENCRYPTION_KEY · hash ไม่ได้เพราะเป็น shared secret
+  confirmed_at        timestamptz null · null = ตั้งค้างไว้ ยังไม่บังคับ (เปิดจอแล้วปิดแท็บ ห้ามล็อกคนออก)
+  last_used_step      bigint      null · step ล่าสุดที่รับไปแล้ว — กัน replay ในหน้าต่าง 30 วิ
+  failed_attempts     int         default 0 · ใช้ LOGIN_MAX_ATTEMPTS ชุดเดียวกับรหัสผ่าน
+  locked_until        timestamptz null
+
+recovery_codes        ทางกลับเข้าเมื่อมือถือหาย · 10 อันตอนเปิด · เห็นครั้งเดียว
+  user_id             uuid  FK
+  code_hash           text        sha256 · ตอนใช้มันมีค่าเท่ารหัสผ่าน
+  used_at             timestamptz null · ใช้ได้ครั้งเดียว
+  CREATE INDEX ON iam.recovery_codes (code_hash) WHERE used_at IS NULL;
+
 oauth_accounts        ⚠ ยังไม่สร้าง — migrate ใน Phase 1 แต่ Google login ยังไม่เปิดใช้
                       -- 1 แถว = 1 provider ที่ user คนนั้นผูกไว้
   user_id             uuid  FK → iam.users · ON DELETE CASCADE

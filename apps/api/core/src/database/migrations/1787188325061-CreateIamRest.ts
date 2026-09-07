@@ -1,7 +1,8 @@
 import { type MigrationInterface, type QueryRunner } from 'typeorm'
 
 /**
- * The rest of `iam`: sessions, password resets, system-level RBAC.
+ * The rest of `iam`: sessions, password resets, two-factor credentials and
+ * system-level RBAC.
  * Nothing here has `org_id` — a user belongs to many orgs and a system role
  * crosses them by definition. The RBAC tables wait for Phase 7 to be read.
  *
@@ -74,6 +75,82 @@ export class CreateIamRest1787188325061 implements MigrationInterface {
     await queryRunner.query(`
       CREATE INDEX password_reset_tokens_hash_idx
         ON iam.password_reset_tokens (token_hash) WHERE used_at IS NULL
+    `)
+
+    // One row per person who has turned 2FA on, and none for anybody who has
+    // not — which is why this is a table rather than columns on iam.users:
+    // most rows would be null, and the secret would then be in the result of
+    // every ordinary SELECT on the user.
+    //
+    // Hard delete on purpose, the same reasoning as oauth_accounts: turning
+    // 2FA off must leave nothing behind that a query could forget to filter,
+    // because forgetting `AND deleted_at IS NULL` there means a factor that is
+    // still enforced after somebody switched it off.
+    await queryRunner.query(`
+      CREATE TABLE iam.totp_credentials (
+        id                uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+
+        user_id           uuid        NOT NULL REFERENCES iam.users(id) ON DELETE CASCADE,
+
+        -- AES-256-GCM, not the raw base32. A TOTP secret is shared, so it
+        -- cannot be hashed the way a password is; the mitigation for a stolen
+        -- dump is that the key lives outside the database. deploy/backup.sh
+        -- writes dumps to disk, so this is a real path, not a hypothetical.
+        secret_encrypted  text        NOT NULL,
+
+        -- Null until the person has typed a code the secret produced. An
+        -- unconfirmed row must never be enforced at login: it would lock out
+        -- somebody who started the setup and closed the tab.
+        confirmed_at      timestamptz,
+
+        -- The last 30-second step this credential accepted. A code stays valid
+        -- for its whole window, so without this one observed code can be
+        -- replayed inside it.
+        last_used_step    bigint,
+
+        -- Six digits is a million guesses; a challenge can be reissued by
+        -- signing in again, so the window is not self-limiting. Same two
+        -- columns and the same env vars as the password lockout.
+        failed_attempts   integer     NOT NULL DEFAULT 0,
+        locked_until      timestamptz,
+
+        created_at        timestamptz NOT NULL DEFAULT now(),
+        created_by        uuid        NOT NULL REFERENCES iam.users(id) ON DELETE RESTRICT,
+        updated_at        timestamptz NOT NULL DEFAULT now(),
+        updated_by        uuid        NOT NULL REFERENCES iam.users(id) ON DELETE RESTRICT
+      )
+    `)
+
+    // One per person. Setting up again replaces the row rather than adding to
+    // it, so there is never a question of which secret is live.
+    await queryRunner.query(`
+      CREATE UNIQUE INDEX totp_credentials_user_unique
+        ON iam.totp_credentials (user_id)
+    `)
+
+    // The way back in when the phone is gone. Hashed like a refresh token —
+    // one is as good as a password at the moment it is used.
+    await queryRunner.query(`
+      CREATE TABLE iam.recovery_codes (
+        id          uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+
+        user_id     uuid        NOT NULL REFERENCES iam.users(id) ON DELETE CASCADE,
+        code_hash   text        NOT NULL,
+        -- Single use. No soft delete for the same reason as the reset tokens:
+        -- this column already says the row is spent.
+        used_at     timestamptz,
+
+        created_at  timestamptz NOT NULL DEFAULT now(),
+        created_by  uuid        NOT NULL REFERENCES iam.users(id) ON DELETE RESTRICT,
+        updated_at  timestamptz NOT NULL DEFAULT now(),
+        updated_by  uuid        NOT NULL REFERENCES iam.users(id) ON DELETE RESTRICT
+      )
+    `)
+
+    // Partial, so the index holds only what is still redeemable.
+    await queryRunner.query(`
+      CREATE INDEX recovery_codes_hash_idx
+        ON iam.recovery_codes (code_hash) WHERE used_at IS NULL
     `)
 
     // Migrated in Phase 1, read by nobody until Google login is switched on —
@@ -216,6 +293,8 @@ export class CreateIamRest1787188325061 implements MigrationInterface {
     await queryRunner.query(`DROP TABLE IF EXISTS iam.permissions`)
     await queryRunner.query(`DROP TABLE IF EXISTS iam.roles`)
     await queryRunner.query(`DROP TABLE IF EXISTS iam.password_reset_tokens`)
+    await queryRunner.query(`DROP TABLE IF EXISTS iam.recovery_codes`)
+    await queryRunner.query(`DROP TABLE IF EXISTS iam.totp_credentials`)
     await queryRunner.query(`DROP TABLE IF EXISTS iam.oauth_accounts`)
     await queryRunner.query(`DROP TABLE IF EXISTS iam.sessions`)
   }

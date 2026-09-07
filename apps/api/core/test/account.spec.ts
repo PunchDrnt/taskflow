@@ -26,12 +26,16 @@ import {
   PasswordResetService,
 } from '../src/modules/iam/auth/password-reset.service'
 import { PasswordService } from '../src/modules/iam/auth/password.service'
+import { RecoveryCode } from '../src/modules/iam/auth/recovery-code.entity'
 import { Session } from '../src/modules/iam/auth/session.entity'
 import { SessionService } from '../src/modules/iam/auth/session.service'
 import {
   ACCESS_TOKEN_TTL_SECONDS,
   TokenService,
 } from '../src/modules/iam/auth/token.service'
+import { TotpCredential } from '../src/modules/iam/auth/totp-credential.entity'
+import { TotpService } from '../src/modules/iam/auth/totp.service'
+import { TwoFactorService } from '../src/modules/iam/auth/two-factor.service'
 import { User } from '../src/modules/iam/user/user.entity'
 import { UserService } from '../src/modules/iam/user/user.service'
 import { EmailService } from '../src/modules/notify/email.service'
@@ -54,12 +58,40 @@ const RESET_MAX_PER_HOUR = 3
  * asks whether somebody may get in, this one asks what they may change once
  * they are in.
  */
+/**
+ * The real service, so `login` takes the branch it takes in production. Its
+ * own behaviour is covered in two-factor.spec.ts; here it is a dependency, and
+ * a stub that always answered "off" would make every login test prove less
+ * than it looks like it proves.
+ */
+function buildTwoFactor(
+  dataSource: DataSource,
+  users: UserService,
+  sessions: SessionService,
+): TwoFactorService {
+  return new TwoFactorService(
+    createOrgScopedRepository(dataSource, TotpCredential),
+    createOrgScopedRepository(dataSource, RecoveryCode),
+    dataSource,
+    users,
+    new PasswordService(),
+    sessions,
+    new TotpService({
+      get: () => Buffer.alloc(32, 7).toString('base64'),
+    } as unknown as ConfigService<Env, true>),
+    {
+      get: (key: keyof Env) => (key === 'LOGIN_MAX_ATTEMPTS' ? 5 : 15),
+    } as unknown as ConfigService<Env, true>,
+  )
+}
+
 describe.skipIf(!hasTestDatabase)('account', () => {
   let dataSource: DataSource
   let users: UserService
   let sessions: SessionService
   let auth: AuthService
   let resets: PasswordResetService
+  let twoFactor: TwoFactorService
   let counter = 0
 
   const newUser = async (withPassword = false): Promise<string> => {
@@ -121,6 +153,8 @@ describe.skipIf(!hasTestDatabase)('account', () => {
       get: (key: keyof Env) => (key === 'LOGIN_MAX_ATTEMPTS' ? 5 : 15),
     } as unknown as ConfigService<Env, true>
 
+    twoFactor = buildTwoFactor(dataSource, users, sessions)
+
     auth = new AuthService(
       users,
       new MembershipService(
@@ -139,6 +173,7 @@ describe.skipIf(!hasTestDatabase)('account', () => {
           verifyOptions: { algorithms: ['HS256'] },
         }),
       ),
+      twoFactor,
     )
 
     const resetConfig = {

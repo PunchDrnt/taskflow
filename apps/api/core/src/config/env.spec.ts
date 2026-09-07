@@ -10,6 +10,10 @@ const required = {
   S3_SECRET_KEY: '0'.repeat(63) + '1',
   S3_BUCKET: 'taskflow',
   JWT_SECRET: 'a'.repeat(32),
+  // Exactly 32 bytes, because the schema measures the decoded length rather
+  // than the string's — a base64 string that looks the right size and decodes
+  // to 31 bytes is the mistake worth failing at boot.
+  TOTP_ENCRYPTION_KEY: Buffer.alloc(32, 1).toString('base64'),
 }
 
 // What production additionally demands, on top of `required`.
@@ -88,6 +92,18 @@ describe('validateEnv', () => {
     // No default anywhere: a fallback secret is a secret everyone has. The
     // floor is HS256's own output length — a shorter key still boots and still
     // signs, which is exactly what makes it worth checking here.
+    const { TOTP_ENCRYPTION_KEY: _key, ...withoutTotpKey } = required
+    expect(() => validateEnv(withoutTotpKey)).toThrow(/TOTP_ENCRYPTION_KEY/)
+
+    // Decoded length, not string length: 24 base64 characters look plausible
+    // and decode to 16 bytes, which AES-256 will not take.
+    expect(() =>
+      validateEnv({
+        ...required,
+        TOTP_ENCRYPTION_KEY: Buffer.alloc(16, 1).toString('base64'),
+      }),
+    ).toThrow(/TOTP_ENCRYPTION_KEY/)
+
     const { JWT_SECRET: _omitted, ...withoutSecret } = required
 
     expect(() => validateEnv(withoutSecret)).toThrow(/JWT_SECRET/)

@@ -140,6 +140,33 @@ export const registerSchema = z
 
 export type RegisterInput = z.infer<typeof registerSchema>
 
+/** The six digits from the app, or one of the recovery codes. */
+const twoFactorCode = z
+  .string()
+  .trim()
+  .min(1, 'กรุณากรอกรหัสยืนยัน')
+  .max(64, 'รหัสยืนยันยาวเกินไป')
+
+/** `POST /v1/auth/login/2fa` — the second step, holding the challenge cookie. */
+export const twoFactorLoginSchema = z.object({ code: twoFactorCode })
+export type TwoFactorLoginInput = z.infer<typeof twoFactorLoginSchema>
+
+/**
+ * `POST /v1/me/2fa/setup` — the password is required even though the caller is
+ * signed in: somebody who has taken a session could otherwise enrol their own
+ * authenticator and lock the owner out of their account.
+ */
+export const twoFactorSetupSchema = z.object({ password: presentedPassword })
+export type TwoFactorSetupInput = z.infer<typeof twoFactorSetupSchema>
+
+/** `POST /v1/me/2fa/enable` — proves the secret reached the app. */
+export const twoFactorEnableSchema = z.object({ code: twoFactorCode })
+export type TwoFactorEnableInput = z.infer<typeof twoFactorEnableSchema>
+
+/** `DELETE /v1/me/2fa` — same reasoning as setup, in the other direction. */
+export const twoFactorDisableSchema = z.object({ password: presentedPassword })
+export type TwoFactorDisableInput = z.infer<typeof twoFactorDisableSchema>
+
 /**
  * The codes the sign-in screens branch on. Here rather than in
  * `API_ERROR_CODES` for the reason given there: that file is for codes no
@@ -187,6 +214,17 @@ export const AUTH_ERROR_CODES = {
   USERNAME_TAKEN: 'USERNAME_TAKEN',
   /** A profile edit: that number is on another live account. */
   PHONE_TAKEN: 'PHONE_TAKEN',
+  /**
+   * The password was right and a second factor is now needed. Not an error —
+   * a step. The client shows the code field rather than a failure.
+   */
+  TWO_FACTOR_REQUIRED: 'TWO_FACTOR_REQUIRED',
+  /** Wrong, expired, or already used — one code for all three. */
+  INVALID_TWO_FACTOR_CODE: 'INVALID_TWO_FACTOR_CODE',
+  /** Setup asked for while it is already on. */
+  TWO_FACTOR_ALREADY_ENABLED: 'TWO_FACTOR_ALREADY_ENABLED',
+  /** Enable called before setup minted a secret. */
+  TWO_FACTOR_SETUP_NOT_STARTED: 'TWO_FACTOR_SETUP_NOT_STARTED',
 } as const
 
 export type AuthErrorCode =

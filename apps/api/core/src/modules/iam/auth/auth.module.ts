@@ -14,12 +14,18 @@ import { AuthGuard } from './auth.guard'
 import { AuthService } from './auth.service'
 import { LockoutService } from './lockout.service'
 import { MePasswordController } from './me-password.controller'
+import { MeTwoFactorController } from './me-two-factor.controller'
+import { MeController } from './me.controller'
 import { PasswordResetToken } from './password-reset-token.entity'
 import { PasswordResetService } from './password-reset.service'
 import { PasswordService } from './password.service'
+import { RecoveryCode } from './recovery-code.entity'
 import { Session } from './session.entity'
 import { SessionService } from './session.service'
 import { ACCESS_TOKEN_TTL_SECONDS, TokenService } from './token.service'
+import { TotpCredential } from './totp-credential.entity'
+import { TotpService } from './totp.service'
+import { TwoFactorService } from './two-factor.service'
 
 /**
  * Auth: sign in, sign out, refresh, and the per-request check the guard will
@@ -54,7 +60,12 @@ import { ACCESS_TOKEN_TTL_SECONDS, TokenService } from './token.service'
       }),
     }),
   ],
-  controllers: [AuthController, MePasswordController],
+  controllers: [
+    AuthController,
+    MeController,
+    MePasswordController,
+    MeTwoFactorController,
+  ],
   providers: [
     // Global from here rather than from AppModule: APP_GUARD is picked up
     // wherever it is provided, and this is the module that already has
@@ -62,12 +73,16 @@ import { ACCESS_TOKEN_TTL_SECONDS, TokenService } from './token.service'
     { provide: APP_GUARD, useClass: AuthGuard },
     provideOrgRepository(Session),
     provideOrgRepository(PasswordResetToken),
+    provideOrgRepository(TotpCredential),
+    provideOrgRepository(RecoveryCode),
     PasswordService,
     TokenService,
     SessionService,
     LockoutService,
     AuthService,
     PasswordResetService,
+    TotpService,
+    TwoFactorService,
   ],
   exports: [AuthService, TokenService],
 })

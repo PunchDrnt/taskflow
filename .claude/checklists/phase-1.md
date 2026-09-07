@@ -124,6 +124,13 @@ unique เต็ม · `views.sort_order` / `is_default`
 - [x] `/register` มีอยู่แต่ดักด้วย `FeatureService.isEnabled(org, 'public_registration')` → `false`
       · **การใช้งานจริงครั้งแรกของ `FeatureService`** ที่เขียนรอไว้ตั้งแต่ Phase 0
 
+- [x] **2FA แบบ TOTP — เปิดเอง ไม่บังคับใคร** (นอกแผนเดิม · roadmap เขียนไว้ว่า Phase หลัง + บังคับ system role)
+      · ลงครึ่งแรกก่อนเพราะ**การบังคับต้องมี system role ให้บังคับ** ซึ่ง `iam.user_roles` ยังไม่มีแถวเลยตั้งแต่ Phase 0
+      · 🔒 secret เข้ารหัส AES-256-GCM ไม่ใช่เก็บดิบ — `deploy/backup.sh` เขียน dump ลงดิสก์ กุญแจต้องไม่อยู่ใน dump
+      · 🔒 `last_used_step` กัน replay — โค้ดอันเดียวใช้ได้ทั้งหน้าต่าง 30 วิ ไม่จำ step = โดนแอบมองครั้งเดียวใช้ได้สองรอบ
+      · challenge เป็น JWT 5 นาที มี `purpose` และ**ไม่มี `sid`** — guard ปฏิเสธสองชั้น
+      · recovery code 10 อัน เก็บแต่ hash · ตัดด้วย statement เดียวแบบ session rotation
+      · **`phone` ไม่เกี่ยวกับ 2FA** — เลือก TOTP ไม่ใช่ SMS เบอร์เป็นข้อมูลโปรไฟล์ล้วนๆ
 - [x] ตาราง `iam.oauth_accounts` — migrate แล้ว ยังไม่มีใครอ่าน (แพทเทิร์นเดียวกับตาราง RBAC ตั้งแต่ Phase 0)
 
 **ตรวจก่อนปิดข้อนี้**
