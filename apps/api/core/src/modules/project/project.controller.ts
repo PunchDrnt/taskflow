@@ -14,6 +14,7 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger'
 
 import {
   addProjectMemberSchema,
+  assignableQuerySchema,
   changeProjectMemberRoleSchema,
   createProjectSchema,
   listProjectsQuerySchema,
@@ -21,6 +22,7 @@ import {
   projectMemberUserIdSchema,
   updateProjectSchema,
   type AddProjectMemberInput,
+  type AssignableQuery,
   type ChangeProjectMemberRoleInput,
   type CreateProjectInput,
   type ListProjectsQuery,
@@ -32,6 +34,7 @@ import { ZodValidationPipe } from '#shared/http/zod-validation.pipe'
 import { UserService } from '../iam/user/user.service'
 import {
   ProjectMemberService,
+  type AssignableUser,
   type ProjectMemberRow,
 } from './project-member.service'
 import { ProjectService, type ProjectView } from './project.service'
@@ -171,6 +174,23 @@ export class ProjectController {
         avatarUrl: person?.avatarUrl ?? null,
       }
     })
+  }
+
+  /**
+   * The assignee picker's list, one tier at a time.
+   *
+   * `scope=project` is the default and nearly always the answer;
+   * `scope=org` is what the picker's "search the whole organisation" button
+   * asks for, and it marks who is already in the project so the client knows
+   * which picks will need a confirmation first.
+   */
+  @Get(':id/assignable')
+  @ApiOperation({ summary: 'People this project can assign work to' })
+  listAssignable(
+    @Param('id', new ZodValidationPipe(projectIdSchema)) id: string,
+    @Query(new ZodValidationPipe(assignableQuerySchema)) query: AssignableQuery,
+  ): Promise<AssignableUser[]> {
+    return this.members.assignable(id, query)
   }
 
   @Post(':id/members')

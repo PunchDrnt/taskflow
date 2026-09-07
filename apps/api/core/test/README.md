@@ -55,22 +55,23 @@ each other's data and fail in ways that depend on timing.
 
 ## What lives here
 
-| File                          | Covers                                                               |
-| ----------------------------- | -------------------------------------------------------------------- |
-| `database.ts`                 | Helper: connect to the test database with migrations applied         |
-| `org-isolation.spec.ts`       | 🔒 A query made for org A must never return org B's rows             |
-| `schema-drift.spec.ts`        | Entities still describe the schema the migrations built              |
-| `schema-invariants.spec.ts`   | Facts the schema and the code both rely on, and must agree about     |
-| `retention.spec.ts`           | The maintenance jobs — purge order, anonymisation, the partition job |
-| `cascade-soft-delete.spec.ts` | What TypeORM hides on its own, and that an aggregate goes down whole |
-| `audit.spec.ts`               | 🔒 The activity log commits and rolls back with what it describes    |
-| `outbox.spec.ts`              | Notification queue and delivery: retries, backoff, giving up         |
-| `storage.spec.ts`             | The bucket is private: presigned URLs work, plain ones get 403       |
-| `sentry.spec.ts`              | Unhandled errors are reported; an `HttpException` is not             |
-| `auth.spec.ts`                | 🔒 Login, lockout, and refresh rotation that cannot be raced         |
-| `account.spec.ts`             | Profile, password change, and the reset link's single use            |
-| `two-factor.spec.ts`          | TOTP enrolment, replay of a used step, recovery codes                |
-| `organization.spec.ts`        | 🔒 An organisation never ends up without an owner                    |
-| `project.spec.ts`             | Who may start a project, and that one arrives able to hold work      |
-| `status.spec.ts`              | 🔒 A project always keeps a status, and one that counts as finished  |
-| `docs-links.spec.ts`          | Every link in `.claude/docs` points at something that exists         |
+| File                          | Covers                                                                |
+| ----------------------------- | --------------------------------------------------------------------- |
+| `database.ts`                 | Helper: connect to the test database with migrations applied          |
+| `org-isolation.spec.ts`       | 🔒 A query made for org A must never return org B's rows              |
+| `schema-drift.spec.ts`        | Entities still describe the schema the migrations built               |
+| `schema-invariants.spec.ts`   | Facts the schema and the code both rely on, and must agree about      |
+| `retention.spec.ts`           | The maintenance jobs — purge order, anonymisation, the partition job  |
+| `cascade-soft-delete.spec.ts` | What TypeORM hides on its own, and that an aggregate goes down whole  |
+| `audit.spec.ts`               | 🔒 The activity log commits and rolls back with what it describes     |
+| `outbox.spec.ts`              | Notification queue and delivery: retries, backoff, giving up          |
+| `storage.spec.ts`             | The bucket is private: presigned URLs work, plain ones get 403        |
+| `sentry.spec.ts`              | Unhandled errors are reported; an `HttpException` is not              |
+| `auth.spec.ts`                | 🔒 Login, lockout, and refresh rotation that cannot be raced          |
+| `account.spec.ts`             | Profile, password change, and the reset link's single use             |
+| `two-factor.spec.ts`          | TOTP enrolment, replay of a used step, recovery codes                 |
+| `organization.spec.ts`        | 🔒 An organisation never ends up without an owner                     |
+| `project.spec.ts`             | Who may start a project, and that one arrives able to hold work       |
+| `status.spec.ts`              | 🔒 A project always keeps a status, and one that counts as finished   |
+| `task.spec.ts`                | 🔒 A task number is never reissued, and completion follows the status |
+| `docs-links.spec.ts`          | Every link in `.claude/docs` points at something that exists          |

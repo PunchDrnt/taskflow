@@ -70,3 +70,27 @@ export function actorFromContext(): Actor {
 
   return { userId, orgId, orgRole }
 }
+
+/**
+ * The caller as the permission rules should see them for one project.
+ *
+ * `projectRoles` holds that project alone. Loading every project a person is
+ * in to answer a question about one of them would be the double load the
+ * `@RequirePermission` decorator refuses to do in a guard — and a map with
+ * other ids in it invites a rule to match the wrong one.
+ *
+ * Here rather than beside the service that first needed it, because tasks ask
+ * the same question about their project and the two answers must not drift:
+ * one of them building the actor slightly differently is a check that passes
+ * for the wrong person and looks exactly like one that passed correctly.
+ */
+export function actorForProject(
+  role: ScopedRole | null,
+  projectId: string,
+): Actor {
+  const actor = actorFromContext()
+
+  return role === null
+    ? actor
+    : { ...actor, projectRoles: { [projectId]: role } }
+}

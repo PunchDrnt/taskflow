@@ -11,6 +11,8 @@ import { SYSTEM_USER_ID } from '#shared/system-user'
 
 import { AuditService } from '../src/modules/audit/audit.service'
 import { AuditLog } from '../src/modules/audit/log.entity'
+import { User } from '../src/modules/iam/user/user.entity'
+import { UserService } from '../src/modules/iam/user/user.service'
 import { OrganizationMember } from '../src/modules/organization/member.entity'
 import { MemberService } from '../src/modules/organization/member.service'
 import { ProjectMember } from '../src/modules/project/project-member.entity'
@@ -159,6 +161,7 @@ describe.skipIf(!hasTestDatabase)('project', () => {
         permissions,
         audit,
       ),
+      new UserService(createOrgScopedRepository(dataSource, User)),
       audit,
     )
 

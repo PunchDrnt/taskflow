@@ -299,27 +299,39 @@ unique เต็ม · `views.sort_order` / `is_default`
 
 ## 6. Task
 
-- [ ] CRUD — Title · Description · Due date · Priority
+- [x] CRUD — Title · Description · Due date · Priority
       · priority สี่ระดับจาก `TASK_PRIORITIES` ใน `@repo/shared` · **ไม่มี CHECK ใน DB**
         ไม่มี index ไหนอ่านค่านี้ zod เป็นคนกัน
-- [ ] **Quick add — เฉพาะในหน้า project** พิมพ์ชื่อ + Enter จบ ไม่บังคับ field อื่น
+      · `due_date` บังคับมี offset (`z.iso.datetime({ offset: true })`) — ไม่มี offset = เที่ยงคืน UTC
+        ซึ่งเร็วกว่ากรุงเทพ 7 ชม. งานเลยกำหนดตั้งแต่เย็นวันก่อน
+      · **project ที่ archive แล้วเขียนไม่ได้** 409 `PROJECT_ARCHIVED` — ตัดสินตอนทำ §6
+- [x] **Quick add — เฉพาะในหน้า project** พิมพ์ชื่อ + Enter จบ ไม่บังคับ field อื่น ⏳ หน้าจอยังไม่มี
+      · API พร้อมแล้ว: `POST /v1/projects/:id/tasks` รับแค่ `{ title }` · status มาจาก `is_default` ของ project
       · My Tasks ไม่มี quick add · ถ้าเพิ่มทีหลังใช้ `localStorage` จำ project ล่าสุด **ไม่ต้องมีตาราง user preference**
       · 🟡 ใน roadmap แต่**ตัดไม่ได้** — quick add คือสิ่งที่ทำให้คนกลับมาใช้
-- [ ] 🔒 **Task number + key** — `tasks.number` แจกจาก `projects.next_task_number` ที่เดินหน้าอย่างเดียว
+- [x] 🔒 **Task number + key** — `tasks.number` แจกจาก `projects.next_task_number` ที่เดินหน้าอย่างเดียว
       · **ห้ามใช้ `MAX(number)+1`** — ลบงานบนสุดแล้วเลขถูกแจกซ้ำทันที
       · unique `(project_id, number)` เป็น **index เต็ม ไม่ใช่ partial** — ข้อยกเว้นเดียวของกฎ soft delete
       · key ประกอบตอนแสดงผล (`key_prefix` + `number`) ไม่เก็บสตริงสำเร็จรูป · sub-task มีเลขของตัวเอง
-      · ✅ คอลัมน์ + index ลงแล้ว เหลือตัวแจกเลขในทรานแซกชันเดียวกับการสร้าง task
-- [ ] Assign ได้หลายคน (เฉพาะ user — ทีมอยู่ Phase 2)
-- [ ] จัดลำดับเอง (LexoRank)
-- [ ] 🔒 **`completed_at` / `completed_by` สอดคล้องกับ `is_done_type` เสมอ — คุมสองทาง**
-  - [ ] ทาง A: task เปลี่ยน status → ตั้งค่า/reset เป็น null
+      · ✅ คอลัมน์ + index ลงแล้ว · ✅ `ProjectService.allocateTaskNumber` แจกด้วย
+        `UPDATE ... RETURNING` ในทรานแซกชันเดียวกับการ insert — สองคนสร้างพร้อมกัน serialise ที่แถว project
+- [x] Assign ได้หลายคน (เฉพาะ user — ทีมอยู่ Phase 2)
+      · assign คนนอก project → 409 `NOT_PROJECT_MEMBER` แล้ว client ยิงซ้ำด้วย `addToProject: true`
+        (การยืนยันเป็น request ที่สอง ไม่ใช่การเขียนที่ซ่อนอยู่) · ดึงคนเข้า project เป็นสิทธิ์ project admin
+      · อีเมลแจ้งคนที่ถูก assign อยู่ §8 ยังไม่ลง
+- [x] จัดลำดับเอง (LexoRank) — API รับ `afterId` ไม่ใช่ sort key · เพื่อนบ้านคิด**ในคอลัมน์** ไม่ใช่ทั้ง project
+- [x] 🔒 **`completed_at` / `completed_by` สอดคล้องกับ `is_done_type` เสมอ — คุมสองทาง**
+  - [x] ทาง A: task เปลี่ยน status → ตั้งค่า/reset เป็น null · `TaskService.update`
+        · done อันหนึ่ง → done อีกอันไม่ใช่การปิดครั้งที่สอง เก็บวันเดิม
+        · สร้าง task ลงใน done ตรงๆ ก็นับว่าเสร็จทันที (quick add ในคอลัมน์ Done)
   - [x] ทาง B: **มีคนแก้ `is_done_type` ของ status ที่มี task ใช้อยู่แล้ว** ← ทางนี้ลืมง่ายกว่ามาก เพราะคนแก้กำลังมองหน้าจอตั้งค่า project ไม่ได้มองงานสักใบ
         · ลงไปพร้อม §5 เพราะจุดที่ trigger คือ endpoint แก้ status · `TaskService.reconcileCompletion(manager, statusId, counted)`
         · แตะเฉพาะแถวที่ค่าไม่ตรงจริงๆ — งานที่เสร็จอยู่แล้วเก็บวันเดิมไว้ และรันซ้ำไม่เปลี่ยนอะไร
         · `completed_by` ลงชื่อคนที่แก้ status เพราะเขาคือคนที่ทำให้มันเกิด · สองคอลัมน์ขยับพร้อมกันตาม `tasks_completed_pair_check`
   - [x] `CHECK` ทำแทนไม่ได้ เงื่อนไขข้ามตาราง (`tasks` ↔ `statuses`) — ยืนยันแล้วตอนทำทาง B
 - [ ] **Assignee picker** — type-ahead ค้นได้ทั้งชื่อจริง / ชื่อเล่น / อีเมล ไม่ใช่ dropdown รายชื่อยาว
+      ⏳ หน้าจอยังไม่มี · API ลงแล้ว: `GET /v1/projects/:id/assignable?scope=project|org&q=`
+        ค้นชื่อจริง/ชื่อเล่น/อีเมล/username · แต่ละแถวบอก `inProject` ให้ client รู้ว่าต้องถามยืนยันไหม
       · เรียงสองชั้นพอ: **คนใน project → ที่เหลือทั้ง org** · ชั้น "คนที่เพิ่ง assign ล่าสุด"
         ที่สเปกเดิมมี **ตัดออกแล้ว** — เป็น query ที่แพงที่สุดในหน้าจอที่เปิดบ่อยที่สุด
         เพื่อจัดลำดับที่ชั้นแรกตอบได้อยู่แล้วเกือบทุกครั้ง

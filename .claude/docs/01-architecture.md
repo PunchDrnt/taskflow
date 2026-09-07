@@ -424,6 +424,33 @@ admin ดูแลคนใน org ได้ แต่จัดการตั�
 ซึ่งคือสิ่งที่กติกา "member เห็นเฉพาะที่ตัวเองอยู่" ปิดไว้พอดี · เส้นแบ่ง:
 **มองไม่เห็น = 404 · เห็นแต่ทำไม่ได้ = 403** (คนที่อยู่ใน project แล้วเปลี่ยนชื่อไม่ได้ ต้องได้คำตอบตรงๆ ไม่ใช่ 404 ที่อ่านเหมือนบั๊ก)
 
+#### task กั้นที่ไหน — สิทธิ์อยู่บน project ไม่ได้อยู่บนแถว
+
+`ability.ts` ให้สิทธิ์ `Task` **ต่อ `projectId`** ไม่ใช่ต่อ task ฉะนั้นทุกเมธอดของ `TaskService`
+เริ่มที่ project เสมอ: เห็น project ไหม (404) แล้วค่อยทำสิ่งนี้ได้ไหม (403) — [เส้นแบ่งเดียวกับข้างบน](#project-role-เห็นอะไร-และกั้นที่ไหน) ต่ำลงมาอีกชั้น
+
+| ใคร | task ในนั้น |
+| --- | --- |
+| org `owner` / `admin` | ทุกอย่าง |
+| project `admin` | ทุกอย่าง รวมลบ |
+| project `member` | อ่าน · สร้าง · แก้ · assign — **ลบไม่ได้** |
+| org `member` ที่ไม่ได้อยู่ project | ไม่เห็นเลย (404) |
+
+**project ที่ archive แล้วเป็น read-only** — เขียนอะไรก็ได้ 409 `PROJECT_ARCHIVED` อ่านได้ตามเดิม
+([เหตุผล](./04-features/phase-1.md#task))
+
+**🔒 `next_task_number` แจกใน `UPDATE ... RETURNING` ของทรานแซกชันที่สร้าง task**
+(`ProjectService.allocateTaskNumber`) — สองคนสร้างพร้อมกันจะ serialise ที่แถว project เอง
+คนที่สองอ่านค่าที่คนแรก commit แล้ว · `SELECT` แล้วค่อย `UPDATE` คือ race แบบเดียวกับ
+`SessionService.rotate` และ `MemberService.changeRole` และตรงนี้จะไปพังที่ unique index
+`tasks_project_number_unique` ซึ่งเป็น **index เต็ม** ไม่ใช่ partial
+
+**`project/` กับ `task/` ไม่ import กัน** — `TaskModule` → `ProjectModule` ทางเดียว
+ส่วนสิ่งเดียวที่ project ต้องรู้เรื่อง task (มีงานกี่ใบใน status นี้ · sync `completed_at` ตอน
+`is_done_type` เปลี่ยน) แยกเป็น `TasksInStatusModule` ที่ไม่ขึ้นกับใคร · แพทเทิร์นเดียวกับ
+`AuthCookiesModule` — cycle ที่ `forwardRef` แก้ได้ก็ยังเป็น cycle ถ้ามีใบไม้ให้ตัดออก
+
+
 **คนที่มี system role ไม่ได้เป็นสมาชิก org โดยอัตโนมัติ** — เข้าถึงข้อมูล org ผ่าน permission ระดับ system หรือ impersonate เท่านั้น ห้ามแอบใส่ตัวเองเข้า `organization.members`
 
 **กติกาที่ต้องบังคับ**
@@ -668,6 +695,14 @@ generateKeyBetween('a0', 'a1') // 'a0V' — แทรกกลาง
 **เรียกผ่าน [`#shared/sort-order`](../../apps/api/core/src/shared/sort-order.ts) ไม่ใช่ import library ตรงๆ** —
 ที่เดียวที่ผูก "alphabet ของ library" เข้ากับ "`COLLATE "C"` ของคอลัมน์" ไว้เป็นลายลักษณ์อักษร
 และเป็นที่ที่ดักเคส bound สลับข้างข้างบน · `between(before, after)` กับ `sequence(n)`
+
+**API รับ `afterId` ไม่ใช่ sort key** — ทั้ง status และ task · key เป็นเลขคณิตที่ถูกต้องก็ต่อเมื่ออ่าน
+neighbour ปัจจุบัน client ที่คำนวณจากลิสต์เก่าจะเขียนแถวลงผิดที่โดยไม่มีอะไรฟ้อง (ดูเคส bound สลับข้างข้างบน)
+· สิ่งที่ client รู้จริงคือ "ให้อยู่ต่อจากอันไหน"
+
+**ของ task คิดเพื่อนบ้าน "ในคอลัมน์" ไม่ใช่ทั้ง project** — key มีอันเดียวต่อ task แต่คนลากการ์ดกำลังมอง
+คอลัมน์เดียว · คิดจากเพื่อนบ้านทั้ง project จะแทรกระหว่างสองแถวที่ board ไม่เคยวางไว้ติดกัน
+แล้วการ์ดไปตกคนละที่กับที่ปล่อยมือ · เปลี่ยน status โดยไม่ส่ง `afterId` → ต่อท้ายคอลัมน์ใหม่
 
 #### Soft Delete
 

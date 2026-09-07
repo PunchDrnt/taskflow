@@ -16,7 +16,7 @@ import { ProjectService } from '../src/modules/project/project.service'
 import { Status } from '../src/modules/project/status.entity'
 import { StatusService } from '../src/modules/project/status.service'
 import { Task } from '../src/modules/task/task.entity'
-import { TaskService } from '../src/modules/task/task.service'
+import { TasksInStatusService } from '../src/modules/task/tasks-in-status.service'
 import { PermissionService } from '../src/permission/permission.service'
 import { createMigratedTestDataSource, hasTestDatabase } from './database'
 
@@ -117,7 +117,7 @@ describe.skipIf(!hasTestDatabase)('project statuses', () => {
       createOrgScopedRepository(dataSource, Status),
       dataSource,
       projects,
-      new TaskService(createOrgScopedRepository(dataSource, Task)),
+      new TasksInStatusService(createOrgScopedRepository(dataSource, Task)),
       audit,
     )
 

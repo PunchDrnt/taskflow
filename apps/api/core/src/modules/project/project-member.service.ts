@@ -2,7 +2,11 @@ import { Injectable } from '@nestjs/common'
 import { InjectDataSource } from '@nestjs/typeorm'
 import { DataSource, QueryFailedError } from 'typeorm'
 
-import { PROJECT_ERROR_CODES, type ScopedRole } from '@repo/shared'
+import {
+  PROJECT_ERROR_CODES,
+  type AssignableQuery,
+  type ScopedRole,
+} from '@repo/shared'
 
 import { ApiException } from '#shared/http/api-exception'
 import { InjectOrgRepository } from '#shared/org-scope/org-repository.provider'
@@ -10,6 +14,7 @@ import { OrgScopedRepository } from '#shared/org-scope/org-scoped.repository'
 import { requireOrgContext } from '#shared/org-scope/request-context'
 
 import { AuditService } from '../audit/audit.service'
+import { UserService } from '../iam/user/user.service'
 import { MemberService } from '../organization/member.service'
 import { ProjectMember } from './project-member.entity'
 import { ProjectService } from './project.service'
@@ -22,7 +27,21 @@ export interface ProjectMemberRow {
   joinedAt: Date
 }
 
+/** One person the assignee picker may offer. */
+export interface AssignableUser {
+  userId: string
+  name: string
+  nickname: string
+  email: string
+  avatarUrl: string | null
+  /** False means picking them will ask to add them to the project first. */
+  inProject: boolean
+}
+
 const UNIQUE_VIOLATION = '23505'
+
+/** How many rows the picker shows before asking the person to type more. */
+const ASSIGNABLE_LIMIT = 20
 
 /**
  * Who is in a project. Independent of teams — somebody joins a project the way
@@ -47,6 +66,7 @@ export class ProjectMemberService {
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly projects: ProjectService,
     private readonly orgMembers: MemberService,
+    private readonly users: UserService,
     private readonly audit: AuditService,
   ) {}
 
@@ -195,6 +215,71 @@ export class ProjectMemberService {
         orgId: this.members.orgId,
       })
     })
+  }
+
+  /**
+   * Who this project can hand work to, for the assignee picker.
+   *
+   * Two tiers, queried one at a time: `project` — nearly always the answer —
+   * and `org` behind the picker's "search the whole organisation" button. The
+   * middle tier the original specification had, "people you assigned
+   * recently", was cut in the docs before this was written: it is the most
+   * expensive query on the most frequently opened screen, spent reordering
+   * something the first tier already answers.
+   *
+   * **Names come from `UserService`, never from a join** — `iam.users` is not
+   * this module's table, and it has no `org_id` to scope by. The consequence
+   * is that `q` is matched in memory rather than in SQL, over the people in
+   * one organisation: a hundred rows here, a few thousand in the largest
+   * customer this design is aimed at. When that stops being true the fix is a
+   * search endpoint on `iam`, not a cross-schema join here.
+   *
+   * Nickname is searched alongside the real name because Thai colleagues go by
+   * it — a picker that only matched `name` would fail to find the person by
+   * the only thing anybody calls them.
+   */
+  async assignable(
+    projectId: string,
+    query: AssignableQuery,
+  ): Promise<AssignableUser[]> {
+    await this.projects.findVisible(projectId)
+
+    const inProject = new Set(
+      (await this.list(projectId)).map((member) => member.userId),
+    )
+
+    const candidates =
+      query.scope === 'project'
+        ? [...inProject]
+        : (await this.orgMembers.list()).map((member) => member.userId)
+
+    const people = await this.users.findByIds(candidates)
+    const needle = query.q?.toLowerCase() ?? ''
+
+    return people
+      .filter(
+        (person) =>
+          needle === '' ||
+          [person.name, person.nickname, person.email, person.username].some(
+            (field) => field.toLowerCase().includes(needle),
+          ),
+      )
+      .sort(
+        (a, b) =>
+          // People already in the project first, then alphabetically — the
+          // two tiers, in one list, for the `org` scope that mixes them.
+          Number(inProject.has(b.id)) - Number(inProject.has(a.id)) ||
+          a.name.localeCompare(b.name),
+      )
+      .slice(0, ASSIGNABLE_LIMIT)
+      .map((person) => ({
+        userId: person.id,
+        name: person.name,
+        nickname: person.nickname,
+        email: person.email,
+        avatarUrl: person.avatarUrl,
+        inProject: inProject.has(person.id),
+      }))
   }
 
   /** The membership row, scoped to this org by the repository. */

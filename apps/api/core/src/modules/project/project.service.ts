@@ -18,7 +18,7 @@ import { requireOrgContext } from '#shared/org-scope/request-context'
 import { sequence } from '#shared/sort-order'
 
 import type { Action } from '../../permission/ability'
-import { actorFromContext, type Actor } from '../../permission/actor'
+import { actorForProject, actorFromContext } from '../../permission/actor'
 import { PermissionService } from '../../permission/permission.service'
 import { AuditService } from '../audit/audit.service'
 import { changesBetween } from '../audit/changes'
@@ -163,7 +163,11 @@ export class ProjectService {
     // Asked of the rules rather than re-derived: the actor carries this
     // project's role and nothing else, so a conditional rule can only match
     // the project actually being asked about.
-    if (!this.permissions.can(actorFor(role, id), 'read', 'Project', { id })) {
+    if (
+      !this.permissions.can(actorForProject(role, id), 'read', 'Project', {
+        id,
+      })
+    ) {
       throw notFound()
     }
 
@@ -191,9 +195,14 @@ export class ProjectService {
   async requireProject(id: string, action: Action): Promise<VisibleProject> {
     const visible = await this.findVisible(id)
 
-    this.permissions.assert(actorFor(visible.role, id), action, 'Project', {
-      id,
-    })
+    this.permissions.assert(
+      actorForProject(visible.role, id),
+      action,
+      'Project',
+      {
+        id,
+      },
+    )
 
     return visible
   }
@@ -394,6 +403,58 @@ export class ProjectService {
     })
   }
 
+  /**
+   * Hands out the next task number for a project, in the caller's transaction.
+   *
+   * 🔒 **A counter on the project row, incremented in the statement that reads
+   * it — never `MAX(number) + 1`.** The two differ the moment a task is
+   * deleted: `MAX + 1` reissues the top number immediately, and a number that
+   * comes back is worse than a broken link. People paste `DEV-87` into chat
+   * and into commit messages; the day that key resolves to a different piece
+   * of work, every one of those references is quietly wrong, and there is
+   * nothing in the data to notice it by. `tasks_project_number_unique` is a
+   * *full* index rather than the partial one every other soft-deleted table
+   * gets, for the same reason and pointing the same way: a deleted task keeps
+   * its number forever.
+   *
+   * Returning the pre-increment value from the `UPDATE` itself is what makes
+   * it safe under concurrency. Two people filing a task in the same project at
+   * the same moment serialise on this row — the second blocks until the first
+   * commits, then reads what the first left — so neither can be handed a
+   * number the other already took. A `SELECT` followed by an `UPDATE` would be
+   * the read-then-write race `MemberService.changeRole` and
+   * `SessionService.rotate` both avoid, and here it would fail loudly, on the
+   * unique index, in whichever request lost.
+   *
+   * The lock is held for the rest of the create, which serialises task
+   * creation per project. That is the cost of the guarantee and it is small:
+   * the transaction is one insert long, and the contention is per project
+   * rather than per organisation.
+   *
+   * The caller must have established that they may touch the project — this
+   * takes an id, not a permission.
+   */
+  async allocateTaskNumber(
+    manager: EntityManager,
+    projectId: string,
+  ): Promise<number> {
+    // TypeORM's postgres driver returns `[rows, affected]` for an UPDATE, even
+    // one with RETURNING — the rows are the first element, not the result.
+    const [rows] = (await manager.query(
+      `UPDATE project.projects
+          SET next_task_number = next_task_number + 1
+        WHERE id = $1 AND org_id = $2 AND deleted_at IS NULL
+        RETURNING next_task_number - 1 AS number`,
+      [projectId, this.projects.orgId],
+    )) as [{ number: number }[], number]
+
+    const allocated = rows[0]?.number
+
+    if (allocated === undefined) throw notFound()
+
+    return allocated
+  }
+
   /** The row, or a 409 if the name is taken — separated to keep create readable. */
   private async insertProject(
     manager: EntityManager,
@@ -421,22 +482,6 @@ export class ProjectService {
       throw nameClash(error, input.name)
     }
   }
-}
-
-/**
- * The caller as the permission rules should see them for one project.
- *
- * `projectRoles` holds that project alone. Loading every project a person is
- * in to answer a question about one of them would be the double load the
- * `@RequirePermission` decorator refuses to do in a guard — and a map with
- * other ids in it invites a rule to match the wrong one.
- */
-function actorFor(role: ScopedRole | null, projectId: string): Actor {
-  const actor = actorFromContext()
-
-  return role === null
-    ? actor
-    : { ...actor, projectRoles: { [projectId]: role } }
 }
 
 function notFound(): ApiException {
