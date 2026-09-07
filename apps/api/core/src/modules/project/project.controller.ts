@@ -31,6 +31,7 @@ import {
   type UpdateProjectInput,
 } from '@repo/shared'
 
+import { ApiZodBody, ApiZodQuery } from '#shared/http/api-zod'
 import { ZodValidationPipe } from '#shared/http/zod-validation.pipe'
 
 import { UserService } from '../iam/user/user.service'
@@ -79,6 +80,7 @@ export class ProjectController {
    */
   @Get()
   @ApiOperation({ summary: 'The projects this caller may see' })
+  @ApiZodQuery(listProjectsQuerySchema)
   list(
     @Query(new ZodValidationPipe(listProjectsQuerySchema))
     query: ListProjectsQuery,
@@ -98,6 +100,7 @@ export class ProjectController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a project, with its starting statuses' })
+  @ApiZodBody(createProjectSchema)
   create(
     @Body(new ZodValidationPipe(createProjectSchema))
     body: CreateProjectInput,
@@ -107,6 +110,7 @@ export class ProjectController {
 
   @Patch(':id')
   @ApiOperation({ summary: 'Rename a project, or change its colour or prefix' })
+  @ApiZodBody(updateProjectSchema)
   update(
     @Param('id', new ZodValidationPipe(projectIdSchema)) id: string,
     @Body(new ZodValidationPipe(updateProjectSchema))
@@ -190,6 +194,7 @@ export class ProjectController {
    */
   @Get(':id/assignable')
   @ApiOperation({ summary: 'People this project can assign work to' })
+  @ApiZodQuery(assignableQuerySchema)
   listAssignable(
     @Param('id', new ZodValidationPipe(projectIdSchema)) id: string,
     @Query(new ZodValidationPipe(assignableQuerySchema)) query: AssignableQuery,
@@ -200,6 +205,7 @@ export class ProjectController {
   @Post(':id/members')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Add somebody in this organisation to the project' })
+  @ApiZodBody(addProjectMemberSchema)
   addMember(
     @Param('id', new ZodValidationPipe(projectIdSchema)) id: string,
     @Body(new ZodValidationPipe(addProjectMemberSchema))
@@ -210,6 +216,7 @@ export class ProjectController {
 
   @Patch(':id/members/:userId')
   @ApiOperation({ summary: "Change somebody's role in this project" })
+  @ApiZodBody(changeProjectMemberRoleSchema)
   changeMemberRole(
     @Param('id', new ZodValidationPipe(projectIdSchema)) id: string,
     @Param('userId', new ZodValidationPipe(projectMemberUserIdSchema))

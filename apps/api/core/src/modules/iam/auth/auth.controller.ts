@@ -25,6 +25,7 @@ import {
 } from '@repo/shared'
 
 import { ApiException } from '#shared/http/api-exception'
+import { ApiZodBody } from '#shared/http/api-zod'
 import { Public } from '#shared/http/route-metadata'
 import { ZodValidationPipe } from '#shared/http/zod-validation.pipe'
 
@@ -69,6 +70,7 @@ export class AuthController {
   @Public()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Sign in with an email or username, and password' })
+  @ApiZodBody(loginSchema)
   async login(
     @Body(new ZodValidationPipe(loginSchema)) body: LoginInput,
     @Req() request: Request,
@@ -105,6 +107,7 @@ export class AuthController {
   @Public()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Finish signing in with a code from the app' })
+  @ApiZodBody(twoFactorLoginSchema)
   async loginTwoFactor(
     @Body(new ZodValidationPipe(twoFactorLoginSchema))
     body: TwoFactorLoginInput,
@@ -238,6 +241,7 @@ export class AuthController {
   @Public()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create an account, if sign-up is enabled' })
+  @ApiZodBody(registerSchema)
   async register(
     @Body(new ZodValidationPipe(registerSchema)) body: RegisterInput,
   ): Promise<{ id: string }> {
@@ -267,6 +271,7 @@ export class AuthController {
   @ApiOperation({
     summary: 'Send a password reset link, if the address exists',
   })
+  @ApiZodBody(forgotPasswordSchema)
   async forgotPassword(
     @Body(new ZodValidationPipe(forgotPasswordSchema))
     body: ForgotPasswordInput,
@@ -288,6 +293,7 @@ export class AuthController {
   @Public()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Set a new password using an emailed link' })
+  @ApiZodBody(resetPasswordSchema)
   async resetPassword(
     @Body(new ZodValidationPipe(resetPasswordSchema)) body: ResetPasswordInput,
     @Res({ passthrough: true }) response: Response,

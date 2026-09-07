@@ -3,6 +3,7 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger'
 
 import { changePasswordSchema, type ChangePasswordInput } from '@repo/shared'
 
+import { ApiZodBody } from '#shared/http/api-zod'
 import { SkipOrgScope } from '#shared/http/route-metadata'
 import { ZodValidationPipe } from '#shared/http/zod-validation.pipe'
 import { requireRequestContext } from '#shared/org-scope/request-context'
@@ -32,6 +33,7 @@ export class MePasswordController {
   @SkipOrgScope()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Change your password and sign other devices out' })
+  @ApiZodBody(changePasswordSchema)
   async changePassword(
     @Body(new ZodValidationPipe(changePasswordSchema))
     body: ChangePasswordInput,

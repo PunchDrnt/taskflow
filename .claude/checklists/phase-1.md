@@ -419,7 +419,12 @@ unique เต็ม · `views.sort_order` / `is_default`
 - [x] **ทุก list ห่อ `{ data, meta }` เหมือนกันหมด** แม้ตัวที่ไม่มีวันแบ่งหน้า (`wholeList()` ใน `@repo/shared`)
       · client ที่ต้องจำว่า endpoint ไหนห่อไม่ห่อ คือ client ที่จำผิดในวันที่ endpoint นั้นเปลี่ยนไปแบ่งหน้า
       · แก้ย้อนของ §3-§5 ที่คืน array เปล่าไปแล้วด้วย
-- [ ] Swagger ครบทุก endpoint — `/docs` เป็นของที่คนอื่นในทีมใช้จริงแล้ว phase นี้
+- [x] Swagger ครบทุก endpoint — `/docs` เป็นของที่คนอื่นในทีมใช้จริงแล้ว phase นี้
+      · ทุก route มี `@ApiOperation` · **และมี body/query schema ด้วย** ผ่าน `@ApiZodBody` / `@ApiZodQuery`
+        ซึ่งแปลง zod schema ตัวเดียวกับที่ `ZodValidationPipe` บังคับ — doc กับ validation แยกกันเพี้ยนไม่ได้
+      · ใช้ `z.toJSONSchema()` ที่ zod 4 มีมาให้ **ไม่เพิ่ม dependency**
+      · ⚠️ `io: 'input'` — สิ่งที่ caller ส่ง ไม่ใช่สิ่งที่ service ได้รับ · `dueDate` เป็น string ขาเข้า
+        เป็น `Date` หลัง parse · ถ้า doc เป็น `Date` = บอกให้ทุกคนส่งผิด
 - [x] zod schema ที่ใช้ร่วมสองฝั่งอยู่ใน `@repo/shared` — อย่า duplicate ฝั่ง web
 
 ---

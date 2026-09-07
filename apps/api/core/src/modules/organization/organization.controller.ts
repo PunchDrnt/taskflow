@@ -23,6 +23,7 @@ import {
   type UpdateOrganizationInput,
 } from '@repo/shared'
 
+import { ApiZodBody } from '#shared/http/api-zod'
 import { SkipOrgScope } from '#shared/http/route-metadata'
 import { ZodValidationPipe } from '#shared/http/zod-validation.pipe'
 
@@ -83,6 +84,7 @@ export class OrganizationController {
   @Patch()
   @RequirePermission('update', 'Organization')
   @ApiOperation({ summary: 'Rename the organisation, or change its slug' })
+  @ApiZodBody(updateOrganizationSchema)
   update(
     @Body(new ZodValidationPipe(updateOrganizationSchema))
     body: UpdateOrganizationInput,
@@ -101,6 +103,7 @@ export class OrganizationController {
   @SkipOrgScope()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create an organisation, owned by its creator' })
+  @ApiZodBody(createOrganizationSchema)
   create(
     @Body(new ZodValidationPipe(createOrganizationSchema))
     body: CreateOrganizationInput,
@@ -146,6 +149,7 @@ export class OrganizationController {
    */
   @Patch('members/:userId')
   @ApiOperation({ summary: "Change somebody's role in this organisation" })
+  @ApiZodBody(changeMemberRoleSchema)
   changeMemberRole(
     @Param('userId', new ZodValidationPipe(memberUserIdSchema)) userId: string,
     @Body(new ZodValidationPipe(changeMemberRoleSchema))

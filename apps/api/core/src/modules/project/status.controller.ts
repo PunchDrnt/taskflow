@@ -22,6 +22,7 @@ import {
   type UpdateStatusInput,
 } from '@repo/shared'
 
+import { ApiZodBody } from '#shared/http/api-zod'
 import { ZodValidationPipe } from '#shared/http/zod-validation.pipe'
 
 import { StatusService, type StatusView } from './status.service'
@@ -54,6 +55,7 @@ export class StatusController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Add a status to the end of the board' })
+  @ApiZodBody(createStatusSchema)
   create(
     @Param('projectId', new ZodValidationPipe(projectIdSchema))
     projectId: string,
@@ -73,6 +75,7 @@ export class StatusController {
    */
   @Patch(':statusId')
   @ApiOperation({ summary: 'Change a status, or move it' })
+  @ApiZodBody(updateStatusSchema)
   update(
     @Param('projectId', new ZodValidationPipe(projectIdSchema))
     projectId: string,

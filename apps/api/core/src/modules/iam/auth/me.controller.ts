@@ -20,6 +20,7 @@ import {
 } from '@repo/shared'
 
 import { ApiException } from '#shared/http/api-exception'
+import { ApiZodBody } from '#shared/http/api-zod'
 import { SkipOrgScope } from '#shared/http/route-metadata'
 import { ZodValidationPipe } from '#shared/http/zod-validation.pipe'
 import { requireRequestContext } from '#shared/org-scope/request-context'
@@ -122,6 +123,7 @@ export class MeController {
   @Patch()
   @SkipOrgScope()
   @ApiOperation({ summary: 'Edit your own profile' })
+  @ApiZodBody(updateProfileSchema)
   async updateProfile(
     @Body(new ZodValidationPipe(updateProfileSchema)) body: UpdateProfileInput,
   ): Promise<Me> {
@@ -142,6 +144,7 @@ export class MeController {
   @SkipOrgScope()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Choose which organisation this session acts for' })
+  @ApiZodBody(setActiveOrgSchema)
   async setActiveOrg(
     @Body(new ZodValidationPipe(setActiveOrgSchema)) body: SetActiveOrgInput,
     @Res({ passthrough: true }) response: Response,

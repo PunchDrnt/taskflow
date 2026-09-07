@@ -19,6 +19,7 @@ import {
   type Page,
 } from '@repo/shared'
 
+import { ApiZodBody, ApiZodQuery } from '#shared/http/api-zod'
 import { ZodValidationPipe } from '#shared/http/zod-validation.pipe'
 
 import { UserService } from '../iam/user/user.service'
@@ -49,6 +50,7 @@ export class ProjectTaskController {
    */
   @Get()
   @ApiOperation({ summary: "This project's tasks, filtered and paged" })
+  @ApiZodQuery(listTasksQuerySchema)
   async list(
     @Param('projectId', new ZodValidationPipe(projectIdSchema))
     projectId: string,
@@ -63,6 +65,7 @@ export class ProjectTaskController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'File a task in this project' })
+  @ApiZodBody(createTaskSchema)
   async create(
     @Param('projectId', new ZodValidationPipe(projectIdSchema))
     projectId: string,

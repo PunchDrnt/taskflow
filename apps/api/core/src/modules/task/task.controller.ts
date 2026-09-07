@@ -25,6 +25,7 @@ import {
   type UpdateTaskInput,
 } from '@repo/shared'
 
+import { ApiZodBody, ApiZodQuery } from '#shared/http/api-zod'
 import { ZodValidationPipe } from '#shared/http/zod-validation.pipe'
 
 import { UserService } from '../iam/user/user.service'
@@ -80,6 +81,7 @@ export class TaskController {
    */
   @Get()
   @ApiOperation({ summary: 'Tasks assigned to me' })
+  @ApiZodQuery(myTasksQuerySchema)
   async mine(
     @Query(new ZodValidationPipe(myTasksQuerySchema)) query: MyTasksQuery,
   ): Promise<Page<TaskResponse>> {
@@ -105,6 +107,7 @@ export class TaskController {
    */
   @Patch(':taskId')
   @ApiOperation({ summary: 'Change a task, or move it' })
+  @ApiZodBody(updateTaskSchema)
   async update(
     @Param('taskId', new ZodValidationPipe(taskIdSchema)) taskId: string,
     @Body(new ZodValidationPipe(updateTaskSchema)) body: UpdateTaskInput,
@@ -171,6 +174,7 @@ export class TaskController {
   @Post(':taskId/assignees')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Assign somebody to this task' })
+  @ApiZodBody(assignTaskSchema)
   async assign(
     @Param('taskId', new ZodValidationPipe(taskIdSchema)) taskId: string,
     @Body(new ZodValidationPipe(assignTaskSchema)) body: AssignTaskInput,
