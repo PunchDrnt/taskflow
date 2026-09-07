@@ -48,10 +48,11 @@ function createInstance(): AxiosInstance {
 /**
  * Every cookie this request arrived with, as one header.
  *
- * All of them, not a chosen few. The refresh cookie is scoped to
- * `/api/v1/auth` so the browser would not have sent it to a page request —
- * which is exactly why the server has to pass on whatever it did get, rather
- * than assume the set.
+ * All of them, not a chosen few. Which cookies the browser attached depends on
+ * the path it was asking for, and the server's job is to pass on whatever
+ * actually arrived rather than to assume a set — a request that turns out not
+ * to carry the refresh token should fail as a session that cannot be renewed,
+ * not as a header assembled from a guess.
  */
 async function currentCookieHeader(): Promise<string> {
   const jar = await cookies()

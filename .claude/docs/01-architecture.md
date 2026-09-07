@@ -8,7 +8,7 @@ Stack, การแบ่ง module, และ convention ที่ทุก mod
 
 1. [Tech Stack](#1-tech-stack)
 2. [Modular Monolith](#2-modular-monolith)
-3. [Conventions](#conventions) — [API](#api) · [Naming](#naming) · [Permission Hierarchy](#permission-hierarchy) · [Data Types](#data-types) 🔒 · [Implementation Notes](#implementation-notes) · [Auth](#auth) · [CSRF](#csrf)
+3. [Conventions](#conventions) — [API](#api) · [Naming](#naming) · [Permission Hierarchy](#permission-hierarchy) · [Data Types](#data-types) 🔒 · [Implementation Notes](#implementation-notes) · [Auth](#auth) · [CSRF](#csrf) · [Web transport](#web-transport--ยิง-api-จากฝั่งไหนก็ได้-แต่ไม่เท่ากัน)
 
 ดูเพิ่ม: [docker-compose](#docker-compose) · [Deploy](#deploy)
 
@@ -716,12 +716,34 @@ CREATE TABLE audit.logs_2026_08 PARTITION OF audit.logs
 
 **Token**
 
-|         | อายุ    | เก็บที่                                  |
-| ------- | ------ | ------------------------------------- |
-| Access  | 15 นาที | httpOnly cookie                       |
-| Refresh | 15 วัน  | httpOnly cookie · `path=/api/v1/auth` |
+|         | อายุ    | เก็บที่          |
+| ------- | ------ | -------------- |
+| Access  | 15 นาที | httpOnly cookie |
+| Refresh | 15 วัน  | httpOnly cookie |
 
-Cookie flags: `httpOnly · Secure · SameSite=Lax`
+Cookie flags: `httpOnly · Secure · SameSite=Lax · Path=/` — ทั้งสี่ตัว
+(`access_token` `refresh_token` `active_org` `two_factor_challenge`)
+
+**`refresh_token` กับ `two_factor_challenge` เคยเป็น `path=/api/v1/auth` — ขยายเป็น `/`
+แล้วเมื่อ 2026-09-07 หลังวัดกับ browser จริง** ที่ scope แคบซื้อให้คือ request ที่ทำ
+`Cookie` header หลุดนอก endpoint auth จะเสีย access token 15 นาที ไม่ใช่ refresh token
+15 วัน · ที่มันแลกไปคือสิ่งที่ไม่เห็นจนกว่าจะยิงจริง:
+
+**cookie ที่ผูก path ไม่ถูกส่งมากับ request ของหน้าเว็บ** — ฉะนั้น `proxy.ts` ของ Next
+ก็ไม่มี token, Server Action ก็ไม่มี (มันยิงกลับไปที่ URL ของหน้าตัวเอง) · การต่ออายุ
+session จึงทำได้เฉพาะ JavaScript ฝั่ง browser เท่านั้น และอาการที่โผล่คือ **cold load
+ที่ห่างจากครั้งก่อนเกิน 15 นาทีจะ render ออกมาเป็น signed-out แล้วค่อยซ่อมตัวเองหลัง
+hydrate** ซึ่งคือ cold load ส่วนใหญ่ · วัดแล้ว: TTL 20 วิ รอ 24 วิ แล้ว reload ได้ 401,
+พอเปลี่ยนเป็น `/` ได้ 200 พร้อม token ใหม่
+
+ทั้งคู่ยัง `httpOnly` เหมือนเดิม ไม่มี script อ่านได้ที่ path ไหนทั้งนั้น และทุก request ที่
+พก refresh token เพิ่มมาเป็น same-origin ไปหา server ตัวที่ออก cookie นั้นเอง · **ที่เพิ่ม
+ขึ้นจริงคือความเสี่ยงต่อ log ของเราเอง** — อะไรที่บันทึก `Cookie` header เต็มๆ จะบันทึก
+credential ที่อายุยาวกว่าเดิม เป็นเรื่องที่ต้องรู้และต้องกัน ไม่ใช่เรื่องที่คุ้มจะแลกกับ
+สถาปัตยกรรมที่ server ต่อ session ของตัวเองไม่ได้
+
+> `two_factor_challenge` ย้ายด้วยเหตุผลของตัวเอง: login ที่ขับด้วย Server Action จะผ่าน
+> ขั้นรหัสผ่านแล้วตายที่ขั้นกรอกโค้ด เพราะมันตั้ง cookie ที่ action ถัดไปมองไม่เห็น
 
 **Access token payload — เอาแค่ที่จำเป็น**
 
@@ -1012,3 +1034,46 @@ cross-site จริง ถึงจะไม่ส่ง
 > **App Router ไม่ได้บังคับให้ route handler อยู่ใต้ `/api`** — `app/api/` เป็น
 > ธรรมเนียมตกทอดจาก Pages Router ที่บังคับจริง · ไฟล์ `route.ts` วางที่ไหนก็เป็น
 > endpoint ที่ path นั้น เพราะงั้นใช้ `/bff/*` แล้วไม่ต้องแตะ Caddy เลย
+
+### Web transport — ยิง API จากฝั่งไหนก็ได้ แต่ไม่เท่ากัน
+
+`apps/web/client/src/lib/api/` มี factory เดียว ออกมาสามหน้าตา ต่างกันแค่สองข้อ:
+**cookie มาจากไหน** และ **เขียน cookie ได้หรือเปล่า**
+
+| ยิงจาก | `cookies().set()` | 401 แล้วทำอะไร | ใช้ตัวไหน |
+| --- | --- | --- | --- |
+| browser | – (browser จัดการเอง) | refresh แล้วยิงซ้ำ | `lib/api/browser.ts` |
+| Server Component ตอน render | **throw** | ยอมแพ้ | `apiForRender()` |
+| Server Action / Route handler | ได้ | refresh แล้วยิงซ้ำ | `apiForAction()` |
+| `proxy.ts` | เขียนลง response | refresh **ก่อน** render | `src/proxy.ts` |
+
+🔒 **`apiForRender` ต้อง refresh ไม่ได้ ไม่ใช่แค่ไม่ทำ** — render ที่ refresh จะ*สำเร็จ*
+คือ API หมุน token ให้จริง แต่เขียน cookie ไม่ได้ ฉะนั้น browser ยังถือตัวเก่า · รอบหน้า
+มันยื่นตัวที่ถูกหมุนทิ้งไปแล้ว พ้นหน้าต่าง 10 วิ `AuthService.detectReuse` อ่านว่าเป็น
+token ที่ถูกขโมย แล้ว **revoke ทั้ง session + ยิง alert** · refresh ใน render ไม่ใช่
+"ทำแล้วไม่ได้ผล" แต่คือ "ทำแล้วพังบัญชี"
+
+**`proxy.ts` ไม่ใช่ `middleware.ts`** — Next 16 เปลี่ยนชื่อ และของใหม่ **รันบน Node
+runtime เสมอ** (ใส่ `export const runtime` เป็น build error) · มันเป็นที่เดียวบน server
+ที่เขียน cookie ได้ *และ* รันก่อน render · ตัดสินใจด้วยการอ่าน `exp` จาก JWT
+**โดยไม่ verify signature** — คำถามคือ "ควรส่งมั้ย" ไม่ใช่ "ของจริงมั้ย" ซึ่งเป็นงานของ
+guard ที่ถือ `JWT_SECRET` · ถ้า proxy verify ด้วย ต้องเอา secret ไปไว้ใน container ของ
+web แล้วจำนวน process ที่ออก session ได้จะกลายเป็นสอง
+
+วัดบน dev (Turbopack): token ยังดี **2-5 ms** ต่อ request · ตอนต้อง refresh จริง
+**15-26 ms** ซึ่งเกิดครั้งเดียวต่อ 15 นาทีต่อคน · `matcher` ตัด `/api/*` `_next/*` และ
+ไฟล์ที่มีนามสกุลออก ไม่งั้นต้นทุนไปโผล่ที่ asset ทุกชิ้น
+
+**`next.config.ts` มี rewrite `/api/*` เฉพาะตอน dev** เลียน `handle_path` ของ Caddy
+(ตัด prefix) เพราะ local ไม่มี Caddy · ไม่มีอันนี้คือ origin นี้ไม่มี `/api` เลย ทุก request
+404 ที่ Next ก่อนถึง API
+
+🔒 **single-flight ของ browser วัดที่ "token เปลี่ยนหรือยัง" ไม่ใช่ "มี refresh ค้างมั้ย"**
+— promise ร่วมอันเดียวไม่พอ วัดแล้ว 6 request ขนานได้ **2 refresh** เพราะ 401 ทั้งหก
+ไม่ได้กลับมาพร้อมกัน สามอันแรกเกาะ refresh เดียวกัน มันเสร็จ แล้วสามอันหลังเปิดรอบใหม่
+· ท่าที่ถูกคือประทับ counter ตอนส่ง แล้วเทียบตอน 401 กลับมา — ถ้ามีคนหมุนไปแล้วก็แค่
+ยิงซ้ำเฉยๆ · แก้แล้ววัดได้ 1 refresh ต่อการหมดอายุหนึ่งครั้ง สามรอบติด
+
+**Server Action ต้องส่ง `user-agent` / `x-forwarded-for` ต่อ** ไม่งั้น login ที่ขับด้วย
+action จะเขียน container ของ Next ลง `iam.sessions.user_agent` — หน้าจอ "อุปกรณ์ที่
+ล็อกอินอยู่" จะขึ้น `axios/1.x` ที่ address เดียวกันหมดทุกแถว

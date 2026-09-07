@@ -18,9 +18,12 @@ import {
 } from './actions'
 
 /**
- * The browser half. Same endpoints, same cookies, different transport — and
- * the one place where a refresh actually has the token it needs, because the
- * browser is the only party that sends `refresh_token` to `/api/v1/auth/*`.
+ * The browser half. Same endpoints, same cookies, different transport.
+ *
+ * It is not the only party that can refresh — `proxy.ts` and `apiForAction`
+ * can too, now that the refresh cookie is scoped to `/` — but it is the only
+ * one that handles an expiry discovered *mid-session*, by an XHR that never
+ * passes through the proxy.
  */
 
 interface LogLine {

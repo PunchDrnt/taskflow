@@ -11,11 +11,12 @@
  * `path`, `httpOnly`, `secure`, `sameSite` — are handled by name rather than
  * by a generic loop that silently skips what it does not recognise.
  *
- * Losing `path` is the one that bites: the refresh cookie is scoped to
- * `/api/v1/auth`, and a copy written at `/` would be sent on every request
- * *and* leave the original in place — two cookies with the same name, the
- * browser picking by longest path, and a rotation that appears to have not
- * happened.
+ * Losing `path` is the one that bites. Every cookie here is written at `/`
+ * today, so a dropped `path` happens to land on the same value — which is
+ * exactly the kind of accident that survives review and then breaks the day
+ * one cookie is scoped differently: the copy and the original would coexist
+ * under one name, the browser would pick by longest path, and a rotation would
+ * appear not to have happened.
  */
 
 /** Structurally what `cookies().set` accepts, and only what we actually set. */

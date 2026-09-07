@@ -24,15 +24,14 @@ import {
  * `lib/api/server.ts` for what a render that refreshed anyway would do to the
  * account.
  *
- * ⚠️ **Whether this can do its job depends on one cookie attribute.**
- * `refresh_token` is scoped to `path=/api/v1/auth`, so the browser attaches it
- * only to requests aimed at the auth endpoints. A page request is not one of
- * those, so `request.cookies` here usually does **not** contain it, and this
- * function returns early having done nothing. That is not a bug in this file —
- * it is the cookie path deciding that refreshing is a browser-initiated
- * operation, which is a defensible choice with a real cost, spelled out in
- * docs/01-architecture.md#auth. The code below is written to work the moment
- * the token is in reach and to cost nothing when it is not.
+ * ⚠️ **This only works because `refresh_token` is scoped to `/`.** It used to
+ * be `path=/api/v1/auth`, and a path-scoped cookie is not attached to a page
+ * request — so `request.cookies` held no refresh token here, this function
+ * returned early every time, and renewing a session was something only
+ * browser-side JavaScript could do. Narrowing that path again would not break
+ * anything loudly; it would quietly turn this file back into a no-op and make
+ * every cold load past fifteen minutes render signed-out. A unit test on
+ * `auth.cookies.ts` pins the path for that reason.
  */
 export async function proxy(request: NextRequest): Promise<NextResponse> {
   const refreshToken = request.cookies.get(REFRESH_TOKEN_COOKIE)?.value

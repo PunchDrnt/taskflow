@@ -51,8 +51,8 @@ export default async function HarnessPage() {
         </Row>
         <Row label={`${REFRESH_TOKEN_COOKIE} ถึง server หรือเปล่า`}>
           {present.includes(REFRESH_TOKEN_COOKIE)
-            ? 'ถึง'
-            : 'ไม่ถึง — path=/api/v1/auth กันไว้ ฉะนั้น proxy กับ server action ไม่มี token จะ refresh'}
+            ? 'ถึง — proxy กับ server action ต่ออายุ session เองได้'
+            : 'ไม่ถึง — ถ้าล็อกอินอยู่แล้วยังขึ้นแบบนี้ แปลว่ามีใครหด path ของ cookie กลับไป'}
         </Row>
         <Row label={`${ACCESS_TOKEN_COOKIE} exp`}>
           {describeExpiry(expiresAt)}

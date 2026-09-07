@@ -93,8 +93,12 @@ unique เต็ม · `views.sort_order` / `is_default`
 - [x] เช็ค session ทุก request (cache 30 วิ) — `revoked_at IS NULL` · `expires_at > now` · `user.status='active'`
       · นี่คือสิ่งที่ทำให้ deactivate/logout มีผลเกือบทันที ไม่ต้องรอ token หมดอายุ
       · ชั้นนี้คือจุดที่จะกลายเป็นคอขวดก่อนใครถ้าคนเยอะขึ้นมาก — ไม่ใช่จำนวนแถว · [เงื่อนไขที่จะเอา Redis เข้ามา](../docs/01-architecture.md#redis--queue--ยังไม่มี-และเงื่อนไขที่จะมี) ระบุ "session revocation cache ที่เช็คทุก request" ไว้เป็นหนึ่งในสามข้ออยู่แล้ว
-- [x] 🔒 **Cookie attributes อยู่ที่เดียว** — `httpOnly · Secure · SameSite=Lax` · refresh ตั้ง `path=/api/v1/auth`
+- [x] 🔒 **Cookie attributes อยู่ที่เดียว** — `httpOnly · Secure · SameSite=Lax · Path=/` ทั้งสี่ตัว
       · กระจายไปหลายที่เมื่อไหร่ จะมีตัวใดตัวหนึ่งตกหล่นแบบไม่มีใครเห็น
+      · ⚠️ **`refresh_token` กับ `two_factor_challenge` เคยเป็น `path=/api/v1/auth` — ขยายเป็น `/` แล้วหลังยิงจริง 2026-09-07**
+      cookie ที่ผูก path ไม่ถูกส่งมากับ request ของหน้าเว็บ ฉะนั้น `proxy.ts` กับ Server Action ไม่มี token จะต่ออายุ session เลย
+      · อาการ: cold load ที่ห่างเกิน 15 นาที render เป็น signed-out ทั้งที่ refresh token ยังดีอีก 15 วัน (วัดแล้ว TTL 20 วิ รอ 24 วิ → 401 · เปลี่ยนเป็น `/` → 200)
+      · แก้ [`01-architecture.md#auth`](../docs/01-architecture.md#auth) ใน commit เดียวกัน · unit test ปักไว้แล้วว่าเป็น `/` ทั้งสี่ ถ้าใครหดกลับจะแดง
 - [x] Access token payload มีแค่ `sub` `sid` `exp` — **ไม่ใส่ role และไม่ใส่ org**
       · เหตุผลเดียวกันทั้งคู่: ถอดสิทธิ์/ถอดคนออกจาก org แล้วต้องรอ 15 นาที
       · และตั้งแต่หนึ่งคนอยู่ได้หลาย org ค่าเดียวใน token ก็ตอบไม่ได้อยู่ดี ([ทั้งหมด](../docs/01-architecture.md#org-ไหนของ-request-นี้))

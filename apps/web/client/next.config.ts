@@ -29,9 +29,10 @@ const nextConfig: NextConfig = {
    * the point of the `:path*` shape below.
    *
    * Without it there is no `/api` on this origin at all locally, so every
-   * request 404s at Next before reaching the API — and, more quietly, the
-   * refresh cookie's `path=/api/v1/auth` matches a URL that never exists, so
-   * nothing about the session flow can be tested at all.
+   * request 404s at Next before reaching the API — and it 404s from Next,
+   * which means a same-origin response with cookies intact and a body that is
+   * an HTML error page, rather than anything that reads like a wiring
+   * problem.
    *
    * Not registered in production: Caddy has already handled `/api/*` before
    * Next is reached, so a rewrite here would be dead configuration that reads
