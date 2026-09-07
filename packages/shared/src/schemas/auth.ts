@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 import { idSchema } from './id.js'
+import { usernameSchema } from './user.js'
 
 /** docs/01-architecture.md#password--rate-limit */
 export const PASSWORD_MIN_LENGTH = 8
@@ -34,8 +35,26 @@ export const passwordSchema = z
  */
 const presentedPassword = z.string().min(1, 'กรุณากรอกรหัสผ่าน')
 
+/**
+ * One field, not two, and not a radio button. Whether somebody types their
+ * email or their username is not a question worth asking them — the two
+ * alphabets do not overlap, because a username may not contain `@` and a CHECK
+ * enforces that. `UserService.findByLogin` picks the query from the shape.
+ *
+ * Deliberately looser than `emailSchema`: trimmed and lower-cased, but not
+ * validated as an address, since most of the time it is not one. A value that
+ * matches nothing gets the same INVALID_CREDENTIALS as a wrong password, which
+ * is what stops this being a way to test which usernames exist.
+ */
+const loginIdentifier = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .min(1, 'กรุณากรอกอีเมลหรือชื่อผู้ใช้')
+  .max(320, 'ยาวเกินไป')
+
 export const loginSchema = z.object({
-  email: emailSchema,
+  login: loginIdentifier,
   password: presentedPassword,
   /**
    * "Remember me" is not a mechanism, only a number: how long
@@ -104,6 +123,7 @@ export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>
 export const registerSchema = z
   .object({
     email: emailSchema,
+    username: usernameSchema,
     password: passwordSchema,
     confirmPassword: z.string(),
     name: z.string().trim().min(1, 'กรุณากรอกชื่อ').max(200, 'ชื่อยาวเกินไป'),
@@ -163,6 +183,10 @@ export const AUTH_ERROR_CODES = {
   REGISTRATION_DISABLED: 'REGISTRATION_DISABLED',
   /** Sign-up only: that address already has an account. */
   EMAIL_TAKEN: 'EMAIL_TAKEN',
+  /** Sign-up or a profile edit: somebody already answers to that name. */
+  USERNAME_TAKEN: 'USERNAME_TAKEN',
+  /** A profile edit: that number is on another live account. */
+  PHONE_TAKEN: 'PHONE_TAKEN',
 } as const
 
 export type AuthErrorCode =

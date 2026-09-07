@@ -42,8 +42,10 @@ import { UserService } from './user.service'
 export interface Me {
   id: string
   email: string
+  username: string
   name: string
   nickname: string
+  phone: string | null
   avatarUrl: string | null
   status: string
   organizations: Membership[]
@@ -89,8 +91,10 @@ export class MeController {
     return {
       id: user.id,
       email: user.email,
+      username: user.username,
       name: user.name,
       nickname: user.nickname,
+      phone: user.phone,
       avatarUrl: user.avatarUrl,
       status: user.status,
       organizations: memberships,

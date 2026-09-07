@@ -21,9 +21,20 @@ export class CreateIamUsers1787186718550 implements MigrationInterface {
         id                        uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
 
         email                     citext      NOT NULL,
+        -- The other way to sign in. citext like email, so Anong and anong are
+        -- the same account rather than two — a login identifier that is
+        -- case-sensitive is a support ticket waiting to happen.
+        username                  citext      NOT NULL,
         password_hash             text,
         name                      text        NOT NULL,
+        -- Not the same thing as username and not a substitute for it: this is
+        -- what colleagues call the person, it may repeat across the org, and
+        -- the assignee picker searches and displays it so nobody is assigned
+        -- to the wrong Somchai. docs/04-features/phase-1.md#auth--users.
         nickname                  text        NOT NULL,
+        -- Profile data, not a credential. 2FA is TOTP, so nothing authenticates
+        -- against this and it needs neither uniqueness nor verification.
+        phone                     text,
         avatar_url                text,
         status                    text        NOT NULL DEFAULT 'active',
         is_system                 boolean     NOT NULL DEFAULT false,
@@ -52,6 +63,26 @@ export class CreateIamUsers1787186718550 implements MigrationInterface {
 
         CONSTRAINT users_status_check
           CHECK (status IN ('active', 'deactivated', 'pending_deletion', 'deleted')),
+
+        -- Narrow on purpose. A username appears in URLs and in @-mentions, so
+        -- spaces, dots or unicode would make every consumer decide how to
+        -- escape it, and confusable characters are how one person gets
+        -- mistaken for another. 3-30 of [a-z0-9_], starting with a letter.
+        --
+        -- The ::text cast is load-bearing. citext makes the regex operator
+        -- case-insensitive as well as equality — measured, not assumed — so
+        -- without it Anong passes this check and is stored with its capital,
+        -- giving one account two spellings across URLs and mentions. Cast
+        -- first and the pattern means what it reads like: stored lower case,
+        -- matched case-insensitively by the column type.
+        CONSTRAINT users_username_format_check
+          CHECK (username::text ~ '^[a-z][a-z0-9_]{2,29}$'),
+
+        -- E.164 without the punctuation: a leading + and 8-15 digits. Stored
+        -- one way so that two people who typed 08x-xxx and +66 8x xxx are
+        -- comparable at all. Nullable — most rows will not have one.
+        CONSTRAINT users_phone_format_check
+          CHECK (phone IS NULL OR phone ~ '^\\+[1-9][0-9]{7,14}$'),
 
         -- Enforced here, not in the login code, which is one bug away from
         -- letting someone in as the account that owns every automated write.
@@ -94,6 +125,22 @@ export class CreateIamUsers1787186718550 implements MigrationInterface {
         ON iam.users (email) WHERE status <> 'deleted'
     `)
 
+    // Same partial shape as email, and for the same reason: a deleted account
+    // releases the name for somebody else, but only after the thirty-day
+    // window in which its owner can still come back.
+    await queryRunner.query(`
+      CREATE UNIQUE INDEX users_username_unique
+        ON iam.users (username) WHERE status <> 'deleted'
+    `)
+
+    // Unique like email, and partial for the same reason: nobody may hold two
+    // live accounts on one number. Postgres allows any number of NULLs in a
+    // unique index, so the many rows with no phone do not collide.
+    await queryRunner.query(`
+      CREATE UNIQUE INDEX users_phone_unique
+        ON iam.users (phone) WHERE status <> 'deleted'
+    `)
+
     // One system user, enforced by the database, not by the seed running once.
     await queryRunner.query(`
       CREATE UNIQUE INDEX users_single_system_unique
@@ -123,9 +170,9 @@ export class CreateIamUsers1787186718550 implements MigrationInterface {
     await queryRunner.query(
       `
       INSERT INTO iam.users
-        (id, email, password_hash, name, nickname, status, is_system, created_by, updated_by)
+        (id, email, username, password_hash, name, nickname, status, is_system, created_by, updated_by)
       VALUES
-        ($1, 'system@taskflow.internal', NULL, 'System', 'System', 'active', true, $1, $1)
+        ($1, 'system@taskflow.internal', 'system', NULL, 'System', 'System', 'active', true, $1, $1)
       `,
       [SYSTEM_USER_ID],
     )

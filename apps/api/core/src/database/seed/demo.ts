@@ -35,33 +35,42 @@ const DEMO_PASSWORD = 'demo-password-not-for-production'
 
 const ORG_ID = '11111111-1111-1111-1111-111111111111'
 
+/** id, email, username, name, nickname, phone, org role */
 const PEOPLE = [
   [
     '22222222-2222-2222-2222-222222222221',
     'owner@taskflow.local',
+    'anong',
     'Anong Wattana',
     'Anong',
+    '+66810000001',
     'owner',
   ],
   [
     '22222222-2222-2222-2222-222222222222',
     'admin@taskflow.local',
+    'kittipong',
     'Kittipong Sae',
     'Kit',
+    '+66810000002',
     'admin',
   ],
   [
     '22222222-2222-2222-2222-222222222223',
     'dev@taskflow.local',
+    'pim',
     'Pim Rattana',
     'Pim',
+    '+66810000003',
     'member',
   ],
   [
     '22222222-2222-2222-2222-222222222224',
     'design@taskflow.local',
+    'somchai',
     'Somchai Ura',
     'Chai',
+    null,
     'member',
   ],
 ] as const
@@ -176,11 +185,25 @@ async function seed(dataSource: DataSource): Promise<void> {
     // and this is the same throwaway password four times over.
     const passwordHash = await hash(DEMO_PASSWORD)
 
-    for (const [id, email, name, nickname] of PEOPLE) {
+    // One row has no phone on purpose: the column is nullable and unique at
+    // once, and a dataset where every row fills it never exercises the case
+    // where several do not.
+    for (const [id, email, username, name, nickname, phone] of PEOPLE) {
       await manager.query(
-        `INSERT INTO iam.users (id, email, name, nickname, status, password_hash, created_by, updated_by)
-         VALUES ($1, $2, $3, $4, 'active', $5, $6, $6)`,
-        [id, email, name, nickname, passwordHash, SYSTEM_USER_ID],
+        `INSERT INTO iam.users
+           (id, email, username, name, nickname, phone, status, password_hash,
+            created_by, updated_by)
+         VALUES ($1, $2, $3, $4, $5, $6, 'active', $7, $8, $8)`,
+        [
+          id,
+          email,
+          username,
+          name,
+          nickname,
+          phone,
+          passwordHash,
+          SYSTEM_USER_ID,
+        ],
       )
     }
 
@@ -190,7 +213,7 @@ async function seed(dataSource: DataSource): Promise<void> {
       [ORG_ID, OWNER],
     )
 
-    for (const [id, , , , role] of PEOPLE) {
+    for (const [id, , , , , , role] of PEOPLE) {
       await manager.query(
         `INSERT INTO organization.members (org_id, user_id, role, created_by, updated_by)
          VALUES ($1, $2, $3, $4, $4)`,

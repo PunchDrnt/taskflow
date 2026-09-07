@@ -241,6 +241,10 @@ describe.skipIf(!hasTestDatabase)('retention', () => {
 
   describe('users who asked to be deleted', () => {
     /** `requestedDaysAgo` is ignored unless the status is pending_deletion. */
+    /** The local part, with the characters the username CHECK forbids removed. */
+    const usernameFor = (email: string): string =>
+      email.split('@')[0]!.replace(/[^a-z0-9_]/g, '_')
+
     const seedUser = async (
       email: string,
       status: string,
@@ -251,11 +255,11 @@ describe.skipIf(!hasTestDatabase)('retention', () => {
 
       const [user] = (await dataSource.query(
         `INSERT INTO iam.users
-           (email, name, nickname, status, deletion_requested_at,
+           (email, username, name, nickname, status, deletion_requested_at,
             created_by, updated_by)
-         VALUES ($1, 'Somchai', 'Som', $2, ${requestedAt}, $3, $3)
+         VALUES ($1, $2, 'Somchai', 'Som', $3, ${requestedAt}, $4, $4)
          RETURNING id`,
-        [email, status, SYSTEM_USER_ID],
+        [email, usernameFor(email), status, SYSTEM_USER_ID],
       )) as { id: string }[]
       return user.id
     }
@@ -266,8 +270,9 @@ describe.skipIf(!hasTestDatabase)('retention', () => {
       await expect(
         dataSource.query(
           `INSERT INTO iam.users
-             (email, name, nickname, status, created_by, updated_by)
-           VALUES ('nodate@example.com', 'S', 'S', 'pending_deletion', $1, $1)`,
+             (email, username, name, nickname, status, created_by, updated_by)
+           VALUES ('nodate@example.com', 'nodate', 'S', 'S',
+                   'pending_deletion', $1, $1)`,
           [SYSTEM_USER_ID],
         ),
       ).rejects.toThrow(/users_deletion_requested_matches_status_check/)

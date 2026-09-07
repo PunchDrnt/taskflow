@@ -1,5 +1,8 @@
-import { Injectable } from '@nestjs/common'
+import { HttpStatus, Injectable } from '@nestjs/common'
 
+import { AUTH_ERROR_CODES } from '@repo/shared'
+
+import { ApiException } from '#shared/http/api-exception'
 import { InjectOrgRepository } from '#shared/org-scope/org-repository.provider'
 import { OrgScopedRepository } from '#shared/org-scope/org-scoped.repository'
 import { SYSTEM_USER_ID } from '#shared/system-user'
@@ -19,6 +22,50 @@ export const ACTIVE_USER_STATUS = 'active'
  * work here — login happens before a request context exists, and `withOrg`
  * would throw looking for an org nobody has chosen yet.
  */
+/**
+ * Postgres's unique_violation, mapped to the code the screen branches on.
+ *
+ * Catching the constraint rather than checking first is what makes this
+ * race-free: two people claiming one username a millisecond apart both pass a
+ * `SELECT`, and only the index can say which of them actually got it. The
+ * pre-checks in `register` exist for a different reason — they say *which*
+ * field collided before anything is written — and this is the backstop that
+ * makes them advisory rather than load-bearing.
+ */
+const UNIQUE_VIOLATION = '23505'
+
+function rethrowConflict(error: unknown): never {
+  const driver = (
+    error as { driverError?: { code?: string; constraint?: string } }
+  ).driverError
+
+  if (driver?.code === UNIQUE_VIOLATION) {
+    if (driver.constraint === 'users_username_unique') {
+      throw new ApiException(
+        HttpStatus.CONFLICT,
+        AUTH_ERROR_CODES.USERNAME_TAKEN,
+        'ชื่อผู้ใช้นี้ถูกใช้แล้ว',
+      )
+    }
+    if (driver.constraint === 'users_phone_unique') {
+      throw new ApiException(
+        HttpStatus.CONFLICT,
+        AUTH_ERROR_CODES.PHONE_TAKEN,
+        'เบอร์โทรนี้ถูกใช้แล้ว',
+      )
+    }
+    if (driver.constraint === 'users_email_unique') {
+      throw new ApiException(
+        HttpStatus.CONFLICT,
+        AUTH_ERROR_CODES.EMAIL_TAKEN,
+        'อีเมลนี้ถูกใช้แล้ว',
+      )
+    }
+  }
+
+  throw error
+}
+
 @Injectable()
 export class UserService {
   constructor(
@@ -33,6 +80,27 @@ export class UserService {
       .where('user.email = :email', { email })
       .andWhere('user.deletedAt IS NULL')
       .getOne()
+  }
+
+  /** Same, for the other login identifier. `username` is citext too. */
+  findByUsername(username: string): Promise<User | null> {
+    return this.users.queryBuilder
+      .base('user')
+      .where('user.username = :username', { username })
+      .andWhere('user.deletedAt IS NULL')
+      .getOne()
+  }
+
+  /**
+   * Whichever identifier this is. One query, chosen by shape rather than by
+   * asking the caller which they typed — a sign-in form with one field is the
+   * point, and `@` is the only thing that separates the two alphabets here
+   * (a username cannot contain one; the CHECK sees to that).
+   */
+  findByLogin(login: string): Promise<User | null> {
+    return login.includes('@')
+      ? this.findByEmail(login)
+      : this.findByUsername(login)
   }
 
   findById(id: string): Promise<User | null> {
@@ -59,7 +127,13 @@ export class UserService {
    */
   async updateProfile(
     id: string,
-    profile: { name: string; nickname: string; avatarUrl: string | null },
+    profile: {
+      username: string
+      name: string
+      nickname: string
+      phone: string | null
+      avatarUrl: string | null
+    },
     now = new Date(),
   ): Promise<void> {
     await this.users.queryBuilder
@@ -69,6 +143,7 @@ export class UserService {
       .where('id = :id', { id })
       .andWhere('deleted_at IS NULL')
       .execute()
+      .catch(rethrowConflict)
   }
 
   /**
@@ -84,6 +159,7 @@ export class UserService {
    */
   async create(person: {
     email: string
+    username: string
     passwordHash: string
     name: string
     nickname: string
@@ -100,6 +176,7 @@ export class UserService {
       })
       .returning(['id'])
       .execute()
+      .catch(rethrowConflict)
 
     const id = (inserted.raw as { id: string }[])[0]!.id
 

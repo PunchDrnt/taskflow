@@ -16,9 +16,12 @@
 ```
 users
   email                       citext   unique (partial — ดูด้านล่าง)
+  username                    citext   unique (partial) · อีกทางที่ใช้ล็อกอิน · เก็บตัวเล็กเสมอ
+                                       CHECK (username::text ~ '^[a-z][a-z0-9_]{2,29}$')
   password_hash               text     null · NULL = login ด้วยรหัสผ่านไม่ได้ (system user · เผื่อ OAuth ทีหลัง)
   name                        text
-  nickname                    text     คนไทยเรียกชื่อเล่น — ต้องค้นได้
+  nickname                    text     คนไทยเรียกชื่อเล่น — ต้องค้นได้ · **คนละอย่างกับ username**
+  phone                       text     null · unique (partial) · E.164 · CHECK (phone ~ '^\+[1-9][0-9]{7,14}$')
   avatar_url                  text     null
   status                      text     'active' | 'deactivated' | 'pending_deletion' | 'deleted'
   deletion_requested_at       timestamptz null · วันที่เจ้าตัวกดลบบัญชี — ตัวนับ 30 วันของ grace period
@@ -108,6 +111,19 @@ oauth_accounts        ⚠ ยังไม่สร้าง — migrate ใน P
   -- 1 คน ผูก provider ละบัญชีเดียว · ผ่อนทีหลังแค่ drop index
   CREATE UNIQUE INDEX ON iam.oauth_accounts (user_id, provider);
 ```
+
+**`username` กับ `nickname` แยกหน้าที่กันชัดๆ** (ตัดสิน 2026-09-07)
+
+| | `username` | `nickname` |
+| --- | --- | --- |
+| คือ | ตัวล็อกอิน · โผล่ใน URL และ @-mention | ชื่อที่เพื่อนร่วมงานเรียก |
+| ซ้ำได้ไหม | **ไม่ได้** unique ทั้งระบบ | ได้ · มี "พี่หนึ่ง" กี่คนก็ได้ |
+| ตัวอักษร | `a-z 0-9 _` ยาว 3-30 ขึ้นต้นด้วยตัวอักษร | อะไรก็ได้ รวมภาษาไทย |
+| ใครใช้ | คนล็อกอิน · ระบบ resolve @mention | assignee picker ค้นและแสดง |
+
+⚠️ **`::text` ใน CHECK ของ username เป็นตัวสำคัญ** — วัดแล้ว: `citext` ทำให้ operator `~` case-insensitive ด้วย ไม่ใช่แค่ `=` · ถ้าไม่ cast `Anong` จะผ่าน check แล้วถูกเก็บทั้งตัวใหญ่ กลายเป็นบัญชีเดียวที่สะกดสองแบบใน URL กับ mention · cast แล้วความหมายตรงกับที่อ่าน: เก็บตัวเล็ก จับคู่แบบไม่สนตัวพิมพ์ด้วยชนิดคอลัมน์
+
+**`phone` unique แต่ null ได้** — unique index ของ Postgres ยอมให้มี NULL กี่แถวก็ได้ แถวส่วนใหญ่จะไม่มีเบอร์ · ที่ unique เพราะสองคนใช้เบอร์เดียวกันคือกรอกผิด ไม่ใช่เคสที่ต้องรองรับ · **ไม่ใช่ credential** — 2FA เป็น TOTP ไม่มีอะไร authenticate กับคอลัมน์นี้ จึงไม่ต้อง verify
 
 **`CreatedEntity` — hard delete และไม่มี `updated_at`/`updated_by`** ([สามคำถาม](./rules.md#base-entity))
 

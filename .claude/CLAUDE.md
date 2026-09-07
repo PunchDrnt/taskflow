@@ -57,6 +57,8 @@ These terms overlap dangerously — check here before naming anything.
 | **Sub-task**           | A task with `parent_task_id` · a full task with its own status and assignee                                                                                            | not a checklist item               |
 | **Sprint**             | A work cycle · optional per project (`sprint_enabled`)                                                                                                                 | not mandatory                      |
 | **Activity log**       | The user-facing _feature_ name — stored in `audit.logs`, owned by module `audit/`                                                                                      | not a schema name                  |
+| **Username**           | The unique login name · `a-z0-9_`, 3-30 chars, lives in URLs and @-mentions · one per live account                                                                     | not a display name                 |
+| **Nickname**           | What colleagues call the person · may repeat · Thai users go by it, so the assignee picker searches and shows it                                                       | not a login identifier             |
 
 Two permission layers, kept strictly separate — system-level RBAC (ours, crosses orgs) above org-level fixed roles (`owner`/`admin`/`member`, with `admin`/`member` on teams and projects).
 

@@ -100,7 +100,8 @@ export class AuthService {
   // --- login -------------------------------------------------------------
 
   async login(input: LoginInput, origin: SessionOrigin): Promise<LoginResult> {
-    const user = await this.users.findByEmail(input.email)
+    // Either identifier — the caller typed one field and never said which.
+    const user = await this.users.findByLogin(input.login)
 
     if (!user || user.passwordHash === null) {
       await this.passwords.verify(await this.decoy(), input.password)
@@ -169,11 +170,12 @@ export class AuthService {
    * account" mail instead.
    */
   async register(input: RegisterInput): Promise<{ id: string }> {
-    const existing = await this.users.findByEmail(input.email)
-    if (existing) throw emailTaken()
+    if (await this.users.findByEmail(input.email)) throw emailTaken()
+    if (await this.users.findByUsername(input.username)) throw usernameTaken()
 
     const user = await this.users.create({
       email: input.email,
+      username: input.username,
       passwordHash: await this.passwords.hash(input.password),
       name: input.name,
       nickname: input.nickname,
@@ -483,5 +485,14 @@ function emailTaken(): ApiException {
     HttpStatus.CONFLICT,
     AUTH_ERROR_CODES.EMAIL_TAKEN,
     'อีเมลนี้ถูกใช้แล้ว',
+  )
+}
+
+/** Same shape as `emailTaken`, and the same caveat about what it reveals. */
+function usernameTaken(): ApiException {
+  return new ApiException(
+    HttpStatus.CONFLICT,
+    AUTH_ERROR_CODES.USERNAME_TAKEN,
+    'ชื่อผู้ใช้นี้ถูกใช้แล้ว',
   )
 }

@@ -100,9 +100,17 @@ describe.skipIf(!hasTestDatabase)('auth', () => {
 
     const [user] = (await dataSource.query(
       `INSERT INTO iam.users
-         (email, password_hash, name, nickname, status, created_by, updated_by)
-       VALUES ($1, $2, $3, $3, $4, $5, $5) RETURNING id`,
-      [emailOf(name), hash, name, overrides.status ?? 'active', SYSTEM_USER_ID],
+         (email, username, password_hash, name, nickname, status, created_by,
+          updated_by)
+       VALUES ($1, $2, $3, $4, $4, $5, $6, $6) RETURNING id`,
+      [
+        emailOf(name),
+        name,
+        hash,
+        name,
+        overrides.status ?? 'active',
+        SYSTEM_USER_ID,
+      ],
     )) as { id: string }[]
 
     return user!.id
@@ -126,7 +134,7 @@ describe.skipIf(!hasTestDatabase)('auth', () => {
     )
 
   const login = (name: string, password = PASSWORD, rememberMe = false) =>
-    auth.login({ email: emailOf(name), password, rememberMe }, ORIGIN)
+    auth.login({ login: emailOf(name), password, rememberMe }, ORIGIN)
 
   /**
    * Through the repository rather than `dataSource.query`, so the row arrives
