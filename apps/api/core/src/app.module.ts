@@ -23,6 +23,7 @@ import { NotifyModule } from './modules/notify/notify.module'
 import { OrganizationModule } from './modules/organization/organization.module'
 import { ProjectModule } from './modules/project/project.module'
 import { StorageModule } from './modules/storage/storage.module'
+import { TaskModule } from './modules/task/task.module'
 import { PermissionModule } from './permission/permission.module'
 
 // The repo keeps a single .env at its root, shared with docker-compose.
@@ -69,6 +70,7 @@ const rootEnvFile = join(__dirname, '..', '..', '..', '..', '.env')
     UserModule,
     OrganizationModule,
     ProjectModule,
+    TaskModule,
     NotifyModule,
     HealthModule,
     MaintenanceModule,
