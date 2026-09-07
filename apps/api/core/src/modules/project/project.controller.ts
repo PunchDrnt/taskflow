@@ -1,7 +1,22 @@
-import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common'
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+  Query,
+} from '@nestjs/common'
 import { ApiOperation, ApiTags } from '@nestjs/swagger'
 
-import { createProjectSchema, type CreateProjectInput } from '@repo/shared'
+import {
+  createProjectSchema,
+  listProjectsQuerySchema,
+  projectIdSchema,
+  type CreateProjectInput,
+  type ListProjectsQuery,
+} from '@repo/shared'
 
 import { ZodValidationPipe } from '#shared/http/zod-validation.pipe'
 
@@ -25,6 +40,28 @@ import { ProjectService, type ProjectView } from './project.service'
 @Controller('projects')
 export class ProjectController {
   constructor(private readonly projects: ProjectService) {}
+
+  /**
+   * Not every project in the organisation — every project *this caller* may
+   * see, decided in the query. See `ProjectService.list`.
+   */
+  @Get()
+  @ApiOperation({ summary: 'The projects this caller may see' })
+  list(
+    @Query(new ZodValidationPipe(listProjectsQuerySchema))
+    query: ListProjectsQuery,
+  ): Promise<ProjectView[]> {
+    return this.projects.list(query)
+  }
+
+  /** 404 rather than 403 when the caller may not see it — see the service. */
+  @Get(':id')
+  @ApiOperation({ summary: 'One project' })
+  find(
+    @Param('id', new ZodValidationPipe(projectIdSchema)) id: string,
+  ): Promise<ProjectView> {
+    return this.projects.findById(id)
+  }
 
   @Post()
   @HttpCode(HttpStatus.CREATED)

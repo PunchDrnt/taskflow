@@ -382,6 +382,48 @@ admin ดูแลคนใน org ได้ แต่จัดการตั�
 > ตัดสินโดยลำดับที่ module ประกาศ provider ซึ่งแปลว่าความปลอดภัยของทุก route
 > ไปขึ้นกับลำดับ import ใน `app.module.ts` · route guard รันหลัง global guard เสมอไม่ว่าลำดับนั้นเป็นยังไง
 
+#### project role เห็นอะไร และกั้นที่ไหน
+
+ชั้นล่างสุดของผัง — และเป็นชั้นเดียวที่**กั้นด้วย query ไม่ใช่ด้วยการถาม `can()` ทีละแถว**
+
+| ใคร | เห็น project ไหน | ทำอะไรได้ |
+| --- | --- | --- |
+| org `owner` / `admin` | **ทุก project ใน org** ถึงไม่ได้เป็นสมาชิก | ทุกอย่าง (`manage all`) |
+| project `admin` | project ที่ตัวเองอยู่ | `manage` project นั้นกับงานในนั้น |
+| project `member` | project ที่ตัวเองอยู่ | อ่าน · สร้าง/แก้ task ในนั้น (ลบไม่ได้) |
+| org `member` ที่ไม่ได้อยู่ project นั้น | **ไม่เห็นเลย** | — |
+
+> ที่ org owner/admin เห็นทุก project ไม่ใช่ความสะดวก — เป็นทางออกของเคส project ที่สมาชิกลาออกหมด
+> แล้วไม่เหลือใครเข้าถึงได้อีก · ด้วยเหตุผลเดียวกันจึง**ไม่มีกฎ "project admin คนสุดท้าย"**
+> แบบที่ org มีกฎ owner คนสุดท้าย
+
+**สร้าง project ได้เฉพาะ owner/admin** ([เหตุผล](./04-features/phase-1.md#project)) ·
+⚠️ `ability.ts` เคยเขียนกลับข้าง (`can('create', 'Project')` อยู่ใน block ของ member) และไม่มีใครเห็น
+เพราะยังไม่เคยมี endpoint ไหนถาม — แก้ให้ตรง doc แล้วใน §4
+
+**🔒 กั้นสองอย่างที่ไม่เหมือนกัน**
+
+- **`ProjectService.list` กั้นใน SQL** — org member ได้ `INNER JOIN project.members`,
+  owner/admin ไม่ join · กรองทีหลังแปลว่าแถวถูกส่งออกไปแล้ว และซ่อนใน sidebar แปลว่าใครรู้ URL ก็เปิดได้
+- **`ability.ts` กั้นทีละแถว** — org member ได้ `can('read', 'all')` แล้ว **`cannot('read', 'Project')`
+  กับ `cannot('read', 'Task')` ทับ** แล้วได้คืนเป็นราย project จาก `actor.projectRoles`
+  · CASL ใช้กฎ**ตัวท้ายสุดที่ match** ลำดับนี้จึงถูก
+  · ⚠️ ก่อน §4 มีแค่ `can('read', 'all')` ล้วนๆ ซึ่งแปลว่า member อ่าน project ไหนก็ได้ — ขัดกับตารางข้างบน
+    และไม่มีใครเห็นเพราะยังไม่มีใครเรียก
+
+> **กฎนี้เขียนไว้สองที่ และเลี่ยงไม่ได้** — `can()` ตอบเรื่องแถวเดียว แต่ลิสต์ต้องการ `WHERE`
+> · ที่ผูกสองอันไว้ไม่ให้เพี้ยนคือ **test** ไม่ใช่ความระวัง: `test/project.spec.ts`
+> เช็คว่าทุก role ผลของ `list()` เท่ากับเซตที่ `can('read', 'Project', { id })` ตอบว่าได้ · แก้ข้างเดียวแล้วแดง
+
+**`actor.projectRoles` ใส่ทีละ project ไม่ใช่โหลดทั้งหมด** — service ที่ load แถวมาแล้ว
+ประกอบ actor ที่มี role ของ project นั้นอันเดียว · โหลดทุก project ที่คนนั้นอยู่เพื่อตอบเรื่อง project เดียว
+คือการโหลดซ้ำแบบเดียวกับที่ [`ContextResolvedSubject`](#permission-hierarchy) ห้าม guard ทำ
+และ map ที่มี id อื่นปนอยู่คือช่องให้กฎไป match ผิดตัว
+
+**404 ไม่ใช่ 403 ตอนมองไม่เห็น** — 403 บน project ที่ member ไม่ได้อยู่ = ยืนยันว่ามี project id นั้นอยู่ใน org
+ซึ่งคือสิ่งที่กติกา "member เห็นเฉพาะที่ตัวเองอยู่" ปิดไว้พอดี · เส้นแบ่ง:
+**มองไม่เห็น = 404 · เห็นแต่ทำไม่ได้ = 403** (คนที่อยู่ใน project แล้วเปลี่ยนชื่อไม่ได้ ต้องได้คำตอบตรงๆ ไม่ใช่ 404 ที่อ่านเหมือนบั๊ก)
+
 **คนที่มี system role ไม่ได้เป็นสมาชิก org โดยอัตโนมัติ** — เข้าถึงข้อมูล org ผ่าน permission ระดับ system หรือ impersonate เท่านั้น ห้ามแอบใส่ตัวเองเข้า `organization.members`
 
 **กติกาที่ต้องบังคับ**
@@ -618,6 +660,14 @@ generateKeyBetween('a0', 'a1') // 'a0V' — แทรกกลาง
   ```
 - Index ต้องมี `sort_order` ต่อท้าย: `(org_id, project_id, sort_order)`
 - **Rebalance job** — ลากไปมาบ่อยมาก key จะยาวขึ้น (`a0VVVVV...`) ตั้ง job รีเซ็ตเมื่อ key ยาวเกิน 50 ตัว (นานๆ ครั้ง แต่ควรเผื่อ)
+- ⚠️ **`generateKeyBetween` ไม่ตรวจว่า bound สลับข้างกัน** — `('a1', 'a0')` **ไม่ throw** แต่คืน `'a0V'`
+  ซึ่งเป็น key ที่ถูกต้องทุกอย่างและเรียงอยู่**ต่ำกว่าทั้งคู่** · แถวไปโผล่ผิดที่โดยไม่มี error ที่ไหนเลย
+  (วัดกับ fractional-indexing 4.0.0) · มันจะ throw เฉพาะตอนคำนวณไม่ได้จริงๆ เช่น `('a0','a0')` หรือ magnitude prefix คนละตัว
+  · เคสนี้เกิดจากการอ่าน neighbour มาจากลิสต์ที่ไม่ได้ `ORDER BY sort_order` ซึ่งเป็นบั๊กที่ควรดังไม่ใช่เงียบ
+
+**เรียกผ่าน [`#shared/sort-order`](../../apps/api/core/src/shared/sort-order.ts) ไม่ใช่ import library ตรงๆ** —
+ที่เดียวที่ผูก "alphabet ของ library" เข้ากับ "`COLLATE "C"` ของคอลัมน์" ไว้เป็นลายลักษณ์อักษร
+และเป็นที่ที่ดักเคส bound สลับข้างข้างบน · `between(before, after)` กับ `sequence(n)`
 
 #### Soft Delete
 

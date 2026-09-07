@@ -5,14 +5,17 @@ import { DataSource, QueryFailedError, type EntityManager } from 'typeorm'
 import {
   PROJECT_ERROR_CODES,
   type CreateProjectInput,
+  type ListProjectsQuery,
   type ScopedRole,
 } from '@repo/shared'
 
 import { ApiException } from '#shared/http/api-exception'
+import { InjectOrgRepository } from '#shared/org-scope/org-repository.provider'
+import { OrgScopedRepository } from '#shared/org-scope/org-scoped.repository'
 import { requireOrgContext } from '#shared/org-scope/request-context'
 import { sequence } from '#shared/sort-order'
 
-import { actorFromContext } from '../../permission/actor'
+import { actorFromContext, type Actor } from '../../permission/actor'
 import { PermissionService } from '../../permission/permission.service'
 import { AuditService } from '../audit/audit.service'
 import { DEFAULT_STATUSES } from './default-statuses'
@@ -31,10 +34,15 @@ export interface ProjectView {
   archivedAt: Date | null
   /**
    * What the caller is *in this project*, or null when they are not in it and
-   * are seeing it because they run the organisation. The sidebar needs it to
-   * decide whether to draw project settings; it is not what any permission
-   * decision reads, which is `ProjectAccess`.
+   * are seeing it because they run the organisation. The sidebar reads it to
+   * decide whether to draw project settings.
    */
+  role: ScopedRole | null
+}
+
+/** A project the caller may see, with the membership that made it visible. */
+export interface VisibleProject {
+  project: Project
   role: ScopedRole | null
 }
 
@@ -44,10 +52,125 @@ const UNIQUE_VIOLATION = '23505'
 @Injectable()
 export class ProjectService {
   constructor(
+    @InjectOrgRepository(Project)
+    private readonly projects: OrgScopedRepository<Project>,
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly permissions: PermissionService,
     private readonly audit: AuditService,
   ) {}
+
+  /**
+   * The projects this caller may see, which is not the same list for everyone
+   * in the organisation.
+   *
+   * 🔒 **The gate is in the query, not in a filter afterwards and not in the
+   * sidebar.** docs/04-features/phase-1.md#สิทธิ์ระดับ-project-กั้นจริงตั้งแต่-phase-1:
+   * a member sees only the projects they have joined, and an org owner or
+   * admin sees all of them — which exists so a project whose members have all
+   * left does not become unreachable. Filtering rows the database already
+   * returned would still have sent them over the wire, and hiding a link in
+   * the UI stops nobody who knows the URL.
+   *
+   * ⚠️ **This is the one rule expressed twice** — as SQL here and as CASL in
+   * `ability.ts` — and it is unavoidable: `can()` answers about one row, and a
+   * list needs a WHERE clause. So the two are held together by a test rather
+   * than by care: `test/project.spec.ts` asserts that for every role, what
+   * this returns is exactly the set `can('read', 'Project', { id })` says yes
+   * to. Change one and the other goes red.
+   */
+  async list(
+    query: ListProjectsQuery = { includeArchived: false },
+  ): Promise<ProjectView[]> {
+    const { userId } = requireOrgContext()
+    const actor = actorFromContext()
+
+    const builder = this.projects.queryBuilder
+      .withOrg('project')
+      .leftJoin(
+        ProjectMember,
+        'membership',
+        'membership.projectId = project.id AND membership.userId = :userId',
+        { userId },
+      )
+      .select('project.id', 'id')
+      .addSelect('project.name', 'name')
+      .addSelect('project.description', 'description')
+      .addSelect('project.color', 'color')
+      .addSelect('project.key_prefix', 'keyPrefix')
+      .addSelect('project.archived_at', 'archivedAt')
+      .addSelect('membership.role', 'role')
+      .andWhere('project.deletedAt IS NULL')
+      .orderBy('project.name', 'ASC')
+
+    if (!query.includeArchived) {
+      builder.andWhere('project.archivedAt IS NULL')
+    }
+
+    // The gate. An owner or an admin runs the organisation and sees every
+    // project in it; anybody else sees the ones the join found them in.
+    if (actor.orgRole === 'member') {
+      builder.andWhere('membership.id IS NOT NULL')
+    }
+
+    return builder.getRawMany<ProjectView>()
+  }
+
+  /**
+   * One project, or 404 — including when it exists and the caller may not see
+   * it.
+   *
+   * **404 rather than 403, and the difference is deliberate.** A 403 on a
+   * project a member has not joined confirms that a project with that id
+   * exists in their organisation, which is exactly what "a member sees only
+   * the projects they are in" is meant to withhold. The codebase already
+   * answers 404 for a row in another org for the same reason.
+   *
+   * The split it draws: **not being able to see it is 404, not being allowed
+   * to change it is 403.** Someone looking at a project they belong to and
+   * lacking the rights to rename it should be told so plainly — hiding it at
+   * that point would only look like a bug.
+   */
+  async findVisible(id: string): Promise<VisibleProject> {
+    const { userId } = requireOrgContext()
+
+    const project = await this.projects.queryBuilder
+      .withOrg('project')
+      .andWhere('project.id = :id', { id })
+      .andWhere('project.deletedAt IS NULL')
+      .getOne()
+
+    if (!project) throw notFound()
+
+    const membership = await this.projects.queryBuilder
+      .base('project')
+      .select('membership.role', 'role')
+      .innerJoin(
+        ProjectMember,
+        'membership',
+        'membership.projectId = project.id AND membership.userId = :userId',
+        { userId },
+      )
+      .where('project.id = :id', { id })
+      .getRawOne<{ role: ScopedRole }>()
+
+    const role = membership?.role ?? null
+
+    // Asked of the rules rather than re-derived: the actor carries this
+    // project's role and nothing else, so a conditional rule can only match
+    // the project actually being asked about.
+    if (!this.permissions.can(actorFor(role, id), 'read', 'Project', { id })) {
+      throw notFound()
+    }
+
+    return { project, role }
+  }
+
+  /** The same project, shaped for a client. */
+  async findById(id: string): Promise<ProjectView> {
+    const { project, role } = await this.findVisible(id)
+
+    return view(project, role)
+  }
 
   /**
    * Creates a project, the statuses it needs to hold work, and its first
@@ -153,6 +276,26 @@ export class ProjectService {
       throw nameClash(error, input.name)
     }
   }
+}
+
+/**
+ * The caller as the permission rules should see them for one project.
+ *
+ * `projectRoles` holds that project alone. Loading every project a person is
+ * in to answer a question about one of them would be the double load the
+ * `@RequirePermission` decorator refuses to do in a guard — and a map with
+ * other ids in it invites a rule to match the wrong one.
+ */
+function actorFor(role: ScopedRole | null, projectId: string): Actor {
+  const actor = actorFromContext()
+
+  return role === null
+    ? actor
+    : { ...actor, projectRoles: { [projectId]: role } }
+}
+
+function notFound(): ApiException {
+  return ApiException.notFound('ไม่พบโปรเจกต์นี้')
 }
 
 export function view(project: Project, role: ScopedRole | null): ProjectView {

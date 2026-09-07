@@ -42,6 +42,7 @@
     "@repo/shared": "workspace:*",
     "@sentry/nestjs": "^10.70.0",
     "cookie-parser": "^1.4.7",
+    "fractional-indexing": "^4.0.0",
     "nestjs-pino": "^4.6.1",
     "otplib": "^13.5.0",
     "pg": "^8.23.0",

@@ -223,9 +223,20 @@ unique เต็ม · `views.sort_order` / `is_default`
 - [ ] `color` เป็น token จาก palette 8 สี (ไม่ใช่ hex) — คอลัมน์ลงแล้ว `icon` เอาออกแล้ว
       · ✅ `paletteColorSchema` อ่านจาก `STATUS_COLORS` ตัวเดียวกับ status — ลิสต์เดียว สีที่ project ใช้ได้แต่ status ใช้ไม่ได้จึงเป็นไปไม่ได้
 - [ ] Project member อิสระจากทีม (แบบ Slack channel) — role `admin` / `member`
-- [ ] 🔒 **กั้นสิทธิ์ระดับ project จริงตั้งแต่ phase นี้ ไม่ใช่แค่ซ่อนใน sidebar**
+- [x] 🔒 **กั้นสิทธิ์ระดับ project จริงตั้งแต่ phase นี้ ไม่ใช่แค่ซ่อนใน sidebar**
       · member เห็นเฉพาะ project ที่ตัวเองเป็นสมาชิก · org owner/admin เห็นทุก project ใน org ตัวเอง
       · กั้นแค่ที่ UI = คนที่รู้ URL ก็ยังเปิดเข้าไปได้
+      · ✅ **กั้นใน SQL** — `ProjectService.list` ให้ org member `INNER JOIN project.members` ส่วน owner/admin ไม่ join
+        · กรองทีหลัง = แถวถูกส่งออกไปแล้ว
+      · ⚠️ **เจอรูตอนเขียน test: `ability.ts` ให้ member `can('read', 'all')` เฉยๆ** ซึ่งแปลว่าอ่าน project ไหนก็ได้
+        ขัดกับ [ตารางใน docs](../docs/01-architecture.md#project-role-เห็นอะไร-และกั้นที่ไหน) · เติม `cannot('read','Project')`
+        กับ `cannot('read','Task')` แล้วคืนเป็นราย project จาก `actor.projectRoles` (CASL ใช้กฎตัวท้ายสุดที่ match)
+        · **ไม่มีใครเห็นเพราะยังไม่มีใครเรียก** — `findVisible` ที่เขียนใหม่ถาม `can()` แล้วได้ `true` เสมอ เช็คที่ดูเหมือนเช็คแต่ไม่ใช่
+      · 🔒 **กฎนี้อยู่สองที่ (SQL กับ CASL) เลี่ยงไม่ได้** — `can()` ตอบเรื่องแถวเดียว ลิสต์ต้องการ `WHERE`
+        · `test/project.spec.ts` เช็คว่าทุก role ผลของ `list()` เท่ากับเซตที่ `can('read','Project',{id})` ตอบว่าได้ · แก้ข้างเดียวแล้วแดง
+      · **มองไม่เห็น = 404 · เห็นแต่ทำไม่ได้ = 403** — 403 บน project ที่ member ไม่ได้อยู่ = ยืนยันว่ามี id นั้นใน org
+      · `actor.projectRoles` ใส่ทีละ project ที่ service โหลดมาแล้ว **ไม่ได้โหลดทั้งหมดใส่ context** — guard ไม่ต้องแตะ
+        และไม่มี query เพิ่มต่อ request สำหรับ endpoint ที่ไม่ได้ถามเรื่อง project
 - [ ] ลบ project → ลูกทั้งต้นไปด้วย ผ่าน `CascadeSoftDelete` (inject เป็น service) ที่มีอยู่แล้ว
       · ถ้าเพิ่มตารางใหม่ใน phase นี้ **ต้องใส่ใน `AGGREGATE_CHILDREN` หรือ `ROOTS`** ไม่งั้น test ฟ้อง
 

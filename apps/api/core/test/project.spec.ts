@@ -10,6 +10,7 @@ import { SYSTEM_USER_ID } from '#shared/system-user'
 
 import { AuditService } from '../src/modules/audit/audit.service'
 import { AuditLog } from '../src/modules/audit/log.entity'
+import { Project } from '../src/modules/project/project.entity'
 import { ProjectService } from '../src/modules/project/project.service'
 import { PermissionService } from '../src/permission/permission.service'
 import { createMigratedTestDataSource, hasTestDatabase } from './database'
@@ -99,6 +100,20 @@ describe.skipIf(!hasTestDatabase)('project', () => {
     }
   }
 
+  const joinProject = (projectId: string, userId: string, role: string) =>
+    dataSource.query(
+      `INSERT INTO project.members
+         (org_id, project_id, user_id, role, created_by, updated_by)
+       VALUES ($1, $2, $3, $4, $5, $5)`,
+      [acme, projectId, userId, role, SYSTEM_USER_ID],
+    )
+
+  const archive = (projectId: string) =>
+    dataSource.query(
+      `UPDATE project.projects SET archived_at = now() WHERE id = $1`,
+      [projectId],
+    )
+
   const create = (userId: string, orgRole: OrgRole, name: string) =>
     as(acme, userId, orgRole, () =>
       projects.create({ name, keyPrefix: 'DEV', color: 'blue' }),
@@ -108,6 +123,7 @@ describe.skipIf(!hasTestDatabase)('project', () => {
     dataSource = await createMigratedTestDataSource()
 
     projects = new ProjectService(
+      createOrgScopedRepository(dataSource, Project),
       dataSource,
       new PermissionService(),
       new AuditService(createOrgScopedRepository(dataSource, AuditLog)),
@@ -250,6 +266,174 @@ describe.skipIf(!hasTestDatabase)('project', () => {
       expect(await countOf('project.projects')).toBe(1)
       expect(await countOf('project.statuses')).toBe(4)
       expect(await countOf('project.members')).toBe(1)
+    })
+  })
+
+  describe('🔒 who may see which project', () => {
+    let apollo: string
+    let mercury: string
+
+    beforeEach(async () => {
+      // Two projects the owner made. `plain` is put into one of them and left
+      // out of the other, which is the whole shape of the rule.
+      apollo = (await create(owner, 'owner', 'Apollo')).id
+      mercury = (await create(owner, 'owner', 'Mercury')).id
+
+      await joinProject(apollo, plain, 'member')
+    })
+
+    const namesFor = async (userId: string, orgRole: OrgRole) =>
+      (await as(acme, userId, orgRole, () => projects.list())).map(
+        (project) => project.name,
+      )
+
+    it('shows an owner every project in the organisation', async () => {
+      // Including Mercury, which they are not a member of. This is what keeps
+      // a project whose members have all left from becoming unreachable.
+      expect(await namesFor(owner, 'owner')).toEqual(['Apollo', 'Mercury'])
+    })
+
+    it('shows an admin every project in the organisation', async () => {
+      expect(await namesFor(admin, 'admin')).toEqual(['Apollo', 'Mercury'])
+    })
+
+    it('shows a member only the projects they have joined', async () => {
+      expect(await namesFor(plain, 'member')).toEqual(['Apollo'])
+    })
+
+    it('reports the caller’s own role in each project', async () => {
+      const [apolloView] = await as(acme, plain, 'member', () =>
+        projects.list(),
+      )
+
+      expect(apolloView?.role).toBe('member')
+
+      // The owner is in Apollo because they created it, and not in Mercury.
+      const forOwner = await as(acme, owner, 'owner', () => projects.list())
+
+      expect(forOwner.map((one) => one.role)).toEqual(['admin', 'admin'])
+    })
+
+    it('answers 404, not 403, for a project a member has not joined', async () => {
+      // A 403 would confirm that a project with that id exists in their
+      // organisation, which is exactly what the rule withholds.
+      expect(
+        await codeOf(
+          as(acme, plain, 'member', () => projects.findById(mercury)),
+        ),
+      ).toBe('NOT_FOUND')
+    })
+
+    it('lets a member open the project they are in', async () => {
+      const project = await as(acme, plain, 'member', () =>
+        projects.findById(apollo),
+      )
+
+      expect(project).toMatchObject({ name: 'Apollo', role: 'member' })
+    })
+
+    it('lets an owner open a project they are not in', async () => {
+      const project = await as(acme, admin, 'admin', () =>
+        projects.findById(mercury),
+      )
+
+      // Visible, with no project role of their own — the sidebar uses that to
+      // decide what to draw, and it is not what let them in.
+      expect(project).toMatchObject({ name: 'Mercury', role: null })
+    })
+
+    it('🔒 never shows a project belonging to another organisation', async () => {
+      await as(globex, owner, 'owner', () =>
+        projects.create({ name: 'Zeus', keyPrefix: 'ZEU', color: 'red' }),
+      )
+
+      // Zeus is in neither list, and Apollo is in neither of Globex's.
+      expect(await namesFor(owner, 'owner')).toEqual(['Apollo', 'Mercury'])
+      expect(
+        (await as(globex, owner, 'owner', () => projects.list())).map(
+          (one) => one.name,
+        ),
+      ).toEqual(['Zeus'])
+
+      // The id is not a way in either: the org scope runs before the
+      // project one, so it reads as a project that does not exist.
+      const [zeus] = (await dataSource.query(
+        `SELECT id FROM project.projects WHERE name = 'Zeus'`,
+      )) as { id: string }[]
+
+      expect(
+        await codeOf(
+          as(acme, owner, 'owner', () => projects.findById(zeus!.id)),
+        ),
+      ).toBe('NOT_FOUND')
+    })
+
+    it('🔒 the list agrees with the permission rules, role by role', async () => {
+      // The one rule this codebase states twice — as SQL in
+      // `ProjectService.list` and as CASL in `ability.ts` — because `can()`
+      // answers about one row and a list needs a WHERE clause. Nothing but
+      // this test stops the two drifting apart.
+      const permissions = new PermissionService()
+      const everyProject = [apollo, mercury]
+
+      for (const [userId, orgRole] of [
+        [owner, 'owner'],
+        [admin, 'admin'],
+        [plain, 'member'],
+      ] as [string, OrgRole][]) {
+        const listed = await as(acme, userId, orgRole, () => projects.list())
+
+        const allowed = everyProject.filter((id) => {
+          const role = listed.find((one) => one.id === id)?.role ?? null
+
+          return permissions.can(
+            {
+              userId,
+              orgId: acme,
+              orgRole,
+              ...(role === null ? {} : { projectRoles: { [id]: role } }),
+            },
+            'read',
+            'Project',
+            { id },
+          )
+        })
+
+        expect(listed.map((one) => one.id).sort()).toEqual(allowed.sort())
+      }
+    })
+  })
+
+  describe('archived projects', () => {
+    let apollo: string
+
+    beforeEach(async () => {
+      apollo = (await create(owner, 'owner', 'Apollo')).id
+      await create(owner, 'owner', 'Mercury')
+      await archive(apollo)
+    })
+
+    it('are left out of the list by default', async () => {
+      // Which is what the sidebar and every picker ask for.
+      const listed = await as(acme, owner, 'owner', () => projects.list())
+
+      expect(listed.map((one) => one.name)).toEqual(['Mercury'])
+    })
+
+    it('are included when asked for', async () => {
+      const listed = await as(acme, owner, 'owner', () =>
+        projects.list({ includeArchived: true }),
+      )
+
+      expect(listed.map((one) => one.name)).toEqual(['Apollo', 'Mercury'])
+    })
+
+    it('can still be opened directly', async () => {
+      // Archive hides, it does not revoke: members keep their access to the
+      // history. Only `deleted_at` takes a project away.
+      await expect(
+        as(acme, owner, 'owner', () => projects.findById(apollo)),
+      ).resolves.toMatchObject({ name: 'Apollo' })
     })
   })
 })

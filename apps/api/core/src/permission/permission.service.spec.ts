@@ -41,9 +41,40 @@ describe('PermissionService', () => {
     it('gives a member the run of the org read-only and nothing more', () => {
       const member = actor('member')
 
-      expect(permissions.can(member, 'read', 'Task', {})).toBe(true)
+      expect(permissions.can(member, 'read', 'Organization', {})).toBe(true)
+      expect(permissions.can(member, 'read', 'Team', {})).toBe(true)
       expect(permissions.can(member, 'delete', 'Project', {})).toBe(false)
       expect(permissions.can(member, 'update', 'Team', {})).toBe(false)
+    })
+
+    it('🔒 does not let `read all` reach a project they have not joined', () => {
+      // `can('read', 'all')` used to cover projects and tasks too, which reads
+      // as harmless and is not: a member sees only the projects they are in
+      // (docs/04-features/phase-1.md), and a blanket read said otherwise. The
+      // two `cannot`s in `ability.ts` are given back per project by the
+      // conditional rules — so this is the state of somebody with no
+      // membership in the project being asked about.
+      const member = actor('member')
+
+      expect(permissions.can(member, 'read', 'Project', { id: 'p1' })).toBe(
+        false,
+      )
+      expect(permissions.can(member, 'read', 'Task', { projectId: 'p1' })).toBe(
+        false,
+      )
+
+      const joined = actor('member', { projectRoles: { p1: 'member' } })
+
+      expect(permissions.can(joined, 'read', 'Project', { id: 'p1' })).toBe(
+        true,
+      )
+      expect(permissions.can(joined, 'read', 'Task', { projectId: 'p1' })).toBe(
+        true,
+      )
+      // ...and only that one.
+      expect(permissions.can(joined, 'read', 'Project', { id: 'p2' })).toBe(
+        false,
+      )
     })
 
     it('does not let a member start a project', () => {
@@ -127,8 +158,10 @@ describe('PermissionService', () => {
 
     it('still allows what is permitted unconditionally', () => {
       // `can('read', 'all')` comes from the org role and names no row, so an
-      // empty resource is the honest way to ask and the answer is yes.
-      expect(permissions.can(lead, 'read', 'Task', {})).toBe(true)
+      // empty resource is the honest way to ask and the answer is yes. Not
+      // `Project` or `Task`, which the member block takes back and the
+      // conditional rules give out one id at a time.
+      expect(permissions.can(lead, 'read', 'Organization', {})).toBe(true)
     })
   })
 
