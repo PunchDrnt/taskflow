@@ -208,17 +208,55 @@ unique เต็ม · `views.sort_order` / `is_default`
 
 ## 4. Project
 
-- [ ] สร้าง / แก้ไข / ลบ project (soft delete)
+- [x] สร้าง / แก้ไข / ลบ project (soft delete)
+      · ✅ **สร้างแล้ว** — `POST /v1/projects` สร้าง project + status ตั้งต้น 4 อัน + แถว member ของคนสร้าง **ในทรานแซกชันเดียว**
+        `tasks.status_id` เป็น NOT NULL ฉะนั้น project ที่ไม่มี status ไม่ใช่ project ว่าง แต่เป็น project ที่รับงานใบแรกไม่ได้ และดูปกติทุกอย่างจนกว่าจะมีคนลอง
+      · ⚠️ **`ability.ts` เคยเขียนกลับข้างกับ docs** — `can('create', 'Project')` อยู่ใน block ของ `member`
+        พร้อมคอมเมนต์ว่า "project เป็น Slack channel ใครก็สร้างได้" แต่ [`04-features/phase-1.md`](../docs/04-features/phase-1.md#project) เขียนไว้ตั้งแต่แรกว่า **owner/admin เท่านั้น**
+        · ไม่มีใครเห็นเพราะยังไม่เคยมีใครเรียก `can` กับ subject นี้เลย · **โค้ดขยับมาตรงกับ doc** doc ไม่ต้องแก้ (แพทเทิร์นเดียวกับ `FeatureService` ใน §0)
+        · เหตุผลของ doc ผูกกับกติกาข้างล่างพอดี: member เห็นเฉพาะ project ที่ตัวเองอยู่ คนที่มองไม่เห็นว่ามีอะไรอยู่แล้วบ้าง ไม่ใช่คนที่ควรตัดสินว่าต้องมีอันใหม่
+      · **ไม่มีกฎ "project admin คนสุดท้าย"** ต่างจาก owner คนสุดท้ายของ org — project ที่ไม่เหลือ admin เลย org owner/admin ยังจัดการได้อยู่ จึงเข้าถึงไม่ได้แบบ org ไร้ owner ไม่ได้
 - [ ] **`key_prefix` บังคับกรอกตอนสร้าง** · uppercase `^[A-Z][A-Z0-9]{1,5}$` · ซ้ำกันได้ในหนึ่ง org
       · คอลัมน์ + CHECK ลงแล้ว เหลือฟอร์มกับ validation ฝั่ง API/web · **regex ตาม docs ไม่ใช่ตาม prototype**
         (prototype ยอมให้ `12` ผ่าน ซึ่งตัวแรกต้องเป็นตัวอักษร)
+      · ✅ `keyPrefixSchema` ใน `@repo/shared` ใช้ regex ของ docs ตรงกับ CHECK ในตาราง — ค่าที่ API รับแต่ DB ปฏิเสธจะโผล่มาเป็น 500
+      · schema `.toUpperCase()` ให้เอง — พิมพ์ `apl` มาได้ `APL` ไม่ใช่ 400 (ยิงจริงแล้ว)
+      · ⏳ **ติ๊กไม่ได้เพราะยังไม่มีฟอร์มฝั่ง web** — ฝั่ง API ครบแล้ว
 - [ ] `color` เป็น token จาก palette 8 สี (ไม่ใช่ hex) — คอลัมน์ลงแล้ว `icon` เอาออกแล้ว
-- [ ] Project member อิสระจากทีม (แบบ Slack channel) — role `admin` / `member`
-- [ ] 🔒 **กั้นสิทธิ์ระดับ project จริงตั้งแต่ phase นี้ ไม่ใช่แค่ซ่อนใน sidebar**
+      · ✅ `paletteColorSchema` อ่านจาก `STATUS_COLORS` ตัวเดียวกับ status — ลิสต์เดียว สีที่ project ใช้ได้แต่ status ใช้ไม่ได้จึงเป็นไปไม่ได้
+      · ⏳ **ติ๊กไม่ได้เพราะยังไม่มีตัวเลือกสีฝั่ง web** — ฝั่ง API ครบแล้ว (hex ตอบ 400)
+- [x] Project member อิสระจากทีม (แบบ Slack channel) — role `admin` / `member`
+      · `GET/POST /v1/projects/:id/members` · `PATCH|DELETE .../:userId` · ชื่อดึงผ่าน `UserService.findByIds` ไม่ใช่ join (แบบเดียวกับ org members)
+      · 🔒 **ต้องเช็คเองว่าคนที่เพิ่มอยู่ใน org จริง — FK ไม่ได้ครอบ** · `project.members.user_id` ชี้ `iam.users(id)` เดี่ยวๆ
+        มีแค่ `project_id` ที่เป็น composite กับ `org_id` · แปลว่าใส่ user ของบริษัทอื่นเข้าไป insert ผ่านสบายๆ แล้วเขาได้ membership จริงที่ `list` นับให้ด้วย
+        · `ProjectMemberService.add` เลยถาม `MemberService.findByUserId` ก่อน (export เพิ่มจาก `OrganizationModule`) → ไม่อยู่ใน org = 404
+      · ลบสมาชิกเป็น **hard `DELETE`** ถูกแล้ว — `project.members` เป็น `OrgScopedEntity` ไม่มี `deleted_at`
+        เพราะ membership ที่จบไปแล้วไม่มีอะไรให้อ่านย้อน · งานที่เขาทำอยู่บน task ผูกด้วย `created_by` ไม่ได้หายไปไหน
+      · audit row เขียน**ก่อน** delete ในทรานแซกชันเดียวกัน — เขียนทีหลังจะหาแถวไม่เจอแล้ว
+- [x] 🔒 **กั้นสิทธิ์ระดับ project จริงตั้งแต่ phase นี้ ไม่ใช่แค่ซ่อนใน sidebar**
       · member เห็นเฉพาะ project ที่ตัวเองเป็นสมาชิก · org owner/admin เห็นทุก project ใน org ตัวเอง
       · กั้นแค่ที่ UI = คนที่รู้ URL ก็ยังเปิดเข้าไปได้
-- [ ] ลบ project → ลูกทั้งต้นไปด้วย ผ่าน `CascadeSoftDelete` (inject เป็น service) ที่มีอยู่แล้ว
+      · ✅ **กั้นใน SQL** — `ProjectService.list` ให้ org member `INNER JOIN project.members` ส่วน owner/admin ไม่ join
+        · กรองทีหลัง = แถวถูกส่งออกไปแล้ว
+      · ⚠️ **เจอรูตอนเขียน test: `ability.ts` ให้ member `can('read', 'all')` เฉยๆ** ซึ่งแปลว่าอ่าน project ไหนก็ได้
+        ขัดกับ [ตารางใน docs](../docs/01-architecture.md#project-role-เห็นอะไร-และกั้นที่ไหน) · เติม `cannot('read','Project')`
+        กับ `cannot('read','Task')` แล้วคืนเป็นราย project จาก `actor.projectRoles` (CASL ใช้กฎตัวท้ายสุดที่ match)
+        · **ไม่มีใครเห็นเพราะยังไม่มีใครเรียก** — `findVisible` ที่เขียนใหม่ถาม `can()` แล้วได้ `true` เสมอ เช็คที่ดูเหมือนเช็คแต่ไม่ใช่
+      · 🔒 **กฎนี้อยู่สองที่ (SQL กับ CASL) เลี่ยงไม่ได้** — `can()` ตอบเรื่องแถวเดียว ลิสต์ต้องการ `WHERE`
+        · `test/project.spec.ts` เช็คว่าทุก role ผลของ `list()` เท่ากับเซตที่ `can('read','Project',{id})` ตอบว่าได้ · แก้ข้างเดียวแล้วแดง
+      · **มองไม่เห็น = 404 · เห็นแต่ทำไม่ได้ = 403** — 403 บน project ที่ member ไม่ได้อยู่ = ยืนยันว่ามี id นั้นใน org
+      · `actor.projectRoles` ใส่ทีละ project ที่ service โหลดมาแล้ว **ไม่ได้โหลดทั้งหมดใส่ context** — guard ไม่ต้องแตะ
+        และไม่มี query เพิ่มต่อ request สำหรับ endpoint ที่ไม่ได้ถามเรื่อง project
+- [x] ลบ project → ลูกทั้งต้นไปด้วย ผ่าน `CascadeSoftDelete` (inject เป็น service) ที่มีอยู่แล้ว
       · ถ้าเพิ่มตารางใหม่ใน phase นี้ **ต้องใส่ใน `AGGREGATE_CHILDREN` หรือ `ROOTS`** ไม่งั้น test ฟ้อง
+      · ⚠️ **การใช้งานจริงครั้งแรกของ `CascadeSoftDelete`** (เขียนไว้ตั้งแต่ Phase 0 มีแต่ test เรียก) และเจอว่ามันเปิด transaction ของตัวเอง
+        ซึ่งแปลว่าเขียน audit row ให้อยู่ทรานแซกชันเดียวกันไม่ได้เลย — ขัดกฎ 🔒
+        · เปลี่ยนเป็น `softDelete(manager, table, id)` **บังคับรับ manager และ throw ถ้าไม่มี transaction** ทรงเดียวกับ `AuditService.record`
+        · compiler หา call site ให้ครบ 8 จุด · แก้ [`CLAUDE.md`](../CLAUDE.md) ในคอมมิตเดียวกัน
+      · audit row บันทึกว่าอะไรไปด้วยกี่แถว (`cascaded`) — log ตอบ "แล้ว task ล่ะ" ได้โดยไม่ต้องไปไล่ `AGGREGATE_CHILDREN` เอง
+      · **archive ไม่ใช่ delete** — `POST|DELETE /v1/projects/:id/archive` แยก endpoint ไม่ใช่ field ใน `PATCH`
+        เพราะ "เปลี่ยนชื่อ" กับ "ซ่อนจาก sidebar ทุกคน" ไม่ควรมาในรูป request เดียวกันที่ต่างกันแค่หนึ่ง key
+        และ activity log ควรมี action ให้คนไล่หา · `archived_at` ไม่มี `archived_by` และไม่มี CHECK คู่ ต่างจาก soft delete ทุกตัว
 
 ---
 
@@ -232,6 +270,9 @@ unique เต็ม · `views.sort_order` / `is_default`
 - [ ] **หน้าจอแก้ status ต่อ project** — เพิ่ม/ลบ/เปลี่ยนชื่อ/เปลี่ยนสี/จัดลำดับ
       · กติกาข้างล่างไม่มีที่ให้กดถ้าไม่มีหน้านี้
 - [ ] `sort_order` เป็น LexoRank เหมือน task
+      · ✅ **ตัวช่วยเขียนแล้ว** — `#shared/sort-order` (`between` / `sequence`) · fractional indexing base-62 เรียงตาม ASCII
+        ให้ตรงกับ `COLLATE "C"` ของคอลัมน์ · แทรกกลางเขียนแถวเดียว ไม่ใช่เขียนใหม่ทั้งลิสต์
+      · 🔒 key ห้ามลงท้ายด้วยหลักต่ำสุด — `'V'` กับ `'V0'` เป็นเลขเดียวกันแต่ไบต์ไม่เท่ากัน ลิสต์ที่มีทั้งคู่คือสองแถวที่คนอ่านแยกไม่ออกแต่ Postgres แยก
 - [ ] Partial unique index คุม "อย่างมากหนึ่ง" มีตั้งแต่ Phase 0 แล้ว — `is_default` ต่อ project
 - [ ] ห้ามลบ status ที่มี task ใช้อยู่ / ห้ามลบอันสุดท้าย
 - [ ] status เป็นทั้ง done และ cancelled พร้อมกันไม่ได้

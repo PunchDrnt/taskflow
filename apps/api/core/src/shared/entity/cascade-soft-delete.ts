@@ -90,27 +90,46 @@ export class CascadeSoftDelete {
    *
    * Named for what it does rather than for the class it sits on: at the call
    * site `cascade.delete(...)` reads like the hard delete this is not.
+   *
+   * 🔒 **Takes the caller's `EntityManager` and refuses one that is not in a
+   * transaction**, the same shape and for the same reason as
+   * `AuditService.record`. Deleting an aggregate is business logic that owes
+   * the activity log an entry, and an entry can only commit or roll back with
+   * the delete if both run on one transaction. This used to open its own,
+   * which made writing that entry atomically impossible — nothing had noticed
+   * because until §4 no service had ever called it.
    */
-  async softDelete(table: string, id: string): Promise<Record<string, number>> {
+  async softDelete(
+    manager: EntityManager,
+    table: string,
+    id: string,
+  ): Promise<Record<string, number>> {
+    if (!manager.queryRunner?.isTransactionActive) {
+      throw new Error(
+        'CascadeSoftDelete.softDelete needs the EntityManager of an open ' +
+          'transaction — the whole aggregate has to go down together, and ' +
+          'with whatever audit row describes it. Call it from inside ' +
+          'dataSource.transaction(...).',
+      )
+    }
+
     const { orgId, userId } = requireOrgContext()
+    const deleted: Record<string, number> = {}
 
-    return this.dataSource.transaction(async (manager) => {
-      const deleted: Record<string, number> = {}
-
-      const roots = await this.markDeleted(manager, {
-        table,
-        where: `id = $3`,
-        parameters: [id],
-        orgId,
-        userId,
-      })
-
-      if (roots.length === 0) return deleted
-      deleted[table] = roots.length
-
-      await this.descend(manager, table, roots, orgId, userId, deleted)
-      return deleted
+    const roots = await this.markDeleted(manager, {
+      table,
+      where: `id = $3`,
+      parameters: [id],
+      orgId,
+      userId,
     })
+
+    if (roots.length === 0) return deleted
+    deleted[table] = roots.length
+
+    await this.descend(manager, table, roots, orgId, userId, deleted)
+
+    return deleted
   }
 
   private async descend(

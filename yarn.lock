@@ -123,6 +123,7 @@ __metadata:
     "@types/pg": "npm:^8"
     cookie-parser: "npm:^1.4.7"
     eslint: "npm:^10.7.0"
+    fractional-indexing: "npm:^4.0.0"
     nestjs-pino: "npm:^4.6.1"
     otplib: "npm:^13.5.0"
     pg: "npm:^8.23.0"
@@ -5686,6 +5687,13 @@ __metadata:
   version: 0.2.0
   resolution: "forwarded@npm:0.2.0"
   checksum: 10c0/9b67c3fac86acdbc9ae47ba1ddd5f2f81526fa4c8226863ede5600a3f7c7416ef451f6f1e240a3cc32d0fd79fcfe6beb08fd0da454f360032bde70bf80afbb33
+  languageName: node
+  linkType: hard
+
+"fractional-indexing@npm:^4.0.0":
+  version: 4.0.0
+  resolution: "fractional-indexing@npm:4.0.0"
+  checksum: 10c0/1b081fb507a147583714b8bb8f8199801b9ef17499523aafd12e4811dd173f377bc5f320fd27e1a1aead67e397f4b8a5ca64d3eb5efe7f027ac255de17ccb839
   languageName: node
   linkType: hard
 

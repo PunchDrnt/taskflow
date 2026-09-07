@@ -21,6 +21,7 @@ import { AuthModule } from './modules/iam/auth/auth.module'
 import { UserModule } from './modules/iam/user/user.module'
 import { NotifyModule } from './modules/notify/notify.module'
 import { OrganizationModule } from './modules/organization/organization.module'
+import { ProjectModule } from './modules/project/project.module'
 import { StorageModule } from './modules/storage/storage.module'
 import { PermissionModule } from './permission/permission.module'
 
@@ -67,6 +68,7 @@ const rootEnvFile = join(__dirname, '..', '..', '..', '..', '.env')
     AuthModule,
     UserModule,
     OrganizationModule,
+    ProjectModule,
     NotifyModule,
     HealthModule,
     MaintenanceModule,

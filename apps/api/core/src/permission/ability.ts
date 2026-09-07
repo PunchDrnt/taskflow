@@ -71,10 +71,33 @@ export function defineAbilityFor(actor: Actor): AppAbility {
   }
 
   if (actor.orgRole === 'member') {
+    // The organisation, its people, its teams: a member may read all of it.
     can('read', 'all')
-    // A project is a Slack channel, not a department: anyone in the org may
-    // start one, and creating it makes them its admin.
-    can('create', 'Project')
+
+    // 🔒 ...but not every project, and not every task. `read all` on its own
+    // said they could, which contradicts
+    // docs/04-features/phase-1.md#สิทธิ์ระดับ-project-กั้นจริงตั้งแต่-phase-1 —
+    // a member sees only the projects they have joined. Nothing noticed while
+    // no endpoint asked: `ProjectService.list` gates correctly in SQL, and the
+    // `can()` beside it was answering yes to everything, so the check read
+    // like a check and was not one.
+    //
+    // These are taken away here and given back per project by the loop below,
+    // which is the order CASL needs: the last rule matching a subject wins, so
+    // a `can` on one project id overrides this blanket `cannot`.
+    cannot('read', 'Project')
+    cannot('read', 'Task')
+
+    // ⚠️ **A member may not create a project**, and this used to say the
+    // opposite — `can('create', 'Project')`, on the reasoning that a project
+    // is a Slack channel and anyone may start one. The specification says
+    // otherwise and always did (docs/04-features/phase-1.md#project: "สร้าง
+    // project ได้เฉพาะ org owner / admin"), for a reason that only shows up at
+    // this company's size: at ~100 people and four projects, letting everyone
+    // start one means projects appear that nobody is responsible for tidying
+    // away. It also pairs with the rule right below — a member sees only the
+    // projects they are in, so the person deciding a new one is needed would
+    // be deciding it without being able to see what already exists.
   }
 
   for (const [projectId, role] of Object.entries(actor.projectRoles ?? {})) {
