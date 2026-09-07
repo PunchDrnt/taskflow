@@ -656,6 +656,37 @@ describe.skipIf(!hasTestDatabase)('tasks', () => {
     })
   })
 
+  describe('the activity log', () => {
+    it('reads a task history back, newest first', async () => {
+      const task = await asOwner(() => tasks.create(apollo, { title: 'งาน' }))
+      const done = await statusNamed('Done')
+
+      await asOwner(() => tasks.update(task.id, { statusId: done }))
+      await asOwner(() =>
+        tasks.assign(task.id, { userId: member, addToProject: false }),
+      )
+
+      const history = await asOwner(() => tasks.activity(task.id))
+
+      expect(history.map((row) => row.action)).toEqual([
+        'assigned',
+        'updated',
+        'created',
+      ])
+    })
+
+    it('needs only the right to see the task', async () => {
+      const task = await asOwner(() => tasks.create(apollo, { title: 'งาน' }))
+
+      await expect(
+        asMember(() => tasks.activity(task.id)),
+      ).resolves.toHaveLength(1)
+      expect(await codeOf(asPlain(() => tasks.activity(task.id)))).toBe(
+        'NOT_FOUND',
+      )
+    })
+  })
+
   describe('the audit trail', () => {
     it('records the assignee on the task, not the task on the assignee', async () => {
       const task = await asOwner(() => tasks.create(apollo, { title: 'งาน' }))

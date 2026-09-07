@@ -18,6 +18,8 @@ import { SYSTEM_USER_ID } from '#shared/system-user'
 
 import type { Env } from '../src/config/env'
 import { FeatureService } from '../src/feature/feature.service'
+import { AuditService } from '../src/modules/audit/audit.service'
+import { AuditLog } from '../src/modules/audit/log.entity'
 import { AuthService } from '../src/modules/iam/auth/auth.service'
 import { LockoutService } from '../src/modules/iam/auth/lockout.service'
 import { PasswordResetToken } from '../src/modules/iam/auth/password-reset-token.entity'
@@ -156,10 +158,12 @@ describe.skipIf(!hasTestDatabase)('account', () => {
     twoFactor = buildTwoFactor(dataSource, users, sessions)
 
     auth = new AuthService(
+      dataSource,
       users,
       new MembershipService(
         createOrgScopedRepository(dataSource, OrganizationMember),
       ),
+      new AuditService(createOrgScopedRepository(dataSource, AuditLog)),
       sessions,
       new LockoutService(config, users),
       new PasswordService(),

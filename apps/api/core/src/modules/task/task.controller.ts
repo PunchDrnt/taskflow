@@ -31,6 +31,15 @@ import {
 } from './task-people'
 import { TaskService, type TaskView } from './task.service'
 
+/** One line of a task's activity panel. */
+export interface ActivityEntry {
+  id: string
+  action: string
+  occurredAt: Date
+  changes: Record<string, unknown>
+  actor: AssigneeView
+}
+
 /**
  * One task, by id.
  *
@@ -85,6 +94,35 @@ export class TaskController {
     @Param('taskId', new ZodValidationPipe(taskIdSchema)) taskId: string,
   ): Promise<void> {
     return this.tasks.remove(taskId)
+  }
+
+  /**
+   * The task's history, newest first — the activity panel on the detail view.
+   *
+   * Actor names are attached the same way assignees' are: from `iam` through
+   * its service, never a join.
+   */
+  @Get(':taskId/activity')
+  @ApiOperation({ summary: 'What has happened to this task' })
+  async activity(
+    @Param('taskId', new ZodValidationPipe(taskIdSchema)) taskId: string,
+  ): Promise<ActivityEntry[]> {
+    const rows = await this.tasks.activity(taskId)
+    const actors = await this.people(rows.map((row) => row.actorId))
+    const byId = new Map(actors.map((actor) => [actor.userId, actor]))
+
+    return rows.map((row) => ({
+      id: row.id,
+      action: row.action,
+      occurredAt: row.occurredAt,
+      changes: row.changesJson,
+      actor: byId.get(row.actorId) ?? {
+        userId: row.actorId,
+        name: null,
+        nickname: null,
+        avatarUrl: null,
+      },
+    }))
   }
 
   @Get(':taskId/assignees')

@@ -10,6 +10,8 @@ import { createOrgScopedRepository } from '#shared/org-scope/org-scoped.reposito
 import { SYSTEM_USER_ID } from '#shared/system-user'
 
 import type { Env } from '../src/config/env'
+import { AuditService } from '../src/modules/audit/audit.service'
+import { AuditLog } from '../src/modules/audit/log.entity'
 import {
   AuthService,
   isTwoFactorChallenge,
@@ -85,10 +87,12 @@ function build(dataSource: DataSource) {
     users,
     sessions,
     auth: new AuthService(
+      dataSource,
       users,
       new MembershipService(
         createOrgScopedRepository(dataSource, OrganizationMember),
       ),
+      new AuditService(createOrgScopedRepository(dataSource, AuditLog)),
       sessions,
       new LockoutService(config, users),
       new PasswordService(),
@@ -379,6 +383,81 @@ describe.skipIf(!hasTestDatabase)('auth', () => {
           AUTH_ERROR_CODES.INVALID_CREDENTIALS,
         )
       }
+    })
+  })
+
+  describe('the activity log of a failed sign-in', () => {
+    const auditFor = async (userId: string): Promise<string[]> => {
+      const rows = (await dataSource.query(
+        `SELECT org_id, action FROM audit.logs
+          WHERE entity_type = 'user' AND entity_id = $1
+          ORDER BY occurred_at ASC`,
+        [userId],
+      )) as { org_id: string; action: string }[]
+
+      return rows.map((row) => `${row.action}`)
+    }
+
+    it('writes one row per organisation the account belongs to', async () => {
+      // A failed login has no active org — the endpoint is public — but the
+      // person who acts on "somebody is trying to get into Kit's account" is
+      // the admin of the company Kit works for, so the row lands with them.
+      const userId = await newUser('logan')
+      const first = await newOrg('logan-one')
+      const second = await newOrg('logan-two')
+      await join(first, userId)
+      await join(second, userId)
+
+      await codeOf(login('logan', 'wrong'))
+
+      expect(await auditFor(userId)).toEqual(['login_failed', 'login_failed'])
+
+      const rows = (await dataSource.query(
+        `SELECT DISTINCT org_id FROM audit.logs WHERE entity_id = $1`,
+        [userId],
+      )) as { org_id: string }[]
+
+      expect(rows.map((row) => row.org_id).sort()).toEqual(
+        [first, second].sort(),
+      )
+    })
+
+    it('says so when the attempt is the one that locked the account', async () => {
+      const userId = await newUser('mallory')
+      await join(await newOrg('mallory-org'), userId)
+
+      await failUntilLocked('mallory')
+
+      expect(await auditFor(userId)).toEqual([
+        ...Array<string>(MAX_ATTEMPTS - 1).fill('login_failed'),
+        'login_locked',
+      ])
+    })
+
+    it('⚠️ writes nothing for attempts made during a lock', async () => {
+      // Those are unbounded — as fast as the network allows — and audit.logs
+      // is partitioned and never deleted. Counted failures are capped at
+      // LOGIN_MAX_ATTEMPTS per window, which is a bound worth having in a
+      // table nothing ever removes rows from.
+      const userId = await newUser('niaj')
+      await join(await newOrg('niaj-org'), userId)
+      await failUntilLocked('niaj')
+      const during = await auditFor(userId)
+
+      await codeOf(login('niaj', 'wrong'))
+      await codeOf(login('niaj', 'wrong'))
+
+      expect(await auditFor(userId)).toEqual(during)
+    })
+
+    it('writes nothing for an account in no organisation', async () => {
+      // There is nobody to tell, and audit.logs.org_id is NOT NULL.
+      const userId = await newUser('olivia')
+
+      expect(await codeOf(login('olivia', 'wrong'))).toBe(
+        AUTH_ERROR_CODES.INVALID_CREDENTIALS,
+      )
+      expect(await auditFor(userId)).toEqual([])
     })
   })
 

@@ -22,6 +22,7 @@ import { actorForProject } from '../../permission/actor'
 import { PermissionService } from '../../permission/permission.service'
 import { AuditService } from '../audit/audit.service'
 import { changesBetween } from '../audit/changes'
+import type { AuditLog } from '../audit/log.entity'
 import { ProjectMemberService } from '../project/project-member.service'
 import { Project } from '../project/project.entity'
 import { ProjectService } from '../project/project.service'
@@ -318,6 +319,22 @@ export class TaskService {
         },
       })
     })
+  }
+
+  /**
+   * Everything that has happened to this task, newest first.
+   *
+   * Read through `AuditService`, never by joining `audit.logs` — the activity
+   * log is a feature owned by one module, and a join from here would freeze
+   * its table shape forever (docs/01-architecture.md#reading-the-audit-log-from-other-modules).
+   *
+   * Seeing the task is the whole requirement: anybody who may open it may see
+   * what happened to it.
+   */
+  async activity(taskId: string): Promise<AuditLog[]> {
+    await this.requireTask(taskId, 'read')
+
+    return this.audit.findForEntity('task', taskId)
   }
 
   /** Who has this task. */

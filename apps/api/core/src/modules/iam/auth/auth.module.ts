@@ -6,6 +6,7 @@ import { JwtModule } from '@nestjs/jwt'
 import { provideOrgRepository } from '#shared/org-scope/org-repository.provider'
 
 import type { Env } from '../../../config/env'
+import { AuditModule } from '../../audit/audit.module'
 import { OrganizationModule } from '../../organization/organization.module'
 import { UserModule } from '../user/user.module'
 import { AuthCookiesModule } from './auth-cookies.module'
@@ -42,6 +43,7 @@ import { TwoFactorService } from './two-factor.service'
  */
 @Module({
   imports: [
+    AuditModule,
     AuthCookiesModule,
     UserModule,
     OrganizationModule,

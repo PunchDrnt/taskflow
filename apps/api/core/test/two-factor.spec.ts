@@ -9,6 +9,8 @@ import { createOrgScopedRepository } from '#shared/org-scope/org-scoped.reposito
 import { SYSTEM_USER_ID } from '#shared/system-user'
 
 import type { Env } from '../src/config/env'
+import { AuditService } from '../src/modules/audit/audit.service'
+import { AuditLog } from '../src/modules/audit/log.entity'
 import {
   AuthService,
   isTwoFactorChallenge,
@@ -123,10 +125,12 @@ describe.skipIf(!hasTestDatabase)('two-factor', () => {
       config,
     )
     auth = new AuthService(
+      dataSource,
       users,
       new MembershipService(
         createOrgScopedRepository(dataSource, OrganizationMember),
       ),
+      new AuditService(createOrgScopedRepository(dataSource, AuditLog)),
       sessions,
       new LockoutService(config, users),
       new PasswordService(),

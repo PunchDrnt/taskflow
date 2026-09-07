@@ -343,11 +343,21 @@ unique เต็ม · `views.sort_order` / `is_default`
 
 ## 7. Activity log — ต่อของที่มีอยู่แล้ว
 
-- [ ] 🔒 **`AuditService.record(manager, entry)` ใน transaction เดียวกับ business logic**
+- [x] 🔒 **`AuditService.record(manager, entry)` ใน transaction เดียวกับ business logic**
       · service throw ให้เองถ้าไม่มี transaction เปิดอยู่ — เป็นการบังคับด้วยรูปทรง ไม่ใช่ความจำ
       · event listener ทำแทนไม่ได้ มันรันหลัง commit
-- [ ] เขียน log ตอน: สร้าง/แก้/ลบ task · เปลี่ยน status · assign · เปลี่ยน role · login ล้มเหลว
-- [ ] เก็บ id ของคนที่ถูก assign ไว้ใน `changes_json` — `entity_id` คือ task ไม่ใช่คน
+- [x] เขียน log ตอน: สร้าง/แก้/ลบ task · เปลี่ยน status · assign · เปลี่ยน role · login ล้มเหลว
+      · login ล้มเหลวไม่มี org (endpoint เป็น `@Public()`) แต่ `audit.logs.org_id` เป็น NOT NULL —
+        เขียน**หนึ่งแถวต่อ org ที่บัญชีนั้นอยู่** เพราะคนที่ต้องเห็น "มีคนพยายามเข้าบัญชี Kit" คือ admin ของบริษัท Kit
+        · บัญชีที่ไม่อยู่ org ไหนเลย ไม่เขียน — ไม่มีใครให้บอก
+      · `AuditService.recordFor(manager, { orgId, actorId }, entry)` — org กับ actor เป็น argument
+        เฉพาะ event ที่เกิดก่อนมี request context · ที่เหลือทั้งหมดต้องใช้ `record`
+      · ⚠️ **เขียนเฉพาะครั้งที่ lockout นับ** — ครั้งที่ยิงตอนกำลังโดนล็อกไม่เขียน เพราะไม่มีเพดาน
+        (ยิงได้เร็วเท่าที่เน็ตไหว) และ `audit.logs` เป็นตารางที่ห้ามลบ · ครั้งที่นับถูกจำกัดที่ `LOGIN_MAX_ATTEMPTS` ต่อรอบ
+- [x] **อ่านกลับได้** — `GET /v1/tasks/:taskId/activity` ผ่าน `AuditService.findForEntity`
+      · ไม่ join `audit.logs` จาก module อื่น · เห็น task ได้ = อ่านประวัติได้ (ไม่มีเงื่อนไขเพิ่ม)
+      · ข้อนี้ไม่ได้อยู่ในเช็คลิสต์เดิมซึ่งมีแต่ฝั่งเขียน — activity log ที่ไม่มีใครอ่านได้ไม่ใช่ฟีเจอร์
+- [x] เก็บ id ของคนที่ถูก assign ไว้ใน `changes_json` — `entity_id` คือ task ไม่ใช่คน
       และ `audit.logs` ไม่มีคอลัมน์อื่นให้ใส่ ([ทุกคอลัมน์](../docs/02-database/schema.md#schema-audit))
       · index `logs_actor_idx (org_id, actor_id, action, occurred_at DESC)` มีตั้งแต่ Phase 0 แล้ว
         แต่ **ผู้ใช้เดิมของมันคือ assignee picker ชั้นที่สองซึ่งถูกตัดไปแล้ว** — index ยังอยู่ ไม่ต้องลบ
