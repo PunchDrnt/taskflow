@@ -89,7 +89,11 @@ export class AuthGuard implements CanActivate {
       throw noOrg(caller.memberships.length)
     }
 
-    fillRequestContext({ userId: caller.userId, orgId: active.orgId })
+    fillRequestContext({
+      userId: caller.userId,
+      orgId: active.orgId,
+      sessionId: caller.sessionId,
+    })
 
     return true
   }

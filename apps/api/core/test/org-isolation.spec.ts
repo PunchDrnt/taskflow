@@ -28,7 +28,10 @@ describe.skipIf(!hasTestDatabase)('cross-org isolation', () => {
   let organizations: OrgScopedRepository<Organization>
 
   const asOrg = <R>(org: Organization, fn: () => R): R =>
-    runWithRequestContext({ orgId: org.id, userId: SYSTEM_USER_ID }, fn)
+    runWithRequestContext(
+      { orgId: org.id, userId: SYSTEM_USER_ID, sessionId: null },
+      fn,
+    )
 
   beforeAll(async () => {
     dataSource = await createMigratedTestDataSource()

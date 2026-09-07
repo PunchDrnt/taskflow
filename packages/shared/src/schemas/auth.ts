@@ -54,6 +54,73 @@ export const setActiveOrgSchema = z.object({
 export type SetActiveOrgInput = z.infer<typeof setActiveOrgSchema>
 
 /**
+ * `PATCH /v1/me/password`.
+ *
+ * `confirmNewPassword` is checked here as well as in the form. The client is
+ * where the mismatch should be caught, because that is where it can be shown
+ * next to the field — but "the client already checked" is not a property the
+ * API can rely on, and the cost of checking again is one `refine`.
+ */
+export const changePasswordSchema = z
+  .object({
+    currentPassword: presentedPassword,
+    newPassword: passwordSchema,
+    confirmNewPassword: z.string(),
+  })
+  .refine((value) => value.newPassword === value.confirmNewPassword, {
+    path: ['confirmNewPassword'],
+    message: 'รหัสผ่านใหม่ไม่ตรงกัน',
+  })
+
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>
+
+/** `POST /v1/auth/forgot-password` — answers 204 either way. */
+export const forgotPasswordSchema = z.object({ email: emailSchema })
+
+export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>
+
+/** `POST /v1/auth/reset-password` — the code comes from the emailed link. */
+export const resetPasswordSchema = z
+  .object({
+    code: z.string().min(1, 'ลิงก์ไม่ถูกต้อง'),
+    newPassword: passwordSchema,
+    confirmNewPassword: z.string(),
+  })
+  .refine((value) => value.newPassword === value.confirmNewPassword, {
+    path: ['confirmNewPassword'],
+    message: 'รหัสผ่านใหม่ไม่ตรงกัน',
+  })
+
+export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>
+
+/**
+ * `POST /v1/auth/register` — gated by `public_registration`, which is off.
+ *
+ * No `orgId`: registering creates a person, not a membership. Somebody who
+ * signs up belongs to nothing until an admin adds them, which is exactly why
+ * the feature is off — otherwise anyone who knows the URL can sit in the
+ * system waiting for a mis-click.
+ */
+export const registerSchema = z
+  .object({
+    email: emailSchema,
+    password: passwordSchema,
+    confirmPassword: z.string(),
+    name: z.string().trim().min(1, 'กรุณากรอกชื่อ').max(200, 'ชื่อยาวเกินไป'),
+    nickname: z
+      .string()
+      .trim()
+      .min(1, 'กรุณากรอกชื่อเล่น')
+      .max(100, 'ชื่อเล่นยาวเกินไป'),
+  })
+  .refine((value) => value.password === value.confirmPassword, {
+    path: ['confirmPassword'],
+    message: 'รหัสผ่านไม่ตรงกัน',
+  })
+
+export type RegisterInput = z.infer<typeof registerSchema>
+
+/**
  * The codes the sign-in screens branch on. Here rather than in
  * `API_ERROR_CODES` for the reason given there: that file is for codes no
  * feature owns, and every module collecting its codes into it would make it a
@@ -76,6 +143,26 @@ export const AUTH_ERROR_CODES = {
   NO_ORGANIZATION: 'NO_ORGANIZATION',
   /** Signed in, a member of several, and has not picked → the org picker. */
   ORG_NOT_SELECTED: 'ORG_NOT_SELECTED',
+  /**
+   * `currentPassword` on a change did not match. Separate from
+   * INVALID_CREDENTIALS because the screen is different — the caller is
+   * already signed in, and the field to highlight is not the email.
+   */
+  WRONG_CURRENT_PASSWORD: 'WRONG_CURRENT_PASSWORD',
+  /**
+   * The reset link is wrong, already spent, or expired. One code for all
+   * three, so a guessed code cannot be told apart from a stale one.
+   */
+  INVALID_RESET_CODE: 'INVALID_RESET_CODE',
+  /**
+   * Public sign-up is switched off for this installation. Not FORBIDDEN: the
+   * caller is not being refused permission, the feature is not on at all, and
+   * the screen to show is "ask an admin to invite you" rather than "you may
+   * not do that".
+   */
+  REGISTRATION_DISABLED: 'REGISTRATION_DISABLED',
+  /** Sign-up only: that address already has an account. */
+  EMAIL_TAKEN: 'EMAIL_TAKEN',
 } as const
 
 export type AuthErrorCode =

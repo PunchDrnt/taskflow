@@ -1,6 +1,11 @@
 import { HttpStatus, Injectable, Logger } from '@nestjs/common'
 
-import { AUTH_ERROR_CODES, type LoginInput } from '@repo/shared'
+import {
+  AUTH_ERROR_CODES,
+  type ChangePasswordInput,
+  type LoginInput,
+  type RegisterInput,
+} from '@repo/shared'
 
 import { ApiException } from '#shared/http/api-exception'
 import { alertsFor } from '#shared/jobs/alert'
@@ -148,6 +153,35 @@ export class AuthService {
     }
   }
 
+  /**
+   * Creates an account that belongs to no organisation.
+   *
+   * Deliberately does not sign the new person in. There is nothing for them to
+   * see yet — they are a member of nowhere until an admin adds them — and
+   * issuing a session here would be one more path that mints one.
+   *
+   * A duplicate address is reported as taken rather than swallowed. That does
+   * leak whether an address is registered, which `forgot-password` works hard
+   * to avoid; the difference is that a sign-up form has no other way to
+   * explain itself, and the whole endpoint is behind a flag that is off. If
+   * public registration is ever switched on, this is the line to revisit —
+   * the usual answer is to accept quietly and send a "you already have an
+   * account" mail instead.
+   */
+  async register(input: RegisterInput): Promise<{ id: string }> {
+    const existing = await this.users.findByEmail(input.email)
+    if (existing) throw emailTaken()
+
+    const user = await this.users.create({
+      email: input.email,
+      passwordHash: await this.passwords.hash(input.password),
+      name: input.name,
+      nickname: input.nickname,
+    })
+
+    return { id: user.id }
+  }
+
   // --- refresh -----------------------------------------------------------
 
   /**
@@ -269,6 +303,80 @@ export class AuthService {
     this.cache.clear()
   }
 
+  // --- passwords ---------------------------------------------------------
+
+  /**
+   * Changes a password for somebody already signed in, and signs every *other*
+   * device out.
+   *
+   * That asymmetry is the point. The reason to change a password is usually
+   * that somebody else might know it, so every session it could have opened
+   * has to go — but ending the caller's own session too would answer a
+   * successful change with a login screen, which reads as a failure and
+   * teaches people not to do it.
+   *
+   * `currentPassword` is verified every time, including here where the caller
+   * already holds a valid session: an unlocked laptop is exactly the case this
+   * check exists for.
+   */
+  async changePassword(
+    userId: string,
+    sessionId: string,
+    input: ChangePasswordInput,
+    now = new Date(),
+  ): Promise<{ signedOutSessions: number }> {
+    const user = await this.users.findById(userId)
+
+    // No password set at all — the system user, or an account that only ever
+    // signed in through a provider. There is nothing to verify against, and
+    // treating an absent hash as a match would be a way in.
+    if (!user?.passwordHash) throw wrongCurrentPassword()
+
+    if (
+      !(await this.passwords.verify(user.passwordHash, input.currentPassword))
+    )
+      throw wrongCurrentPassword()
+
+    await this.users.setPasswordHash(
+      userId,
+      await this.passwords.hash(input.newPassword),
+      userId,
+      now,
+    )
+
+    const signedOutSessions = await this.sessions.revokeAllForUser(
+      userId,
+      'password_changed',
+      sessionId,
+      now,
+    )
+
+    this.forgetSessions(userId, sessionId)
+
+    return { signedOutSessions }
+  }
+
+  /**
+   * Drops one person's cached sessions, keeping `except` if given.
+   *
+   * Revoking writes the row, but a cache hit within SESSION_CACHE_TTL_MS never
+   * reads it — so without this a sign-out is eventual rather than immediate.
+   * Thirty seconds of that is the accepted cost for an ordinary revocation; it
+   * is not the right answer when the reason is "somebody else may be signed in
+   * as me", which is what both password paths are for. Public so
+   * `PasswordResetService` can say the same thing.
+   *
+   * Per instance, like the cache itself. With more than one API process this
+   * becomes shared state, which is one of the three things
+   * docs/01-architecture.md names as the reason to add Redis.
+   */
+  forgetSessions(userId: string, except?: string): void {
+    for (const [sid, entry] of this.cache) {
+      if (entry.value.userId === userId && sid !== except)
+        this.cache.delete(sid)
+    }
+  }
+
   // --- the per-request check ---------------------------------------------
 
   /**
@@ -353,5 +461,27 @@ function sessionExpired(): ApiException {
     HttpStatus.UNAUTHORIZED,
     AUTH_ERROR_CODES.SESSION_EXPIRED,
     'เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่',
+  )
+}
+
+/**
+ * 400, not 401: the caller is signed in and stays signed in — what failed is
+ * one field of a form, and a 401 would send the client to the login screen it
+ * does not need.
+ */
+function wrongCurrentPassword(): ApiException {
+  return new ApiException(
+    HttpStatus.BAD_REQUEST,
+    AUTH_ERROR_CODES.WRONG_CURRENT_PASSWORD,
+    'รหัสผ่านปัจจุบันไม่ถูกต้อง',
+  )
+}
+
+/** 409, because the request is well-formed and conflicts with what exists. */
+function emailTaken(): ApiException {
+  return new ApiException(
+    HttpStatus.CONFLICT,
+    AUTH_ERROR_CODES.EMAIL_TAKEN,
+    'อีเมลนี้ถูกใช้แล้ว',
   )
 }

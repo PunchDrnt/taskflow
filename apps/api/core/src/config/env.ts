@@ -55,6 +55,19 @@ const envSchema = z
     // and for a public SaaS are not the same, and neither is worth a deploy.
     LOGIN_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
     LOGIN_LOCK_MINUTES: z.coerce.number().int().positive().default(15),
+    // Forgotten-password links, per docs/01-architecture.md#auth. Thirty
+    // minutes rather than ten because the real protection is that the token is
+    // single-use; a window too short for somebody checking mail on a phone
+    // between meetings just produces repeated requests, which is not safer.
+    PASSWORD_RESET_TTL_MINUTES: z.coerce.number().int().positive().default(30),
+    // Per email address, per hour. Caps how much mail one address can be made
+    // to receive, which is the abuse this endpoint enables — it answers 204
+    // whether or not the account exists, so there is nothing else to limit on.
+    PASSWORD_RESET_MAX_PER_HOUR: z.coerce.number().int().positive().default(3),
+    // Where the emailed link points. Not derivable from the request: mail is
+    // rendered by OutboxWorker long after it, and behind Caddy the Host header
+    // is whatever the proxy passed on.
+    APP_URL: z.url().default('http://localhost:3000'),
 
     // Object storage. Named for the protocol rather than the server, which is
     // a deployment choice — Garage in docker-compose.yml, and nothing in the

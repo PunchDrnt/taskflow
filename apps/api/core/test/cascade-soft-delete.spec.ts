@@ -27,7 +27,10 @@ describe.skipIf(!hasTestDatabase)('cascade soft delete', () => {
   let orgB: string
 
   const asOrg = <R>(orgId: string, fn: () => R): R =>
-    runWithRequestContext({ orgId, userId: SYSTEM_USER_ID }, fn)
+    runWithRequestContext(
+      { orgId, userId: SYSTEM_USER_ID, sessionId: null },
+      fn,
+    )
 
   const newOrg = async (slug: string): Promise<string> => {
     const [org] = (await dataSource.query(

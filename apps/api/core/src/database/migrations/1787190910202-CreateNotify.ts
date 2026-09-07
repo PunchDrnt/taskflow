@@ -18,7 +18,18 @@ export class CreateNotify1787190910202 implements MigrationInterface {
     await queryRunner.query(`
       CREATE TABLE notify.outbox (
         id            uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
-        org_id        uuid        NOT NULL REFERENCES organization.organizations(id) ON DELETE CASCADE,
+        -- Nullable, and the only org_id in the codebase that is. Almost every
+        -- row here belongs to one org — a task was assigned, somebody was
+        -- mentioned — but a password-reset mail belongs to the *account*: the
+        -- recipient may be in several organisations or in none, and picking
+        -- one would file the message under a company with nothing to do with
+        -- it. That is the exemption docs/00-overview.md#binding-decisions
+        -- already states, applied per row rather than per table.
+        --
+        -- Nothing reads this column scoped today: OutboxWorker crosses orgs on
+        -- purpose and selects on status. A future per-org view would filter on
+        -- org_id, which correctly leaves the account-level rows out.
+        org_id        uuid        REFERENCES organization.organizations(id) ON DELETE CASCADE,
 
         recipient_id  uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
         channel       text        NOT NULL,

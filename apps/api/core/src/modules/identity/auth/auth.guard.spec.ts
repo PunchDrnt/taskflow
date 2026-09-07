@@ -223,7 +223,11 @@ describe('AuthGuard', () => {
       ),
     ).resolves.toBe(true)
 
-    expect(entered).toHaveBeenCalledWith({ userId: USER, orgId: ACME })
+    expect(entered).toHaveBeenCalledWith({
+      userId: USER,
+      orgId: ACME,
+      sessionId: SESSION,
+    })
   })
 
   it('honours the active_org cookie when they belong to several', async () => {
@@ -236,7 +240,11 @@ describe('AuthGuard', () => {
       }),
     )
 
-    expect(entered).toHaveBeenCalledWith({ userId: USER, orgId: GLOBEX })
+    expect(entered).toHaveBeenCalledWith({
+      userId: USER,
+      orgId: GLOBEX,
+      sessionId: SESSION,
+    })
   })
 
   it('asks somebody in several orgs to choose', async () => {
@@ -295,7 +303,11 @@ describe('AuthGuard', () => {
       ),
     ).resolves.toBe(true)
 
-    expect(entered).toHaveBeenCalledWith({ userId: USER, orgId: null })
+    expect(entered).toHaveBeenCalledWith({
+      userId: USER,
+      orgId: null,
+      sessionId: SESSION,
+    })
   })
 
   it('still clears a stale cookie on a @SkipOrgScope() route', async () => {

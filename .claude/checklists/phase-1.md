@@ -105,14 +105,26 @@ unique เต็ม · `views.sort_order` / `is_default`
       · cookie ที่ชี้ org ที่ไม่ได้เป็นสมาชิก → 403 แล้ว**ลบ cookie ทิ้ง** ไม่ใช่แค่ปฏิเสธ
       · code ที่ตอบคือ `ORG_NOT_SELECTED` ไม่ใช่การเงียบๆ เปลี่ยนไปใช้ org อื่นที่เขาเป็นสมาชิก — ตอบแทน org ที่ client ไม่ได้ขอคือทางที่งานไปโผล่ผิดบริษัท · พอ cookie ถูกลบแล้ว request ถัดไปก็แก้ตัวเองได้
       · ✅ `RequestContext.orgId` เป็น `string | null` แล้ว · อะไรที่แตะข้อมูล org ใช้ `requireOrgContext()` ซึ่ง throw ถ้าเป็น null (5 call site, compiler หาให้ครบ)
-- [ ] `GET /api/v1/me` — ชื่อ อีเมล role ดึงจากตรงนี้
-- [ ] ลืมรหัสผ่าน (ลิงก์อีเมล **อายุ 30 นาที เก็บเป็น env var** ใช้ได้ครั้งเดียว) / เปลี่ยนรหัสผ่าน (ต้องใส่รหัสเดิม)
+- [x] `GET /v1/me` — ชื่อ อีเมล role · พร้อม `PATCH /v1/me` แก้โปรไฟล์ · ทั้งคู่ `@SkipOrgScope()`
+      เพราะคนที่ยังไม่อยู่ org ไหนก็ต้องอ่านและแก้โปรไฟล์ตัวเองได้
+      · **`email` ไม่อยู่ในฟอร์มแก้ไข** — เป็นตัวล็อกอินและ unique ทั้งระบบ ต้องยืนยันที่อยู่ใหม่ก่อน ซึ่งเป็น flow ของ Phase 2
+- [x] ลืมรหัสผ่าน (ลิงก์อีเมล **อายุ 30 นาที เก็บเป็น env var** ใช้ได้ครั้งเดียว) / เปลี่ยนรหัสผ่าน (ต้องใส่รหัสเดิม)
+      · `POST /v1/auth/forgot-password` ตอบ **204 เสมอ** ไม่ว่าอีเมลจะมีจริงหรือไม่ — ต่างกันเมื่อไหร่คือช่องให้ไล่เดาว่าใครมีบัญชี
+      · `reset-password` revoke **ทุก** session ไม่เว้นอันไหน · `PATCH /v1/me/password` revoke ทุกอัน **ยกเว้นอันปัจจุบัน**
+      ความไม่สมมาตรนี้คือตัวดีไซน์: เตะตัวเองออกด้วยแล้วหน้าจอเด้งไป login ซึ่งอ่านแล้วเหมือนทำไม่สำเร็จ
+      · 🔒 ใช้ token แล้วทิ้งด้วย **statement เดียว** แบบเดียวกับ session rotation — `SELECT` แล้วค่อย `UPDATE` แปลว่าคลิกสองทีผ่านทั้งคู่
+      · `PASSWORD_RESET_TTL_MINUTES` / `PASSWORD_RESET_MAX_PER_HOUR` อยู่ใน `env.ts` · ขอใหม่ = อันเก่าใช้ไม่ได้
+      · controller ของ `PATCH /v1/me/password` อยู่ใน `auth/` แต่ path เป็น `me/` — `UserModule` import `AuthModule` ไม่ได้ มันวนกลับ
+      · ⚠️ **`notify.outbox.org_id` กลายเป็น nullable** เพราะเมลรีเซ็ตเป็นของบัญชี ไม่ใช่ของ org
+      แก้ [`00-overview`](../docs/00-overview.md#binding-decisions) กับ [`schema.md`](../docs/02-database/schema.md#schema-notify) แล้วใน commit เดียวกัน
 - [x] **Remember me** — เป็นค่าของ `sessions.expires_at` ไม่ใช่กลไกใหม่
 - [x] **ล็อกบัญชีเมื่อ login ผิดหลายครั้ง** — `identity.users.failed_login_attempts` + `locked_until`
       · เก็บใน DB ไม่ใช่ memory · ลองผิดระหว่างล็อกไม่ต่อเวลา · อีเมลที่ไม่มีในระบบไม่นับอะไรเลย
       · ✅ ครบแล้ว — `LOGIN_MAX_ATTEMPTS` / `LOGIN_LOCK_MINUTES` อยู่ใน `env.ts` · lock หมดอายุแล้วนับใหม่ (N ครั้งต่อหน้าต่าง) ไม่ใช่สะสมต่อ
-- [ ] `/register` มีอยู่แต่ดักด้วย `FeatureService.isEnabled(org, 'public_registration')` → `false`
+- [x] `/register` มีอยู่แต่ดักด้วย `FeatureService.isEnabled(org, 'public_registration')` → `false`
       · **การใช้งานจริงครั้งแรกของ `FeatureService`** ที่เขียนรอไว้ตั้งแต่ Phase 0
+
+- [x] ตาราง `identity.oauth_accounts` — migrate แล้ว ยังไม่มีใครอ่าน (แพทเทิร์นเดียวกับตาราง RBAC ตั้งแต่ Phase 0)
 
 **ตรวจก่อนปิดข้อนี้**
 
@@ -121,7 +133,7 @@ unique เต็ม · `views.sort_order` / `is_default`
 - [x] deactivate user ระหว่างที่เขาล็อกอินอยู่ → request ถัดไปเข้าไม่ได้
 - [x] 🔒 request หลายอันจากคนละ org พร้อมกัน → ไม่มีอันไหนเห็น org ผิด
 
-**เหลือใน §1** — `GET /api/v1/me` · ลืม/เปลี่ยนรหัสผ่าน · `/register` หลัง `FeatureService` (ยกไป PR ถัดไป)
+**§1 ปิดครบแล้ว** — ทุกข้อข้างบนติ๊กหมดแล้ว รวมทั้งสี่ข้อ "ตรวจก่อนปิด"
 
 ⚠️ **`setGlobalPrefix('v1')` ลงแล้ว และ health ถูก exclude ไว้** — healthcheck ใน `deploy/compose.yml`
 ยิง `127.0.0.1:3001/health/live` ตรงๆ ไม่ผ่าน Caddy · ย้ายเข้า prefix เมื่อไหร่ container จะรายงาน unhealthy
@@ -131,7 +143,7 @@ unique เต็ม · `views.sort_order` / `is_default`
 
 ## 2. User + Profile
 
-- [ ] 🔒 **Email unique ทั้งระบบแบบ partial index**
+- [x] 🔒 **Email unique ทั้งระบบแบบ partial index** — ลงมาตั้งแต่ `CreateIdentityUsers` แล้ว (`users_email_unique`)
 
       ```sql
       CREATE UNIQUE INDEX ON identity.users (email) WHERE status != 'deleted';
@@ -140,9 +152,11 @@ unique เต็ม · `views.sort_order` / `is_default`
       · `citext` อยู่แล้ว → `A@x.com` ชนกับ `a@x.com` เอง ไม่ต้องพัน `lower()`
       · `WHERE status != 'deleted'` จองอีเมลไว้ตลอด grace period 30 วัน ไม่ให้คนอื่นแย่งไปสมัครแล้วเจ้าตัวกู้คืนไม่ได้
 
-- [ ] โปรไฟล์: ชื่อจริง · **ชื่อเล่น** · อีเมล · รูป
+- [x] โปรไฟล์: ชื่อจริง · **ชื่อเล่น** · รูป — `PATCH /v1/me` · ชื่อเล่นเป็น required เหมือนชื่อจริง
       · ชื่อเล่นไม่ใช่ของตกแต่ง — คนไทยเรียกชื่อเล่นเป็นหลัก ค้นด้วยชื่อจริงอย่างเดียวหาไม่เจอ
+      · ⏳ **อีเมลยังแก้ไม่ได้** — ต้องยืนยันที่อยู่ใหม่ก่อนถึงจะเปลี่ยนได้ ยกไป Phase 2 พร้อม flow ยืนยัน
 - [ ] อัปโหลดรูปผ่าน `StorageService` (presigned) — เขียนรอไว้แล้ว Phase 1 ใช้จริงครั้งแรก
+      · `avatarUrl` รับค่าแล้วใน `PATCH /v1/me` · ที่ยังขาดคือ endpoint ขอ presigned PUT
 - [ ] Deactivate / Reactivate (admin/owner กด) — assign งานใหม่ให้ไม่ได้ งานเก่ายังอยู่
 - [ ] สร้าง user ช่วงแรกด้วย admin API หรือ seed script — **หน้าจอจัดการ user อยู่ Phase 2**
 
@@ -297,6 +311,7 @@ unique เต็ม · `views.sort_order` / `is_default`
 | `enterWith` ใน guard | `run` ใช้ไม่ได้ (scope ปิดก่อน handler) · และ `enterWith` ต้องอยู่**ก่อน `await` แรก** · ถ้าเปลี่ยนโครง auth ต้องยิง server จริงซ้ำ ไม่ใช่แค่ดูว่า login ผ่าน (login เป็น `@Public()` จึงผ่านแม้ guard พัง) |
 | `@Public()` | มีอยู่แล้วแต่**ยังไม่มีใครอ่าน** · ลืมต่อ `Reflector` = ทุก endpoint ต้องล็อกอิน รวมทั้ง `/login` เอง |
 | ~~`RequestContextMiddleware`~~ | ✅ ลบไปแล้วพร้อม `AuthGuard` — `openRequestContext` มีที่เรียกที่เดียวคือ guard |
+| `null` ใน where ของ TypeORM | ต้องใช้ `IsNull()` · ใส่ `null` ตรงๆ **throw ตอน runtime** ไม่ใช่ compile error — เจอสองรอบใน PR C ทั้งใน service และในเทสต์ |
 | `.returning([...])` ของ TypeORM | รับ **property name** เข้า แต่คืน key เป็น **column name** · ชื่อที่ไม่ตรง property ถูกตัดออกจาก SQL **เงียบๆ** ไม่ error — `['id','user_id']` ทำให้ refresh ออก token ที่ไม่มี `sub` แล้วทุก request หลัง refresh 401 (เจอตอนยิงจริง 2026-09-04, unit test ผ่านหมด) |
 | `z.uuid()` ของ zod 4 | เช็ค version/variant nibble ตาม RFC 9562 ด้วย · `SYSTEM_USER_ID` (nil UUID) และ id ของ demo seed สอบตก ทั้งที่ column `uuid` ของ Postgres รับหมด — ใช้ `idSchema()` (`z.guid()`) กับทุก id |
 | `skip` ใน repository | ตัดออกจาก type แล้ว compile ไม่ผ่าน · ไม่ใช่บั๊ก เป็นความตั้งใจ — ต้องเขียน cursor helper |

@@ -23,7 +23,10 @@ describe.skipIf(!hasTestDatabase)('activity log', () => {
   let otherOrg: string
 
   const asOrg = <R>(org: string, fn: () => R): R =>
-    runWithRequestContext({ orgId: org, userId: SYSTEM_USER_ID }, fn)
+    runWithRequestContext(
+      { orgId: org, userId: SYSTEM_USER_ID, sessionId: null },
+      fn,
+    )
 
   const newOrg = async (slug: string): Promise<string> => {
     const [org] = (await dataSource.query(
