@@ -14,6 +14,7 @@ import {
   loginAction,
   logoutAction,
   meAction,
+  meParallelAction,
   type ActionOutcome,
 } from './actions'
 
@@ -208,6 +209,18 @@ export function HarnessClient() {
         </Button>
         <Button disabled={pending} onClick={() => runAction(meAction)}>
           GET /me
+        </Button>
+        <Button
+          disabled={pending}
+          onClick={() => runAction(() => meParallelAction(false))}
+        >
+          GET /me ×6 (Promise.all)
+        </Button>
+        <Button
+          disabled={pending}
+          onClick={() => runAction(() => meParallelAction(true))}
+        >
+          GET /me ×6 หลังทิ้ง token
         </Button>
         <Button disabled={pending} onClick={() => runAction(logoutAction)}>
           logout

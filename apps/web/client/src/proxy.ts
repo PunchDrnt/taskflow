@@ -54,7 +54,7 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     return NextResponse.next()
   }
 
-  const refreshed = await refresh(request)
+  const refreshed = await refreshOnce(request, refreshToken)
 
   // A failed refresh already carries the API's clearing cookies. Let the
   // request through as a signed-out one rather than redirecting: which route
@@ -82,11 +82,81 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   return response
 }
 
+/** Long enough for a slow container, short enough to stay inside the grace. */
+const REFRESH_TIMEOUT_MS = 5_000
+
 interface Refreshed {
   /** Raw `Set-Cookie` headers, exactly as the API wrote them. */
   setCookie: string[]
   /** name → value, for rebuilding the header this render will send. */
   cookies: Map<string, string>
+}
+
+/**
+ * 🔒 One renewal per token, however many requests arrive holding it.
+ *
+ * A cold load is not one request. The document, the prefetches Next fires for
+ * every `<Link>` in view, and any RSC fetch a navigation starts all pass
+ * through here, and if the token aged out while the tab was idle they arrive
+ * together holding the same expired one. Each would otherwise refresh, and
+ * they would race: one rotation wins and the rest match nothing, so the API
+ * answers `SESSION_EXPIRED` — measured at six-for-six on the Server Action
+ * path, which has exactly the same shape.
+ *
+ * Keyed by the token being spent rather than by the user, because that is what
+ * makes two callers' work identical. Module-level, so it spans requests, which
+ * is the whole point — and bounded, since an entry lives only as long as the
+ * request it represents.
+ */
+const inFlight = new Map<string, Promise<Refreshed | null>>()
+
+/**
+ * How long a *successful* result stays in the map after it resolves.
+ *
+ * Dropping it the moment it settles is not enough. Eight parallel page
+ * requests produced **two** refreshes rather than one: the ones that arrived
+ * after the first had finished found nothing to join and opened a second
+ * round, still holding the token the first had already spent. That succeeded
+ * only because `AuthService`'s ten-second grace window replays a completed
+ * rotation — which means the correctness of a burst rested on a *server-side*
+ * safety net for late tabs, and a refresh slow enough to push the second round
+ * past that window would have read as a stolen token and revoked the session.
+ *
+ * Comfortably inside that window, and only for results worth reusing: a
+ * failure is dropped at once, so a blip does not lock renewal out for seconds.
+ */
+const REFRESH_RESULT_TTL_MS = 5_000
+
+function refreshOnce(
+  request: NextRequest,
+  refreshToken: string,
+): Promise<Refreshed | null> {
+  const existing = inFlight.get(refreshToken)
+  if (existing !== undefined) return existing
+
+  const started = refresh(request)
+  inFlight.set(refreshToken, started)
+
+  void started.then(
+    (result) => {
+      if (result === null) {
+        inFlight.delete(refreshToken)
+
+        return
+      }
+
+      // `unref` so a pending entry never holds the process open on shutdown.
+      setTimeout(
+        () => inFlight.delete(refreshToken),
+        REFRESH_RESULT_TTL_MS,
+      ).unref?.()
+    },
+    // `refresh` answers null rather than throwing; this is belt and braces so
+    // an entry can never outlive the work it stands for.
+    () => inFlight.delete(refreshToken),
+  )
+
+  return started
 }
 
 async function refresh(request: NextRequest): Promise<Refreshed | null> {
@@ -108,6 +178,12 @@ async function refresh(request: NextRequest): Promise<Refreshed | null> {
       // A renewal must never be served from a cache, by us or by anything
       // between us and the API.
       cache: 'no-store',
+      // A hung refresh would otherwise hold the render open indefinitely, and
+      // — worse — leave this request presenting a token long enough for a
+      // later attempt to fall outside the API's reuse grace window. Well under
+      // that window, and the `catch` below turns it into "carry on with what
+      // we have" rather than a signed-out page.
+      signal: AbortSignal.timeout(REFRESH_TIMEOUT_MS),
     })
 
     if (!response.ok) return null

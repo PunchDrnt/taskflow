@@ -53,6 +53,23 @@ interface RetriedConfig extends InternalAxiosRequestConfig {
 }
 
 /**
+ * What to do when the refresh itself fails: the session is genuinely over and
+ * the API has already cleared the cookies.
+ *
+ * A hard navigation rather than a router push, because everything cached —
+ * the RSC payload, the router cache, any client state holding the last user —
+ * belongs to a session that no longer exists.
+ */
+let sessionLostHandler = (): void => {
+  window.location.assign('/login')
+}
+
+/** For screens that would rather show the failure than navigate away. */
+export function setSessionLostHandler(handler: () => void): void {
+  sessionLostHandler = handler
+}
+
+/**
  * 🔒 One refresh per expiry, however many requests run into it.
  *
  * A shared in-flight promise is the obvious half of this and is not enough on
@@ -72,11 +89,37 @@ interface RetriedConfig extends InternalAxiosRequestConfig {
 let inFlightRefresh: Promise<void> | null = null
 let refreshCount = 0
 
+/**
+ * Latched when a refresh fails, cleared by the next response that succeeds.
+ *
+ * Without it the shared promise still leaks: it is cleared when it settles, so
+ * a 401 that arrives after a *failed* refresh opens another one, which fails
+ * the same way — measured at three announcements for one dead session across
+ * six parallel requests. The counter that solves this for the success case
+ * cannot, because a failure does not advance it.
+ *
+ * Clearing on any success rather than on an explicit reset is what keeps it
+ * from becoming a footgun: signing in again goes through this instance like
+ * everything else, so nothing has to remember to unlatch it.
+ */
+let sessionIsLost = false
+
 export function refreshSession(): Promise<void> {
   inFlightRefresh ??= bare
     .post(REFRESH_PATH)
     .then(() => {
       refreshCount += 1
+    })
+    .catch((error: unknown) => {
+      // Here, not in the interceptor's catch. Every request waiting on this
+      // promise sees the same rejection, so a handler called there is called
+      // once per waiter — measured, six parallel requests against a revoked
+      // session produced six calls, which in production is
+      // `window.location.assign` six times over. The session is lost once, so
+      // it is announced once.
+      sessionIsLost = true
+      sessionLostHandler()
+      throw error
     })
     .finally(() => {
       inFlightRefresh = null
@@ -94,59 +137,52 @@ api.interceptors.request.use((config) => {
   return config
 })
 
-/**
- * What to do when the refresh itself fails: the session is genuinely over and
- * the API has already cleared the cookies.
- *
- * A hard navigation rather than a router push, because everything cached —
- * the RSC payload, the router cache, any client state holding the last user —
- * belongs to a session that no longer exists.
- */
-let sessionLostHandler = (): void => {
-  window.location.assign('/login')
-}
+api.interceptors.response.use(
+  (response) => {
+    // A response arrived, so whatever the session was doing a moment ago, it
+    // works now. This is what unlatches `sessionIsLost` after signing back in.
+    sessionIsLost = false
 
-/** For screens that would rather show the failure than navigate away. */
-export function setSessionLostHandler(handler: () => void): void {
-  sessionLostHandler = handler
-}
+    return response
+  },
+  async (error: unknown) => {
+    const failure = toApiError(error)
+    const config = configOf(error)
 
-api.interceptors.response.use(undefined, async (error: unknown) => {
-  const failure = toApiError(error)
-  const config = configOf(error)
+    if (
+      failure.status !== 401 ||
+      config === undefined ||
+      config.retriedAfterRefresh === true ||
+      sessionIsLost ||
+      isAuthEndpoint(config.url)
+    ) {
+      throw failure
+    }
 
-  if (
-    failure.status !== 401 ||
-    config === undefined ||
-    config.retriedAfterRefresh === true ||
-    isAuthEndpoint(config.url)
-  ) {
-    throw failure
-  }
+    config.retriedAfterRefresh = true
 
-  config.retriedAfterRefresh = true
+    // Somebody else refreshed while this request was in flight. Its 401 is
+    // stale news, and refreshing again would spend a token already current.
+    if (
+      config.sentAtRefreshCount !== undefined &&
+      config.sentAtRefreshCount < refreshCount
+    ) {
+      return api.request(config)
+    }
 
-  // Somebody else refreshed while this request was in flight. Its 401 is stale
-  // news, and refreshing again would spend a token that is already current.
-  if (
-    config.sentAtRefreshCount !== undefined &&
-    config.sentAtRefreshCount < refreshCount
-  ) {
+    try {
+      await refreshSession()
+    } catch {
+      // `refreshSession` has already announced the loss. What is left to do
+      // here is answer the caller — with the original 401, not the refresh's:
+      // they asked for `/me`, and "your session ended" is the answer to that
+      // question. The refresh is an implementation detail of this file.
+      throw failure
+    }
+
     return api.request(config)
-  }
-
-  try {
-    await refreshSession()
-  } catch {
-    sessionLostHandler()
-    // The original 401, not the refresh's. The caller asked for `/me`, and
-    // "your session ended" is the answer to that question; the refresh is an
-    // implementation detail of this file.
-    throw failure
-  }
-
-  return api.request(config)
-})
+  },
+)
 
 function configOf(error: unknown): RetriedConfig | undefined {
   return axios.isAxiosError(error)

@@ -69,6 +69,40 @@ export async function meAction(): Promise<ActionOutcome> {
   })
 }
 
+/**
+ * Six reads from **one** action, together.
+ *
+ * The case the single-request reasoning misses: `apiForAction` builds one
+ * instance per action, and `Promise.all` puts several requests through it at
+ * once. If the access token has aged out, every one of them comes back 401 and
+ * every one of them wants to refresh.
+ */
+export async function meParallelAction(
+  dropAccessTokenFirst = false,
+): Promise<ActionOutcome> {
+  const started = performance.now()
+
+  return run('server action · GET /me ×6 พร้อมกัน', started, async () => {
+    // The proxy runs on a Server Action's POST too — it goes to the page's own
+    // URL, which the matcher covers — so by the time an action body runs, an
+    // expired token has usually already been renewed. That makes `apiForAction`
+    // the *second* line rather than the first, and this flag is how the second
+    // line gets exercised at all: drop the cookie after the proxy has been and
+    // gone.
+    if (dropAccessTokenFirst) (await cookies()).delete(ACCESS_TOKEN_COOKIE)
+
+    const api = await apiForAction()
+    const replies = await Promise.all(
+      Array.from({ length: 6 }, () => api.get<{ id: string }>('/me')),
+    )
+
+    return {
+      requests: replies.length,
+      distinctIds: new Set(replies.map((reply) => reply.data.id)).size,
+    }
+  })
+}
+
 export async function logoutAction(): Promise<ActionOutcome> {
   const started = performance.now()
 

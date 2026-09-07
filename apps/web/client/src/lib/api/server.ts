@@ -118,11 +118,22 @@ export async function apiForRender(): Promise<AxiosInstance> {
  * For **Server Actions and Route Handlers**. Refreshes on 401, writes the new
  * cookies, and retries once.
  *
- * The refresh is not single-flighted the way the browser client's is, and does
- * not need to be: one action is one request, and two actions running at once
- * are two independent server requests that could not share a promise anyway.
- * What covers them is the API's own ten-second grace window, which hands the
- * same new pair to both.
+ * In practice this is the *second* line rather than the first: a Server Action
+ * posts to the page's own URL, so `proxy.ts` has already seen the request and
+ * renewed an aged-out token before the action body runs. What is left for this
+ * to catch is a token that expires inside the proxy's skew window, and a route
+ * handler reached some other way.
+ *
+ * ⚠️ **Single-flighted, and the first version was not.** The reasoning it
+ * shipped with — "one action is one request, so there is nothing to share" —
+ * ignores `Promise.all` inside a single action. Measured: six parallel reads
+ * against an expired token sent **six** refreshes, all presenting the same
+ * token at the same moment. One rotated it; the other five matched nothing,
+ * and the API answered `SESSION_EXPIRED` to each, so the whole action failed
+ * with a 401 despite having just renewed the session. The API's ten-second
+ * grace window did not help, because it replays a rotation that has already
+ * *finished* — it is a net for a tab that wakes up late, not for five requests
+ * racing inside one function.
  */
 export async function apiForAction(): Promise<AxiosInstance> {
   const instance = createInstance()
@@ -132,8 +143,32 @@ export async function apiForAction(): Promise<AxiosInstance> {
   // out with the new tokens rather than the ones that just 401'd.
   let cookieHeader = await currentCookieHeader()
 
+  // Scoped to this instance, which is one action. Two actions running at once
+  // are two server requests that could not share a promise anyway; what they
+  // share instead is the process-level guard in `proxy.ts`.
+  let inFlightRefresh: Promise<boolean> | null = null
+  let refreshCount = 0
+
+  const refreshOnce = (): Promise<boolean> => {
+    inFlightRefresh ??= refreshFromServer(cookieHeader, origin)
+      .then((header) => {
+        if (header === null) return false
+
+        cookieHeader = header
+        refreshCount += 1
+
+        return true
+      })
+      .finally(() => {
+        inFlightRefresh = null
+      })
+
+    return inFlightRefresh
+  }
+
   instance.interceptors.request.use((config) => {
     config.headers.set({ ...origin, cookie: cookieHeader })
+    ;(config as RetriedConfig).sentAtRefreshCount = refreshCount
 
     return config
   })
@@ -155,10 +190,19 @@ export async function apiForAction(): Promise<AxiosInstance> {
 
     config.retriedAfterRefresh = true
 
-    const refreshed = await refreshFromServer(cookieHeader, origin)
-    if (refreshed === null) throw failure
+    // Somebody else in this action already renewed the token while this
+    // request was in flight, so its 401 is stale news — same reasoning as the
+    // browser client, and the counter is why a shared promise alone is not
+    // enough: the promise is gone by the time a late 401 arrives.
+    if (
+      config.sentAtRefreshCount !== undefined &&
+      config.sentAtRefreshCount < refreshCount
+    ) {
+      return instance.request(config)
+    }
 
-    cookieHeader = refreshed
+    if (!(await refreshOnce())) throw failure
+
     return instance.request(config)
   })
 
@@ -167,6 +211,8 @@ export async function apiForAction(): Promise<AxiosInstance> {
 
 interface RetriedConfig extends InternalAxiosRequestConfig {
   retriedAfterRefresh?: boolean
+  /** `refreshCount` as it stood when this request went out. */
+  sentAtRefreshCount?: number
 }
 
 /**
