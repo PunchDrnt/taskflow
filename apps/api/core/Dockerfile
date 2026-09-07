@@ -53,5 +53,5 @@ COPY apps/api/core/package.json ./apps/api/core/
 
 USER node
 WORKDIR /app/apps/api/core
-EXPOSE 3001
+EXPOSE 4001
 CMD ["node", "dist/main.js"]

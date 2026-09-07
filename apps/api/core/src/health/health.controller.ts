@@ -17,7 +17,7 @@ const RSS_LIMIT_BYTES = 1024 * 1024 * 1024
 
 /**
  * Unauthenticated, and outside the `v1` prefix — both because the container's
- * own healthcheck curls `127.0.0.1:3001/health/live` with no cookies and
+ * own healthcheck curls `127.0.0.1:4001/health/live` with no cookies and
  * without passing through Caddy. A guard here would report every healthy
  * container as unhealthy, which stops `web` and `caddy` from starting at all.
  */

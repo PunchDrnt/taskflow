@@ -21,7 +21,7 @@
 	# handle_path strips the prefix: /api/health reaches the API as /health.
 	# The API knows nothing about being mounted under a path.
 	handle_path /api/* {
-		reverse_proxy api:3001
+		reverse_proxy api:4001
 	}
 
 	handle {

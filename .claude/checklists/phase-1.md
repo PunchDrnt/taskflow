@@ -136,7 +136,7 @@ unique เต็ม · `views.sort_order` / `is_default`
 **§1 ปิดครบแล้ว** — ทุกข้อข้างบนติ๊กหมดแล้ว รวมทั้งสี่ข้อ "ตรวจก่อนปิด"
 
 ⚠️ **`setGlobalPrefix('v1')` ลงแล้ว และ health ถูก exclude ไว้** — healthcheck ใน `deploy/compose.yml`
-ยิง `127.0.0.1:3001/health/live` ตรงๆ ไม่ผ่าน Caddy · ย้ายเข้า prefix เมื่อไหร่ container จะรายงาน unhealthy
+ยิง `127.0.0.1:4001/health/live` ตรงๆ ไม่ผ่าน Caddy · ย้ายเข้า prefix เมื่อไหร่ container จะรายงาน unhealthy
 แล้ว `web` กับ `caddy` ไม่ขึ้นเลย · route health ยัง `@Public()` ด้วยเหตุผลเดียวกัน (ยิงมาแบบไม่มี cookie)
 
 ---
@@ -285,7 +285,7 @@ unique เต็ม · `views.sort_order` / `is_default`
 - [ ] `/api/v1/*` · path nested ชั้นเดียว · resource พหูพจน์ · แก้ไขใช้ `PATCH`
 - [ ] ⚠️ **`setGlobalPrefix('v1')` ไม่ใช่ `'api/v1'` · และต้อง `exclude` health** — บรรทัดเดียวที่ทำ deploy พังได้โดย dev ไม่มีทางเจอ
       · `/api/v1/*` คือ path ที่ **browser** เห็น · Caddy `handle_path /api/*` [ตัด `/api` ทิ้งก่อนถึง Nest](../docs/01-architecture.md#path-ownership) แล้ว ใส่ `'api/v1'` จะได้ `/api/api/v1/...`
-      · healthcheck ของ service `api` ยิง `127.0.0.1:3001/health/live` **ตรง ไม่ผ่าน Caddy** — ไม่ exclude แล้ว path กลายเป็น `/v1/health/live` → container unhealthy → `depends_on: service_healthy` บล็อก `web` กับ `caddy` ทั้งกอง
+      · healthcheck ของ service `api` ยิง `127.0.0.1:4001/health/live` **ตรง ไม่ผ่าน Caddy** — ไม่ exclude แล้ว path กลายเป็น `/v1/health/live` → container unhealthy → `depends_on: service_healthy` บล็อก `web` กับ `caddy` ทั้งกอง
       · dev ไม่เจอเพราะไม่มี Caddy ในเครื่อง · ตอนนี้ `main.ts` ยังไม่มี `setGlobalPrefix` เลย บรรทัดนี้คือของใหม่ที่ phase นี้เพิ่ม
 - [ ] Error shape ตาม [`01-architecture.md`](../docs/01-architecture.md#api) — `code` เป็น string คงที่ให้ frontend เช็ค, `message` ภาษาไทยแสดงผู้ใช้ได้เลย
 - [ ] Swagger ครบทุก endpoint — `/docs` เป็นของที่คนอื่นในทีมใช้จริงแล้ว phase นี้

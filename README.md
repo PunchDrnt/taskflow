@@ -56,8 +56,8 @@ yarn dev
 ```
 
 - Web app: http://localhost:3000
-- API: http://localhost:3001
-- API Swagger docs: http://localhost:3001/docs
+- API: http://localhost:4001
+- API Swagger docs: http://localhost:4001/docs
 
 Every environment variable the API reads is declared and validated by a zod schema in [apps/api/core/src/config/env.ts](apps/api/core/src/config/env.ts). A missing or malformed value stops the process at startup rather than surfacing as `undefined` mid-request — add new variables there rather than reading `process.env` directly.
 
