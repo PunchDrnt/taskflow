@@ -27,6 +27,7 @@ RUN yarn install --immutable
 FROM deps AS build
 COPY tsconfig.json* turbo.json ./
 COPY packages/config packages/config
+COPY packages/shared packages/shared
 COPY packages/ui packages/ui
 COPY apps/web/client apps/web/client
 
@@ -39,7 +40,13 @@ ARG NEXT_PUBLIC_SENTRY_ENVIRONMENT="production"
 ENV NEXT_PUBLIC_SENTRY_DSN=${NEXT_PUBLIC_SENTRY_DSN} \
     NEXT_PUBLIC_SENTRY_ENVIRONMENT=${NEXT_PUBLIC_SENTRY_ENVIRONMENT}
 
-RUN yarn workspace @web/client build
+# @repo/shared first, exactly as the API image does it, and for a reason that
+# is easy to miss here: Next transpiles workspace TypeScript, so a package of
+# raw sources would need no build step — but this one resolves through its
+# package.json `exports` to `dist/index.js`, which only `tsc` writes. Without
+# it the proxy's `import { REFRESH_TOKEN_COOKIE } from '@repo/shared'` fails
+# to resolve and the image build stops.
+RUN yarn workspace @repo/shared build && yarn workspace @web/client build
 
 # ── runtime ──────────────────────────────────────────────────────────────────
 # No install: `output: 'standalone'` already wrote the node_modules subset the
