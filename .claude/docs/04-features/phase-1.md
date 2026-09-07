@@ -135,6 +135,17 @@ CREATE UNIQUE INDEX ON iam.users (email)
   และแต่ละอันหมดอายุระหว่างที่หน้ายังเปิดอยู่
 · ค่าที่เป็น `http(s)://` อยู่แล้วจะ redirect ตรงๆ — นั่นคือรูปที่ host ที่อื่น ไม่ต้องช่วยอะไร
 
+**ย่อและบีบที่ browser ก่อน PUT** — ด้านยาว 512px · re-encode เป็น WebP คุณภาพ ~0.85 · ปกติได้ 30-60KB
+· ⚠️ **ตอนนี้ไม่มีอะไรฝั่ง server กันขนาดเลย** — `presignedUpload` เซ็น `PutObjectCommand` เปล่าๆ
+  ไม่มี `ContentLength` ไม่มีเงื่อนไข content-type ฉะนั้น presigned URL หนึ่งใบรับไฟล์ 200MB ได้เท่ากับรับ 30KB
+  · browser จึงไม่ใช่แค่ "ทำให้เร็วขึ้น" แต่เป็นด่านเดียวที่มีอยู่จริง · จะเพิ่มด่านที่ server หรือไม่เป็นคนละข้อ
+· รูปจากมือถือมี EXIF orientation — canvas ทิ้ง EXIF ทั้งก้อน ถ้าไม่อ่านก่อนรูปจะตะแคง
+  ใช้ `createImageBitmap(blob, { imageOrientation: 'from-image' })` ให้ browser หมุนให้ตั้งแต่ decode
+· การ re-encode ทิ้ง EXIF ทั้งหมด **ซึ่งเป็นเรื่องดี** — รูปจากมือถือพก GPS มาด้วย
+  อัปโหลดไฟล์ดิบคือเอาพิกัดบ้านพนักงานไปวางไว้ใน bucket
+· `fileName` ที่ส่งไป `POST /v1/me/avatar-upload` ป้อน `keyFor` อย่างเดียว ไม่ได้ตรวจอะไร —
+  ถ้า encode เป็น WebP ต้องส่งชื่อลงท้าย `.webp` ไม่งั้นได้ object ชื่อ `.png` ที่ข้างในเป็น WebP
+
 ## Project
 
 - สร้าง / แก้ไข / ลบ project

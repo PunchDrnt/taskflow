@@ -173,6 +173,13 @@ unique เต็ม · `views.sort_order` / `is_default`
       · ไฟล์ไม่ผ่าน Node เลย — upload ที่ทิ้งกลางคันเหลือแค่ object ที่ไม่มีใครอ้างถึง
         และ API ไม่กลายเป็น proxy ที่ memory limit คือ file size limit จริง
       · **เก็บ key ไม่ใช่ URL** เพราะ bucket เป็น private · `GET /v1/users/:userId/avatar` เป็นที่เดียวที่แปลงกลับเป็นรูป
+- [ ] **ย่อ + บีบรูปที่ browser ก่อน PUT** — ด้านยาว 512px · WebP ~0.85 · ปกติเหลือ 30-60KB
+      · ⚠️ **ไม่ใช่แค่ optimisation — เป็นด่านเดียวที่มี** `presignedUpload` เซ็น `PutObjectCommand` เปล่า
+        ไม่มี `ContentLength` ไม่มีเงื่อนไข content-type · URL ใบเดียวรับ 200MB ได้พอๆ กับรับ 30KB
+      · EXIF orientation — canvas ทิ้ง EXIF ทั้งก้อน ไม่อ่านก่อนรูปตะแคง
+        · `createImageBitmap(blob, { imageOrientation: 'from-image' })`
+      · re-encode ทิ้ง EXIF = ทิ้ง GPS ของรูปจากมือถือไปด้วย ซึ่งเป็นเรื่องที่ต้องการอยู่แล้ว
+      · ส่ง `fileName` ให้ลงท้ายตรงกับที่ encode จริง — มันป้อน `keyFor` อย่างเดียว ไม่มีใครตรวจ
 - [x] Deactivate / Reactivate (admin/owner กด) — assign งานใหม่ให้ไม่ได้ งานเก่ายังอยู่
       · `POST|DELETE /v1/org/members/:userId/deactivate` · ยังอยู่ในลิสต์สมาชิก (`status` บอกว่า deactivated)
       · assign งานใหม่ → 409 `USER_INACTIVE` · assignee picker ไม่เสนอชื่อ · **งานที่ถืออยู่ไม่ขยับ**
