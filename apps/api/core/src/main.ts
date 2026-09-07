@@ -40,7 +40,7 @@ async function bootstrap() {
   // route /api/api/v1/... from the browser's side.
   //
   // ⚠️ health is excluded because deploy/compose.yml's healthcheck hits
-  // 127.0.0.1:3001/health/live *directly*, bypassing Caddy. Move it under the
+  // 127.0.0.1:4001/health/live *directly*, bypassing Caddy. Move it under the
   // prefix and the container reports unhealthy, which stops `web` and `caddy`
   // from starting at all — and no Caddy runs locally, so nothing catches it
   // before a deploy. `docs` is excluded for the same reason it is served at a

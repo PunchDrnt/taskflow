@@ -24,7 +24,7 @@ describe('validateEnv', () => {
     const env = validateEnv({ ...required })
 
     expect(env.NODE_ENV).toBe('development')
-    expect(env.PORT).toBe(3001)
+    expect(env.PORT).toBe(4001)
     expect(env.LOG_LEVEL).toBe('info')
   })
 

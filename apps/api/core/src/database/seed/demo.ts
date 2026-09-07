@@ -16,8 +16,9 @@ import { buildDataSourceOptions } from '../data-source.options'
  * it: every statement here crosses the org scope on purpose — there is no
  * request context, because there is nobody making a request.
  *
- * Deletes what it made before making it again, so it can be re-run. It refuses
- * to touch a production database at all.
+ * Deletes what it made before making it again, so it can be re-run — which
+ * means clearing everything that points *at* the demo users too, not only what
+ * carries their org_id. It refuses to touch a production database at all.
  */
 /**
  * The password every demo account shares, printed on the way out so nobody has
@@ -146,6 +147,28 @@ async function seed(dataSource: DataSource): Promise<void> {
       `DELETE FROM organization.organizations WHERE id = $1`,
       [ORG_ID],
     )
+    // Keyed on the recipient, not on org_id, and that is not a shortcut: a
+    // password-reset mail has `org_id` null by design, so an org-scoped delete
+    // misses exactly the rows most likely to be here — anybody trying the
+    // forgot-password flow locally leaves one. Both FKs are RESTRICT, so
+    // missing them makes `db:seed` fail on its second run and never recover,
+    // which is what happened.
+    for (const table of ['notify.outbox', 'notify.notifications']) {
+      await manager.query(`DELETE FROM ${table} WHERE recipient_id = ANY($1)`, [
+        PEOPLE.map(([id]) => id),
+      ])
+    }
+    // Same reasoning: RESTRICT on created_by/updated_by would otherwise pin
+    // the demo users in place once any of them has asked for a reset link.
+    await manager.query(
+      `DELETE FROM identity.password_reset_tokens WHERE user_id = ANY($1)`,
+      [PEOPLE.map(([id]) => id)],
+    )
+    await manager.query(
+      `DELETE FROM identity.sessions WHERE user_id = ANY($1)`,
+      [PEOPLE.map(([id]) => id)],
+    )
+
     await manager.query(`DELETE FROM identity.users WHERE id = ANY($1)`, [
       PEOPLE.map(([id]) => id),
     ])

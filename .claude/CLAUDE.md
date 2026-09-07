@@ -68,7 +68,7 @@ All commands run from the repo root and fan out to workspaces via Turborepo.
 
 ```bash
 yarn install          # install deps (Yarn 4 Berry, node-modules linker); also installs git hooks
-yarn dev              # run all apps in watch mode (web on :3000, api on :3001)
+yarn dev              # run all apps in watch mode (web on :3000, api on :4001)
 yarn build            # build all apps/packages (respects dependency graph)
 yarn lint             # eslint --max-warnings 0 across all workspaces
 yarn check-types      # tsc --noEmit across all workspaces
@@ -131,7 +131,7 @@ Turborepo monorepo. Workspaces are `apps/*/*` and `packages/*` — apps sit one 
 | Workspace                          | What it is                                                                                                                                                                                                                                                                     |
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `apps/web/client` (`@web/client`)  | Next.js 16 App Router + React 19 + Tailwind 4. `/design-system` is a live showcase of every `@repo/ui` component — check it when adding or changing one. **Atomic design applies here and nowhere else** — `packages/ui` is not organised that way and is not being converted. |
-| `apps/api/core` (`@api/core`)      | NestJS 11. `src/main.ts` bootstraps `nestjs-pino` and Swagger at `/docs`; listens on `PORT` (default 3001).                                                                                                                                                                    |
+| `apps/api/core` (`@api/core`)      | NestJS 11. `src/main.ts` bootstraps `nestjs-pino` and Swagger at `/docs`; listens on `PORT` (default 4001).                                                                                                                                                                    |
 | `packages/ui` (`@repo/ui`)         | `@base-ui/react` + cva + Tailwind. One directory per component, exported individually.                                                                                                                                                                                         |
 | `packages/shared` (`@repo/shared`) | Framework-free zod schemas, types, constants. Real `tsc` build, because Nest cannot consume raw `.ts` from a workspace the way Next transpiles it.                                                                                                                             |
 | `packages/config` (`@repo/config`) | The only home for eslint / typescript / prettier / tailwind config.                                                                                                                                                                                                            |
