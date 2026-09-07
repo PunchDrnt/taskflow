@@ -173,6 +173,13 @@ unique เต็ม · `views.sort_order` / `is_default`
       · ไฟล์ไม่ผ่าน Node เลย — upload ที่ทิ้งกลางคันเหลือแค่ object ที่ไม่มีใครอ้างถึง
         และ API ไม่กลายเป็น proxy ที่ memory limit คือ file size limit จริง
       · **เก็บ key ไม่ใช่ URL** เพราะ bucket เป็น private · `GET /v1/users/:userId/avatar` เป็นที่เดียวที่แปลงกลับเป็นรูป
+- [ ] **ย่อ + บีบรูปที่ browser ก่อน PUT** — ด้านยาว 512px · WebP ~0.85 · ปกติเหลือ 30-60KB
+      · ⚠️ **ไม่ใช่แค่ optimisation — เป็นด่านเดียวที่มี** `presignedUpload` เซ็น `PutObjectCommand` เปล่า
+        ไม่มี `ContentLength` ไม่มีเงื่อนไข content-type · URL ใบเดียวรับ 200MB ได้พอๆ กับรับ 30KB
+      · EXIF orientation — canvas ทิ้ง EXIF ทั้งก้อน ไม่อ่านก่อนรูปตะแคง
+        · `createImageBitmap(blob, { imageOrientation: 'from-image' })`
+      · re-encode ทิ้ง EXIF = ทิ้ง GPS ของรูปจากมือถือไปด้วย ซึ่งเป็นเรื่องที่ต้องการอยู่แล้ว
+      · ส่ง `fileName` ให้ลงท้ายตรงกับที่ encode จริง — มันป้อน `keyFor` อย่างเดียว ไม่มีใครตรวจ
 - [x] Deactivate / Reactivate (admin/owner กด) — assign งานใหม่ให้ไม่ได้ งานเก่ายังอยู่
       · `POST|DELETE /v1/org/members/:userId/deactivate` · ยังอยู่ในลิสต์สมาชิก (`status` บอกว่า deactivated)
       · assign งานใหม่ → 409 `USER_INACTIVE` · assignee picker ไม่เสนอชื่อ · **งานที่ถืออยู่ไม่ขยับ**
@@ -212,9 +219,16 @@ unique เต็ม · `views.sort_order` / `is_default`
       · `POST /v1/org` · `@SkipOrgScope()` เพราะคนที่สร้าง org แรกยังไม่ได้อยู่ org ไหน
       · org + แถว owner อยู่ใน transaction เดียว — org ที่ไม่มี owner คือสิ่งที่กฎ owner คนสุดท้ายมีไว้กันพอดี
       · audit row เขียนใน context ของ org ที่เพิ่งเกิด ไม่ใช่ของ caller ที่ยังไม่มี org (`org_id` เป็น NOT NULL)
-- [ ] ยังไม่ได้ทำ: `DELETE /v1/org` — `ability.ts` เขียนกติกาไว้แล้วว่า owner ลบได้ แต่ยังไม่มี endpoint
-      · จงใจ: ไม่มีหน้าจอ ไม่มี flow ยืนยัน และ spec ยังไม่ได้บอกว่าสมาชิกของ org ที่ถูกลบเป็นยังไงต่อ
-      · `CascadeSoftDelete` รองรับอยู่แล้ว (`organization.organizations` เป็น ROOT + ลูกประกาศครบ) เหลือแค่ตัดสินใจ
+- [x] **`DELETE /v1/org` อยู่ Phase 2** — ไม่ใช่ของค้างของ Phase 1 และไม่ใช่คำถามที่ยังไม่มีคำตอบ
+      · [roadmap ข้อ 12](../docs/03-roadmap.md) "Archive project + danger zone" วาง **โอน owner / ลบ org** ไว้ด้วยกัน
+        และสอง flow นี้อ้างกันไปมา — owner คนสุดท้ายลบ account ต้อง "ตั้ง owner ใหม่ *หรือ* ลบ org ก่อน"
+        ทำข้างเดียวได้กติกาครึ่งเดียว
+      · [`04-features/phase-2.md#danger-zone`](../docs/04-features/phase-2.md#danger-zone) ตอบครบแล้ว —
+        owner เท่านั้น · พิมพ์ชื่อ org ยืนยัน · soft delete ทั้งก้อน สมาชิกหลุดจาก org นี้แต่ account ยังอยู่
+      · ของฝั่งโค้ดพร้อมหมดแล้ว เหลือแค่ route — `ability.ts` สั่ง `cannot('delete', 'Organization')` กับ admin ไว้แล้ว
+        และ `CascadeSoftDelete` รองรับ (`organization.organizations` เป็น ROOT + ลูกประกาศครบ)
+      · ที่ Phase 1 ให้ไม่ได้คือหน้าจอยืนยัน API เปล่าๆ แปลว่า HTTP call เดียวลบทั้งบริษัท ไม่มี undo
+        และคนที่ค้างอยู่ใน org นั้นโดนเด้งกลางคัน — cookie `active_org` ชี้ไป org ที่หายไป `AuthGuard` เคลียร์ทิ้ง
 - [x] **ตาราง `organization.invitations`** — ลงแล้ว ยังไม่มีใครอ่าน API + หน้าจอมา Phase 2
       · Phase 1 เพิ่มคนเข้า org ด้วย seed script
 
