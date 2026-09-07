@@ -161,15 +161,14 @@ async function seed(dataSource: DataSource): Promise<void> {
     // Same reasoning: RESTRICT on created_by/updated_by would otherwise pin
     // the demo users in place once any of them has asked for a reset link.
     await manager.query(
-      `DELETE FROM identity.password_reset_tokens WHERE user_id = ANY($1)`,
+      `DELETE FROM iam.password_reset_tokens WHERE user_id = ANY($1)`,
       [PEOPLE.map(([id]) => id)],
     )
-    await manager.query(
-      `DELETE FROM identity.sessions WHERE user_id = ANY($1)`,
-      [PEOPLE.map(([id]) => id)],
-    )
+    await manager.query(`DELETE FROM iam.sessions WHERE user_id = ANY($1)`, [
+      PEOPLE.map(([id]) => id),
+    ])
 
-    await manager.query(`DELETE FROM identity.users WHERE id = ANY($1)`, [
+    await manager.query(`DELETE FROM iam.users WHERE id = ANY($1)`, [
       PEOPLE.map(([id]) => id),
     ])
 
@@ -179,7 +178,7 @@ async function seed(dataSource: DataSource): Promise<void> {
 
     for (const [id, email, name, nickname] of PEOPLE) {
       await manager.query(
-        `INSERT INTO identity.users (id, email, name, nickname, status, password_hash, created_by, updated_by)
+        `INSERT INTO iam.users (id, email, name, nickname, status, password_hash, created_by, updated_by)
          VALUES ($1, $2, $3, $4, 'active', $5, $6, $6)`,
         [id, email, name, nickname, passwordHash, SYSTEM_USER_ID],
       )

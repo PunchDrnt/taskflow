@@ -8,14 +8,14 @@ import { Subscription } from '../modules/billing/subscription.entity'
 import { Attachment } from '../modules/discussion/attachment.entity'
 import { Comment } from '../modules/discussion/comment.entity'
 import { FieldDefinition } from '../modules/field/field-definition.entity'
-import { OauthAccount } from '../modules/identity/auth/oauth-account.entity'
-import { PasswordResetToken } from '../modules/identity/auth/password-reset-token.entity'
-import { Session } from '../modules/identity/auth/session.entity'
-import { SystemPermission } from '../modules/identity/system/system-permission.entity'
-import { SystemRolePermission } from '../modules/identity/system/system-role-permission.entity'
-import { SystemRole } from '../modules/identity/system/system-role.entity'
-import { SystemUserRole } from '../modules/identity/system/system-user-role.entity'
-import { User } from '../modules/identity/user/user.entity'
+import { OauthAccount } from '../modules/iam/auth/oauth-account.entity'
+import { PasswordResetToken } from '../modules/iam/auth/password-reset-token.entity'
+import { Session } from '../modules/iam/auth/session.entity'
+import { SystemPermission } from '../modules/iam/system/system-permission.entity'
+import { SystemRolePermission } from '../modules/iam/system/system-role-permission.entity'
+import { SystemRole } from '../modules/iam/system/system-role.entity'
+import { SystemUserRole } from '../modules/iam/system/system-user-role.entity'
+import { User } from '../modules/iam/user/user.entity'
 import { Notification } from '../modules/notify/notification.entity'
 import { Outbox } from '../modules/notify/outbox.entity'
 import { Invitation } from '../modules/organization/invitation.entity'
@@ -47,7 +47,7 @@ type EntityList = Extract<
  * One per table, `chat.*` aside — Phase 2.
  */
 export const entities: EntityList = [
-  // identity — outside org scoping entirely
+  // iam — outside org scoping entirely
   User,
   Session,
   OauthAccount,

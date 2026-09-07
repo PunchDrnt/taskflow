@@ -135,7 +135,7 @@ export class RetentionService {
    */
   async anonymisePendingDeletionUsers(): Promise<number> {
     const result = (await this.dataSource.query(
-      `UPDATE identity.users
+      `UPDATE iam.users
           SET email         = 'deleted-' || id || '@deleted.invalid',
               name          = 'Deleted user',
               nickname      = 'deleted',
@@ -187,9 +187,9 @@ export class RetentionService {
   /** Revoked or expired. The week of slack is for after-the-fact questions. */
   async purgeFinishedSessions(): Promise<number> {
     return this.deleteInBatches(
-      `DELETE FROM identity.sessions
+      `DELETE FROM iam.sessions
         WHERE ctid IN (
-          SELECT ctid FROM identity.sessions
+          SELECT ctid FROM iam.sessions
            WHERE greatest(expires_at, coalesce(revoked_at, expires_at))
                  < now() - make_interval(days => $1)
            LIMIT ${PURGE_BATCH_SIZE}
@@ -201,9 +201,9 @@ export class RetentionService {
   /** Valid for thirty minutes, kept a day so a "my link failed" ticket has data. */
   async purgePasswordResetTokens(): Promise<number> {
     return this.deleteInBatches(
-      `DELETE FROM identity.password_reset_tokens
+      `DELETE FROM iam.password_reset_tokens
         WHERE ctid IN (
-          SELECT ctid FROM identity.password_reset_tokens
+          SELECT ctid FROM iam.password_reset_tokens
            WHERE created_at < now() - make_interval(days => $1)
            LIMIT ${PURGE_BATCH_SIZE}
         )`,

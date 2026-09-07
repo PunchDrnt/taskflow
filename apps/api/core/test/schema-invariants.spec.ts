@@ -54,7 +54,7 @@ describe.skipIf(!hasTestDatabase)('schema invariants', () => {
     // catches the two parting company — and they part company silently, as a
     // foreign key violation on created_by in whichever job writes first.
     const [seeded] = (await dataSource.query(
-      `SELECT id FROM identity.users WHERE is_system`,
+      `SELECT id FROM iam.users WHERE is_system`,
     )) as { id: string }[]
 
     expect(seeded?.id).toBe(SYSTEM_USER_ID)

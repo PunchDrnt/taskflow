@@ -1,23 +1,23 @@
 import { type MigrationInterface, type QueryRunner } from 'typeorm'
 
 /**
- * `identity.users` and the system user together, because neither is usable
+ * `iam.users` and the system user together, because neither is usable
  * without the other: `created_by` is NOT NULL everywhere and points here.
  *
  * The first row references itself, which Postgres allows in one INSERT as long
  * as the id is a literal — the FK is checked after the row lands.
  *
- * See docs/02-database/schema.md#schema-identity
+ * See docs/02-database/schema.md#schema-iam
  */
 
 /** Fixed, so it is recognisable in logs and identical in every environment. */
 const SYSTEM_USER_ID = '00000000-0000-0000-0000-000000000000'
 
-export class CreateIdentityUsers1787186718550 implements MigrationInterface {
+export class CreateIamUsers1787186718550 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
-    // No org_id: a user belongs to many orgs, so identity is outside scoping.
+    // No org_id: a user belongs to many orgs, so iam is outside scoping.
     await queryRunner.query(`
-      CREATE TABLE identity.users (
+      CREATE TABLE iam.users (
         id                        uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
 
         email                     citext      NOT NULL,
@@ -78,36 +78,36 @@ export class CreateIdentityUsers1787186718550 implements MigrationInterface {
 
     // Self-referencing, so they can only be added once the table exists.
     await queryRunner.query(`
-      ALTER TABLE identity.users
+      ALTER TABLE iam.users
         ADD CONSTRAINT users_created_by_fkey
-          FOREIGN KEY (created_by) REFERENCES identity.users(id) ON DELETE RESTRICT,
+          FOREIGN KEY (created_by) REFERENCES iam.users(id) ON DELETE RESTRICT,
         ADD CONSTRAINT users_updated_by_fkey
-          FOREIGN KEY (updated_by) REFERENCES identity.users(id) ON DELETE RESTRICT,
+          FOREIGN KEY (updated_by) REFERENCES iam.users(id) ON DELETE RESTRICT,
         ADD CONSTRAINT users_deleted_by_fkey
-          FOREIGN KEY (deleted_by) REFERENCES identity.users(id) ON DELETE RESTRICT
+          FOREIGN KEY (deleted_by) REFERENCES iam.users(id) ON DELETE RESTRICT
     `)
 
     // Partial, so a deleted account releases its address. citext already
     // folds case — no lower() wrapper.
     await queryRunner.query(`
       CREATE UNIQUE INDEX users_email_unique
-        ON identity.users (email) WHERE status <> 'deleted'
+        ON iam.users (email) WHERE status <> 'deleted'
     `)
 
     // One system user, enforced by the database, not by the seed running once.
     await queryRunner.query(`
       CREATE UNIQUE INDEX users_single_system_unique
-        ON identity.users (is_system) WHERE is_system
+        ON iam.users (is_system) WHERE is_system
     `)
 
     // RESTRICT does not protect this row: its only referrer is itself, and the
     // DELETE removes that reference in the same statement — verified, it
     // succeeds. Other tables' FKs only cover it once they have system rows.
     await queryRunner.query(`
-      CREATE FUNCTION identity.forbid_system_user_delete() RETURNS trigger
+      CREATE FUNCTION iam.forbid_system_user_delete() RETURNS trigger
       LANGUAGE plpgsql AS $fn$
       BEGIN
-        RAISE EXCEPTION 'identity.users: the system user cannot be deleted (id=%)', OLD.id
+        RAISE EXCEPTION 'iam.users: the system user cannot be deleted (id=%)', OLD.id
           USING ERRCODE = 'restrict_violation';
       END;
       $fn$
@@ -115,14 +115,14 @@ export class CreateIdentityUsers1787186718550 implements MigrationInterface {
 
     await queryRunner.query(`
       CREATE TRIGGER users_forbid_system_delete
-        BEFORE DELETE ON identity.users
+        BEFORE DELETE ON iam.users
         FOR EACH ROW WHEN (OLD.is_system)
-        EXECUTE FUNCTION identity.forbid_system_user_delete()
+        EXECUTE FUNCTION iam.forbid_system_user_delete()
     `)
 
     await queryRunner.query(
       `
-      INSERT INTO identity.users
+      INSERT INTO iam.users
         (id, email, password_hash, name, nickname, status, is_system, created_by, updated_by)
       VALUES
         ($1, 'system@taskflow.internal', NULL, 'System', 'System', 'active', true, $1, $1)
@@ -133,9 +133,9 @@ export class CreateIdentityUsers1787186718550 implements MigrationInterface {
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     // DROP TABLE takes the trigger with it, but not the function it calls.
-    await queryRunner.query(`DROP TABLE IF EXISTS identity.users`)
+    await queryRunner.query(`DROP TABLE IF EXISTS iam.users`)
     await queryRunner.query(
-      `DROP FUNCTION IF EXISTS identity.forbid_system_user_delete()`,
+      `DROP FUNCTION IF EXISTS iam.forbid_system_user_delete()`,
     )
   }
 }

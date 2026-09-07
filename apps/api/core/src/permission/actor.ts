@@ -15,7 +15,7 @@ export type ScopedRole = (typeof SCOPED_ROLES)[number]
  * testable without a database.
  *
  * System-level RBAC is deliberately absent. It is a separate layer that
- * crosses organisations, its permissions live in `identity.*` rather than in
+ * crosses organisations, its permissions live in `iam.*` rather than in
  * code, and nothing reads it until Phase 7 — mixing the two here is exactly
  * what docs/01-architecture.md#permission-hierarchy warns against.
  */

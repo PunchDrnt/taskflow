@@ -96,12 +96,12 @@ describe.skipIf(!hasTestDatabase)('retention', () => {
       }
     })
 
-    it('never purges identity.users', async () => {
+    it('never purges iam.users', async () => {
       const order = await resolvePurgeOrder(dataSource)
 
       // Every created_by in the schema points here with RESTRICT: users are
       // anonymised, not removed, so history keeps an author.
-      expect(order.map((target) => target.name)).not.toContain('identity.users')
+      expect(order.map((target) => target.name)).not.toContain('iam.users')
     })
   })
 
@@ -250,7 +250,7 @@ describe.skipIf(!hasTestDatabase)('retention', () => {
         status === 'pending_deletion' ? daysAgo(requestedDaysAgo) : 'NULL'
 
       const [user] = (await dataSource.query(
-        `INSERT INTO identity.users
+        `INSERT INTO iam.users
            (email, name, nickname, status, deletion_requested_at,
             created_by, updated_by)
          VALUES ($1, 'Somchai', 'Som', $2, ${requestedAt}, $3, $3)
@@ -265,7 +265,7 @@ describe.skipIf(!hasTestDatabase)('retention', () => {
       // sit in the grace period forever.
       await expect(
         dataSource.query(
-          `INSERT INTO identity.users
+          `INSERT INTO iam.users
              (email, name, nickname, status, created_by, updated_by)
            VALUES ('nodate@example.com', 'S', 'S', 'pending_deletion', $1, $1)`,
           [SYSTEM_USER_ID],
@@ -280,7 +280,7 @@ describe.skipIf(!hasTestDatabase)('retention', () => {
       // with it, or the job would anonymise someone who came back.
       await expect(
         dataSource.query(
-          `UPDATE identity.users SET status = 'active' WHERE id = $1`,
+          `UPDATE iam.users SET status = 'active' WHERE id = $1`,
           [id],
         ),
       ).rejects.toThrow(/users_deletion_requested_matches_status_check/)
@@ -294,7 +294,7 @@ describe.skipIf(!hasTestDatabase)('retention', () => {
       const [user] = (await dataSource.query(
         `SELECT email::text, name, nickname, avatar_url, password_hash,
                 status, deletion_requested_at, deleted_at, deleted_by, updated_by
-           FROM identity.users WHERE id = $1`,
+           FROM iam.users WHERE id = $1`,
         [id],
       )) as Record<string, unknown>[]
 
@@ -329,7 +329,7 @@ describe.skipIf(!hasTestDatabase)('retention', () => {
       expect(await retention.anonymisePendingDeletionUsers()).toBe(0)
 
       const [user] = (await dataSource.query(
-        `SELECT status FROM identity.users WHERE id = $1`,
+        `SELECT status FROM iam.users WHERE id = $1`,
         [id],
       )) as { status: string }[]
       expect(user.status).toBe('pending_deletion')
@@ -337,7 +337,7 @@ describe.skipIf(!hasTestDatabase)('retention', () => {
 
     it('never touches the system user', async () => {
       await dataSource.query(
-        `UPDATE identity.users
+        `UPDATE iam.users
             SET status = 'pending_deletion',
                 deletion_requested_at = ${daysAgo(400)}
           WHERE is_system`,
@@ -346,13 +346,13 @@ describe.skipIf(!hasTestDatabase)('retention', () => {
       await retention.anonymisePendingDeletionUsers()
 
       const [user] = (await dataSource.query(
-        `SELECT status, email::text FROM identity.users WHERE is_system`,
+        `SELECT status, email::text FROM iam.users WHERE is_system`,
       )) as { status: string; email: string }[]
       expect(user.status).toBe('pending_deletion')
       expect(user.email).not.toContain('deleted.invalid')
 
       await dataSource.query(
-        `UPDATE identity.users
+        `UPDATE iam.users
             SET status = 'active', deletion_requested_at = NULL
           WHERE is_system`,
       )
@@ -361,14 +361,14 @@ describe.skipIf(!hasTestDatabase)('retention', () => {
 
   describe('tables with their own end-of-life column', () => {
     beforeEach(async () => {
-      await dataSource.query(`DELETE FROM identity.sessions`)
-      await dataSource.query(`DELETE FROM identity.password_reset_tokens`)
+      await dataSource.query(`DELETE FROM iam.sessions`)
+      await dataSource.query(`DELETE FROM iam.password_reset_tokens`)
       await dataSource.query(`DELETE FROM notify.outbox`)
     })
 
     const seedSession = (expiresDaysAgo: number, revoked: boolean) =>
       dataSource.query(
-        `INSERT INTO identity.sessions
+        `INSERT INTO iam.sessions
            (user_id, current_token_hash, user_agent, ip_address,
             expires_at, revoked_at, created_by, updated_by)
          VALUES ($1, 'hash', 'vitest', '127.0.0.1',
@@ -387,7 +387,7 @@ describe.skipIf(!hasTestDatabase)('retention', () => {
 
     it('keeps a session that has not expired', async () => {
       await dataSource.query(
-        `INSERT INTO identity.sessions
+        `INSERT INTO iam.sessions
            (user_id, current_token_hash, user_agent, ip_address,
             expires_at, created_by, updated_by)
          VALUES ($1, 'hash', 'vitest', '127.0.0.1',
@@ -400,7 +400,7 @@ describe.skipIf(!hasTestDatabase)('retention', () => {
 
     it('removes password reset tokens after a day', async () => {
       await dataSource.query(
-        `INSERT INTO identity.password_reset_tokens
+        `INSERT INTO iam.password_reset_tokens
            (user_id, token_hash, expires_at, created_at, created_by, updated_by)
          VALUES ($1, 'h', now(), ${daysAgo(3)}, $1, $1),
                 ($1, 'h', now(), now(), $1, $1)`,

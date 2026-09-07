@@ -15,7 +15,7 @@ export const hasTestDatabase = testDatabaseUrl.length > 0
  * Every schema the migrations create. Keep in step with CreateSchemas.
  */
 const SCHEMAS = [
-  'identity',
+  'iam',
   'organization',
   'project',
   'task',

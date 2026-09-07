@@ -28,10 +28,10 @@ team_members.org_id = Org A     แต่     teams.org_id = Org B
 
 ผลข้างเคียงที่ตั้งใจ: **ย้าย team/project ข้าม org ทั้งที่ยังมีลูกอยู่ไม่ได้** ต้องย้ายลูกไปพร้อมกันใน transaction เดียว
 
-**ไม่ต้องทำ composite** ถ้า FK ชี้ตรงไป `organization.organizations(id)` (เช่น `teams.org_id`, `projects.org_id`) เพราะคอลัมน์เดียวขัดกับตัวเองไม่ได้ · และถ้าชี้ไป schema `identity` ซึ่งไม่มี org
+**ไม่ต้องทำ composite** ถ้า FK ชี้ตรงไป `organization.organizations(id)` (เช่น `teams.org_id`, `projects.org_id`) เพราะคอลัมน์เดียวขัดกับตัวเองไม่ได้ · และถ้าชี้ไป schema `iam` ซึ่งไม่มี org
 
-- FK ข้าม schema ได้ **ทิศทางเดียว**: `task → project → organization → identity`
-- Schema ระดับล่างห้ามมี FK ชี้ขึ้นไปหาระดับบน — `identity` ต้องไม่รู้จัก `task`
+- FK ข้าม schema ได้ **ทิศทางเดียว**: `task → project → organization → iam`
+- Schema ระดับล่างห้ามมี FK ชี้ขึ้นไปหาระดับบน — `iam` ต้องไม่รู้จัก `task`
 - **คอลัมน์ polymorphic ไม่มี FK** — `entity_id` ของ `discussion.comments` · `discussion.attachments` · `audit.logs` ชี้ไปตารางไหนก็ได้ตาม `entity_type` จึงผูก FK ไม่ได้ ชดเชยด้วย index ที่ขึ้นต้นด้วย `(org_id, entity_type, entity_id)`
 - **แต่คอลัมน์อื่นในตารางเดียวกันยังมี FK ตามปกติ** — `discussion.*` ผูก `org_id` กับ `created_by` ไว้ครบ และ comment ผูก `parent_comment_id` เป็น composite ไปหาตัวเอง · `field.definitions` กับ `view.views` ไม่ใช่ polymorphic เลย ทั้งคู่มี composite FK ไป `project.projects` (ดูตาราง ON DELETE ด้านล่าง)
 - **`audit.logs` เป็นตารางเดียวที่ไม่มี FK สักเส้น** — รวมถึง `org_id` และ `actor_id` เพราะ log ต้องอยู่ได้นานกว่าสิ่งที่มันบันทึก
@@ -71,10 +71,10 @@ CREATE INDEX ON discussion.comments (org_id, entity_type, entity_id, created_at)
 | `task.dependencies.predecessor_id` · `.successor_id` _(Phase 5)_                            | `CASCADE`                 |
 | `automation.rules.project_id` _(Phase 5)_                                                   | `CASCADE`                 |
 | `organization.members.org_id` · `organization.team_members.team_id`                         | `CASCADE`                 |
-| `identity.sessions.user_id` · `password_reset_tokens.user_id`                               | `CASCADE`                 |
-| `identity.role_permissions.*` · `user_roles.role_id`                                        | `CASCADE`                 |
+| `iam.sessions.user_id` · `password_reset_tokens.user_id`                               | `CASCADE`                 |
+| `iam.role_permissions.*` · `user_roles.role_id`                                        | `CASCADE`                 |
 | `task.tasks.sprint_id`                                                                      | `SET NULL` (ตกไป Backlog) |
-| `chat.channels.default_assignee_id` · `identity.user_roles.granted_by`                      | `SET NULL`                |
+| `chat.channels.default_assignee_id` · `iam.user_roles.granted_by`                      | `SET NULL`                |
 | `view.views.owner_id` — ⚠️ CASCADE ที่ไม่มีวันทำงาน ([ทำไม](./schema.md#schema-view-phase-4)) | `CASCADE`                 |
 | `task.tasks.project_id` · `task.tasks.status_id`                                            | `RESTRICT`                |
 | `organization.members.user_id` · `team_members.user_id`                                     | `RESTRICT`                |
@@ -137,7 +137,7 @@ CHECK ((deleted_at IS NULL) = (deleted_by IS NULL))   -- ตั้งพร้�
 | คลาส | org_id | แก้ได้ | soft delete | ใช้กับ |
 | --- | :-: | :-: | :-: | --- |
 | `BaseEntity` | ✓ | ✓ | ✓ | ค่าปกติ — task, project, team · `discussion.comments` _(Phase 3)_ |
-| `SoftDeletableEntity` | ✗ | ✓ | ✓ | `identity.users` · `organizations` · `billing.plans` |
+| `SoftDeletableEntity` | ✗ | ✓ | ✓ | `iam.users` · `organizations` · `billing.plans` |
 | `OrgScopedEntity` | ✓ | ✓ | ✗ | `notify.outbox` · `*.members` · `team_members` · `ai_usage` · `organization.invitations` · `notify.notifications` _(Phase 3)_ |
 | `TimestampedEntity` | ✗ | ✓ | ✗ | `sessions` · `password_reset_tokens` |
 | `CreatedEntity` | ✗ | ✗ | ✗ | `role_permissions` · `user_roles` · `oauth_accounts` _(Phase 1)_ |
@@ -163,8 +163,8 @@ CHECK ((deleted_at IS NULL) = (deleted_by IS NULL))   -- ตั้งพร้�
 
 ตอบ **"ไม่"** ถ้าเข้าข้อใดข้อหนึ่ง เรียงจากหนักสุด
 
-1. **ลืม filter แล้วเป็นช่องโหว่สิทธิ์ ไม่ใช่บั๊กการแสดงผล** — แถว `project.members` ที่ `deleted_at` มีค่าแต่ query ลืมกรอง = คนที่ถูกถอดออกยังเข้าถึง project ได้ · `identity.oauth_accounts` หนักกว่านั้นอีก เพราะ flow ล็อกอินหาแถวด้วย `provider_user_id` ตรงๆ ลืมกรองคือคนที่ unlink แล้ว**ล็อกอินกลับเข้ามาได้** · hard delete แล้วแถวไม่อยู่ ไม่มีอะไรให้ลืม
-2. **มีคอลัมน์บอกสถานะ "ใช้ไม่ได้แล้ว" อยู่แล้ว** — `sessions.revoked_at` · `password_reset_tokens.used_at` · `outbox.status` · ตัวบอกการลบสองตัวในตารางเดียวย่อมขัดกันได้ (บั๊กแบบเดียวกับที่ `identity.users` เคยมี)
+1. **ลืม filter แล้วเป็นช่องโหว่สิทธิ์ ไม่ใช่บั๊กการแสดงผล** — แถว `project.members` ที่ `deleted_at` มีค่าแต่ query ลืมกรอง = คนที่ถูกถอดออกยังเข้าถึง project ได้ · `iam.oauth_accounts` หนักกว่านั้นอีก เพราะ flow ล็อกอินหาแถวด้วย `provider_user_id` ตรงๆ ลืมกรองคือคนที่ unlink แล้ว**ล็อกอินกลับเข้ามาได้** · hard delete แล้วแถวไม่อยู่ ไม่มีอะไรให้ลืม
+2. **มีคอลัมน์บอกสถานะ "ใช้ไม่ได้แล้ว" อยู่แล้ว** — `sessions.revoked_at` · `password_reset_tokens.used_at` · `outbox.status` · ตัวบอกการลบสองตัวในตารางเดียวย่อมขัดกันได้ (บั๊กแบบเดียวกับที่ `iam.users` เคยมี)
 3. **การ "ลบ" คือความสัมพันธ์เปลี่ยน ไม่ใช่ข้อมูลถูกทำลาย** — เพิ่มกลับต้นทุนศูนย์ ไม่มีอะไรให้กู้ · soft delete ทำให้ถอด-ใส่ซ้ำสะสมแถวตาย และ upsert ต้องคิดเผื่อทุกครั้ง
 4. **เป็นบันทึกแบบ append-only** เช่น `billing.ai_usage` ที่เป็นการใช้เงิน — ให้ retention ลบจริง soft delete ไม่ตรงความหมาย
 
@@ -211,7 +211,7 @@ export abstract class BaseEntity {
 
 เขียนเป็นเกณฑ์เพราะตารางใหม่โผล่มาเรื่อยๆ · รายชื่อข้อยกเว้นตอบได้แค่ตารางที่มีอยู่แล้ว พอเจอตารางที่ไม่อยู่ในลิสต์ คนอ่านต้องเดาเอง แล้วเดาผิดทางไหนก็ได้
 
-**กรณีที่ 1 — schema `identity` ทั้งก้อน** ไม่มี `org_id` เพราะ:
+**กรณีที่ 1 — schema `iam` ทั้งก้อน** ไม่มี `org_id` เพราะ:
 
 | ตาราง                                                    | เหตุผล                                          |
 | -------------------------------------------------------- | ---------------------------------------------- |

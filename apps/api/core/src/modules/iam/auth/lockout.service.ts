@@ -9,7 +9,7 @@ import { UserService } from '../user/user.service'
  * Locking an account after repeated failures, per
  * docs/04-features/phase-1.md#auth--users.
  *
- * The state is two columns on `identity.users`, not a Map. A counter a restart
+ * The state is two columns on `iam.users`, not a Map. A counter a restart
  * clears is a counter an attacker can clear by making the process restart, and
  * it would not hold across instances either.
  *

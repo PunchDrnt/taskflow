@@ -24,7 +24,7 @@ Phase 1 ยังไม่ปล่อยให้คนใช้จริง �
 
 **ล็อกเมื่อ login ผิดหลายครั้ง**
 
-- นับที่ `identity.users.failed_login_attempts` · ปลดล็อกด้วย `locked_until`
+- นับที่ `iam.users.failed_login_attempts` · ปลดล็อกด้วย `locked_until`
   — เก็บใน DB ไม่ใช่ในหน่วยความจำ เพราะตัวนับที่รีสตาร์ทแล้วหายคือตัวนับที่คนโจมตีรีเซ็ตได้เอง
 - **บอกว่าถูกล็อก แต่ไม่บอกว่านานแค่ไหน**
 - **ลองผิดระหว่างที่ล็อกอยู่ ไม่ต่อเวลาล็อก** — ไม่งั้นใครก็ล็อกเพื่อนร่วมงานค้างไว้ตลอดกาลได้
@@ -41,7 +41,7 @@ Phase 1 ยังไม่ปล่อยให้คนใช้จริง �
 **Email unique ระดับทั้งระบบ** — 1 อีเมล = 1 account แล้วคนนั้นเข้าได้หลาย org ผ่าน `organization.members`
 
 ```sql
-CREATE UNIQUE INDEX ON identity.users (email)
+CREATE UNIQUE INDEX ON iam.users (email)
   WHERE status != 'deleted';
 ```
 

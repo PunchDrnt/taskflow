@@ -23,7 +23,7 @@ sub-task, และกติกาว่าใครกดปิดงานไ�
 
 - เปิด RLS ทุกตารางที่มี `org_id` · **ต้องมี `FORCE ROW LEVEL SECURITY` ด้วย** ไม่งั้น
   role เจ้าของตาราง (ซึ่งคือ role ที่แอปต่ออยู่) ข้าม policy ได้เงียบๆ
-- ตารางที่ **ไม่มี** `org_id` ไม่ต้องมี policy — `identity.*`, `billing.plans`,
+- ตารางที่ **ไม่มี** `org_id` ไม่ต้องมี policy — `iam.*`, `billing.plans`,
   `organization.organizations` · เขียนไว้ให้ชัดว่าตั้งใจไม่ทำ ไม่ใช่ลืม
 - ปิด ❓ ที่ [`01-architecture.md`](../01-architecture.md#transaction) ค้างไว้: `set_config(..., true)`
   เป็น transaction-local แต่ read ของเราไม่เปิด transaction → ค่าหายก่อน query จะรัน
@@ -371,7 +371,7 @@ status = 'pending_deletion' + deletion_requested_at = now()
 
 **PDPA:** กฎหมายให้สิทธิ์ลบข้อมูลส่วนบุคคล (ชื่อ อีเมล รูป) แต่ไม่ได้บังคับให้ลบบันทึกการทำงานที่บริษัทมีสิทธิ์เก็บตามความจำเป็นทางธุรกิจ
 
-`identity.users.status` = `'active' | 'deactivated' | 'pending_deletion' | 'deleted'` — [ดู schema เต็ม](../02-database/schema.md#schema-identity)
+`iam.users.status` = `'active' | 'deactivated' | 'pending_deletion' | 'deleted'` — [ดู schema เต็ม](../02-database/schema.md#schema-iam)
 
 ## Activity Log บนหน้า Task
 
@@ -405,7 +405,7 @@ Phase 2 ทำแค่รายการในหน้า task · feed ระ�
 
 > 🔒 **ลบ task ไม่ลบ log** — `audit.logs` ไม่เคยถูกลบ ([retention](../01-architecture.md#retention--each-kind-of-data-has-its-own-lifetime)) และ sub-task ที่ "ลบ" คือ soft delete แถวยังอยู่ หาด้วย `withDeleted` ได้
 >
-> ลบ log ตอนลบ task คือการทิ้งบันทึกว่า _ใครลบ_ ไปพร้อมกัน ซึ่งเป็นแถวที่มีค่าที่สุดในเหตุการณ์นั้น · PDPA แยกกันคนละเรื่อง — ลบข้อมูลส่วนบุคคลผ่าน anonymize ที่ `identity.users` ไม่ได้บังคับให้ลบบันทึกการทำงาน ([ดู Delete Account](#delete-account))
+> ลบ log ตอนลบ task คือการทิ้งบันทึกว่า _ใครลบ_ ไปพร้อมกัน ซึ่งเป็นแถวที่มีค่าที่สุดในเหตุการณ์นั้น · PDPA แยกกันคนละเรื่อง — ลบข้อมูลส่วนบุคคลผ่าน anonymize ที่ `iam.users` ไม่ได้บังคับให้ลบบันทึกการทำงาน ([ดู Delete Account](#delete-account))
 
 ## Project Settings Accumulated by Phase 2
 

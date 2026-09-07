@@ -45,7 +45,7 @@ grep -rn "DateColumn()" --include=*.ts .        # missing explicit type
 
 **2. `org_id` on every table**
 
-Exceptions, and only these: the whole `identity` schema (users, sessions,
+Exceptions, and only these: the whole `iam` schema (users, sessions,
 password_reset_tokens, roles, permissions, role_permissions, user_roles),
 `billing.plans`, and `organization.organizations`, whose `org_id` would always
 equal its own `id` — OrgScopedRepository scopes that one table on `id`.
@@ -81,7 +81,7 @@ FK from any table that has `org_id` into another table that has `org_id` — thi
 is the rule that makes the isolation guarantee real rather than intended.
 
 Not a finding when the FK points at `organization.organizations(id)` itself, or
-into schema `identity`, neither of which is org-scoped.
+into schema `iam`, neither of which is org-scoped.
 
 **4. Unique constraints on soft-deleted tables must be partial**
 
@@ -134,7 +134,7 @@ constraint it was meant to enforce quietly stops applying:
 
 | column                   | allowed values                                         |
 | ------------------------ | ------------------------------------------------------ |
-| `identity.users.status`  | `active`, `deactivated`, `pending_deletion`, `deleted` |
+| `iam.users.status`       | `active`, `deactivated`, `pending_deletion`, `deleted` |
 | `project.sprints.status` | `planned`, `active`, `completed`                       |
 | `notify.outbox.status`   | `pending`, `sent`, `failed`                            |
 
@@ -147,7 +147,7 @@ grow with every feature.
 - **Extensions before use.** `citext` and `pgcrypto` must be created in an earlier
   migration than any table that depends on them.
 - **The first user row.** Base entity forces `created_by NOT NULL` on every table
-  _including `identity.users` itself_, so the seeded system user must be inserted with
+  _including `iam.users` itself_, so the seeded system user must be inserted with
   `created_by` pointing at its own id. Legal in one statement, but only if written
   deliberately.
 

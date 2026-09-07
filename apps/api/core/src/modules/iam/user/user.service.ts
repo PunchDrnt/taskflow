@@ -10,11 +10,11 @@ import { User } from './user.entity'
 export const ACTIVE_USER_STATUS = 'active'
 
 /**
- * The one way into `identity.users`. Every other module asks here rather than
- * importing the entity, which is what keeps identity's shape changeable.
+ * The one way into `iam.users`. Every other module asks here rather than
+ * importing the entity, which is what keeps iam's shape changeable.
  *
  * Every read goes through `queryBuilder.base`, and that is the correct call
- * rather than a deliberate crossing: `identity.users` has no `org_id`, so
+ * rather than a deliberate crossing: `iam.users` has no `org_id`, so
  * `withOrg` does not exist on it at all. It is also the only one that could
  * work here — login happens before a request context exists, and `withOrg`
  * would throw looking for an org nobody has chosen yet.

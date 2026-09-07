@@ -16,22 +16,22 @@ import { SYSTEM_USER_ID } from '#shared/system-user'
 
 import type { Env } from '../src/config/env'
 import { FeatureService } from '../src/feature/feature.service'
-import { AuthService } from '../src/modules/identity/auth/auth.service'
-import { LockoutService } from '../src/modules/identity/auth/lockout.service'
-import { PasswordResetToken } from '../src/modules/identity/auth/password-reset-token.entity'
+import { AuthService } from '../src/modules/iam/auth/auth.service'
+import { LockoutService } from '../src/modules/iam/auth/lockout.service'
+import { PasswordResetToken } from '../src/modules/iam/auth/password-reset-token.entity'
 import {
   PASSWORD_RESET_TEMPLATE,
   PasswordResetService,
-} from '../src/modules/identity/auth/password-reset.service'
-import { PasswordService } from '../src/modules/identity/auth/password.service'
-import { Session } from '../src/modules/identity/auth/session.entity'
-import { SessionService } from '../src/modules/identity/auth/session.service'
+} from '../src/modules/iam/auth/password-reset.service'
+import { PasswordService } from '../src/modules/iam/auth/password.service'
+import { Session } from '../src/modules/iam/auth/session.entity'
+import { SessionService } from '../src/modules/iam/auth/session.service'
 import {
   ACCESS_TOKEN_TTL_SECONDS,
   TokenService,
-} from '../src/modules/identity/auth/token.service'
-import { User } from '../src/modules/identity/user/user.entity'
-import { UserService } from '../src/modules/identity/user/user.service'
+} from '../src/modules/iam/auth/token.service'
+import { User } from '../src/modules/iam/user/user.entity'
+import { UserService } from '../src/modules/iam/user/user.service'
 import { EmailService } from '../src/modules/notify/email.service'
 import { Outbox } from '../src/modules/notify/outbox.entity'
 import { OrganizationMember } from '../src/modules/organization/member.entity'
@@ -66,7 +66,7 @@ describe.skipIf(!hasTestDatabase)('account', () => {
       ? await new PasswordService().hash(PASSWORD)
       : null
     const [user] = (await dataSource.query(
-      `INSERT INTO identity.users
+      `INSERT INTO iam.users
          (email, password_hash, name, nickname, status, created_by, updated_by)
        VALUES ($1, $2, $3, $3, 'active', $4, $4) RETURNING id`,
       [
@@ -231,7 +231,7 @@ describe.skipIf(!hasTestDatabase)('account', () => {
     it('does not touch a soft-deleted row', async () => {
       const id = await newUser()
       await dataSource.query(
-        `UPDATE identity.users
+        `UPDATE iam.users
             SET status = 'deleted', deleted_at = now(), deleted_by = $2
           WHERE id = $1`,
         [id, SYSTEM_USER_ID],

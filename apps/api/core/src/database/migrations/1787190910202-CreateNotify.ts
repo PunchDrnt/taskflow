@@ -31,7 +31,7 @@ export class CreateNotify1787190910202 implements MigrationInterface {
         -- org_id, which correctly leaves the account-level rows out.
         org_id        uuid        REFERENCES organization.organizations(id) ON DELETE CASCADE,
 
-        recipient_id  uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
+        recipient_id  uuid        NOT NULL REFERENCES iam.users(id) ON DELETE RESTRICT,
         channel       text        NOT NULL,
         template      text        NOT NULL,
         payload_json  jsonb       NOT NULL DEFAULT '{}'::jsonb,
@@ -41,9 +41,9 @@ export class CreateNotify1787190910202 implements MigrationInterface {
         last_error    text,
 
         created_at    timestamptz NOT NULL DEFAULT now(),
-        created_by    uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
+        created_by    uuid        NOT NULL REFERENCES iam.users(id) ON DELETE RESTRICT,
         updated_at    timestamptz NOT NULL DEFAULT now(),
-        updated_by    uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
+        updated_by    uuid        NOT NULL REFERENCES iam.users(id) ON DELETE RESTRICT,
 
         -- The partial index below reads this literal. A typo drops the row
         -- out of the worker's queue silently, and it is never sent.
@@ -66,11 +66,11 @@ export class CreateNotify1787190910202 implements MigrationInterface {
         id            uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
         org_id        uuid        NOT NULL REFERENCES organization.organizations(id) ON DELETE CASCADE,
 
-        recipient_id  uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
+        recipient_id  uuid        NOT NULL REFERENCES iam.users(id) ON DELETE RESTRICT,
         type          text        NOT NULL,
         -- NULL means the system did it: the cron that warns about a due date
         -- has no actor to name.
-        actor_id      uuid        REFERENCES identity.users(id) ON DELETE RESTRICT,
+        actor_id      uuid        REFERENCES iam.users(id) ON DELETE RESTRICT,
         entity_type   text        NOT NULL,
         entity_id     uuid        NOT NULL,
         -- Enough to render the line without joining anything.
@@ -78,9 +78,9 @@ export class CreateNotify1787190910202 implements MigrationInterface {
         read_at       timestamptz,
 
         created_at    timestamptz NOT NULL DEFAULT now(),
-        created_by    uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
+        created_by    uuid        NOT NULL REFERENCES iam.users(id) ON DELETE RESTRICT,
         updated_at    timestamptz NOT NULL DEFAULT now(),
-        updated_by    uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT
+        updated_by    uuid        NOT NULL REFERENCES iam.users(id) ON DELETE RESTRICT
       )
     `)
     // The inbox itself, newest first.

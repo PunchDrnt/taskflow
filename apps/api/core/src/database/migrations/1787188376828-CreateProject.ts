@@ -47,11 +47,11 @@ export class CreateProject1787188376828 implements MigrationInterface {
         next_task_number      integer     NOT NULL DEFAULT 1,
 
         created_at            timestamptz NOT NULL DEFAULT now(),
-        created_by            uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
+        created_by            uuid        NOT NULL REFERENCES iam.users(id) ON DELETE RESTRICT,
         updated_at            timestamptz NOT NULL DEFAULT now(),
-        updated_by            uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
+        updated_by            uuid        NOT NULL REFERENCES iam.users(id) ON DELETE RESTRICT,
         deleted_at            timestamptz,
-        deleted_by            uuid        REFERENCES identity.users(id) ON DELETE RESTRICT,
+        deleted_by            uuid        REFERENCES iam.users(id) ON DELETE RESTRICT,
 
         CONSTRAINT projects_deleted_pair_check
           CHECK ((deleted_at IS NULL) = (deleted_by IS NULL)),
@@ -78,13 +78,13 @@ export class CreateProject1787188376828 implements MigrationInterface {
         org_id      uuid        NOT NULL,
 
         project_id  uuid        NOT NULL,
-        user_id     uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
+        user_id     uuid        NOT NULL REFERENCES iam.users(id) ON DELETE RESTRICT,
         role        text        NOT NULL,
 
         created_at  timestamptz NOT NULL DEFAULT now(),
-        created_by  uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
+        created_by  uuid        NOT NULL REFERENCES iam.users(id) ON DELETE RESTRICT,
         updated_at  timestamptz NOT NULL DEFAULT now(),
-        updated_by  uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
+        updated_by  uuid        NOT NULL REFERENCES iam.users(id) ON DELETE RESTRICT,
 
         CONSTRAINT project_members_project_fkey
           FOREIGN KEY (project_id, org_id)
@@ -122,11 +122,11 @@ export class CreateProject1787188376828 implements MigrationInterface {
         is_cancelled_type  boolean     NOT NULL DEFAULT false,
 
         created_at         timestamptz NOT NULL DEFAULT now(),
-        created_by         uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
+        created_by         uuid        NOT NULL REFERENCES iam.users(id) ON DELETE RESTRICT,
         updated_at         timestamptz NOT NULL DEFAULT now(),
-        updated_by         uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
+        updated_by         uuid        NOT NULL REFERENCES iam.users(id) ON DELETE RESTRICT,
         deleted_at         timestamptz,
-        deleted_by         uuid        REFERENCES identity.users(id) ON DELETE RESTRICT,
+        deleted_by         uuid        REFERENCES iam.users(id) ON DELETE RESTRICT,
 
         CONSTRAINT statuses_done_xor_cancelled_check
           CHECK (NOT (is_done_type AND is_cancelled_type)),
@@ -174,11 +174,11 @@ export class CreateProject1787188376828 implements MigrationInterface {
         sort_order  text        COLLATE "C" NOT NULL,
 
         created_at  timestamptz NOT NULL DEFAULT now(),
-        created_by  uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
+        created_by  uuid        NOT NULL REFERENCES iam.users(id) ON DELETE RESTRICT,
         updated_at  timestamptz NOT NULL DEFAULT now(),
-        updated_by  uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
+        updated_by  uuid        NOT NULL REFERENCES iam.users(id) ON DELETE RESTRICT,
         deleted_at  timestamptz,
-        deleted_by  uuid        REFERENCES identity.users(id) ON DELETE RESTRICT,
+        deleted_by  uuid        REFERENCES iam.users(id) ON DELETE RESTRICT,
 
         -- The partial unique index below keys off this literal value, so a
         -- typo would drop the row out of it silently.

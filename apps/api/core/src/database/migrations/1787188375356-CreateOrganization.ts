@@ -26,11 +26,11 @@ export class CreateOrganization1787188375356 implements MigrationInterface {
         slug        text        NOT NULL,
 
         created_at  timestamptz NOT NULL DEFAULT now(),
-        created_by  uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
+        created_by  uuid        NOT NULL REFERENCES iam.users(id) ON DELETE RESTRICT,
         updated_at  timestamptz NOT NULL DEFAULT now(),
-        updated_by  uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
+        updated_by  uuid        NOT NULL REFERENCES iam.users(id) ON DELETE RESTRICT,
         deleted_at  timestamptz,
-        deleted_by  uuid        REFERENCES identity.users(id) ON DELETE RESTRICT,
+        deleted_by  uuid        REFERENCES iam.users(id) ON DELETE RESTRICT,
 
         CONSTRAINT organizations_deleted_pair_check
           CHECK ((deleted_at IS NULL) = (deleted_by IS NULL))
@@ -46,16 +46,16 @@ export class CreateOrganization1787188375356 implements MigrationInterface {
         id          uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
         org_id      uuid        NOT NULL REFERENCES organization.organizations(id) ON DELETE CASCADE,
 
-        user_id     uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
+        user_id     uuid        NOT NULL REFERENCES iam.users(id) ON DELETE RESTRICT,
         -- Text, not an enum, so a new role is not a type migration. "At least
         -- one owner per org" is app-enforced: no single-row constraint says it.
         role        text        NOT NULL,
 
         -- joined_at is created_at under another name, so it is not repeated.
         created_at  timestamptz NOT NULL DEFAULT now(),
-        created_by  uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
+        created_by  uuid        NOT NULL REFERENCES iam.users(id) ON DELETE RESTRICT,
         updated_at  timestamptz NOT NULL DEFAULT now(),
-        updated_by  uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT
+        updated_by  uuid        NOT NULL REFERENCES iam.users(id) ON DELETE RESTRICT
       )
     `)
     await queryRunner.query(`
@@ -77,11 +77,11 @@ export class CreateOrganization1787188375356 implements MigrationInterface {
         description  text,
 
         created_at   timestamptz NOT NULL DEFAULT now(),
-        created_by   uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
+        created_by   uuid        NOT NULL REFERENCES iam.users(id) ON DELETE RESTRICT,
         updated_at   timestamptz NOT NULL DEFAULT now(),
-        updated_by   uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
+        updated_by   uuid        NOT NULL REFERENCES iam.users(id) ON DELETE RESTRICT,
         deleted_at   timestamptz,
-        deleted_by   uuid        REFERENCES identity.users(id) ON DELETE RESTRICT,
+        deleted_by   uuid        REFERENCES iam.users(id) ON DELETE RESTRICT,
 
         CONSTRAINT teams_deleted_pair_check
           CHECK ((deleted_at IS NULL) = (deleted_by IS NULL))
@@ -104,13 +104,13 @@ export class CreateOrganization1787188375356 implements MigrationInterface {
         org_id      uuid        NOT NULL,
 
         team_id     uuid        NOT NULL,
-        user_id     uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
+        user_id     uuid        NOT NULL REFERENCES iam.users(id) ON DELETE RESTRICT,
         role        text        NOT NULL,
 
         created_at  timestamptz NOT NULL DEFAULT now(),
-        created_by  uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
+        created_by  uuid        NOT NULL REFERENCES iam.users(id) ON DELETE RESTRICT,
         updated_at  timestamptz NOT NULL DEFAULT now(),
-        updated_by  uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
+        updated_by  uuid        NOT NULL REFERENCES iam.users(id) ON DELETE RESTRICT,
 
         -- Composite, so this row's org_id is provably the team's. Covers
         -- org_id → organizations transitively; hence no separate FK.
@@ -148,14 +148,14 @@ export class CreateOrganization1787188375356 implements MigrationInterface {
         org_id       uuid        NOT NULL REFERENCES organization.organizations(id) ON DELETE CASCADE,
 
         -- citext, so an invitation matches the address however it is typed —
-        -- the same folding identity.users.email relies on.
+        -- the same folding iam.users.email relies on.
         email        citext      NOT NULL,
         role         text        NOT NULL,
         -- Hashed, never stored plain: the link in the mail is the only copy.
         token_hash   text        NOT NULL,
         expires_at   timestamptz NOT NULL,
         accepted_at  timestamptz,
-        accepted_by  uuid        REFERENCES identity.users(id) ON DELETE RESTRICT,
+        accepted_by  uuid        REFERENCES iam.users(id) ON DELETE RESTRICT,
         revoked_at   timestamptz,
 
         -- Inviting an owner is not a thing: ownership is granted from inside.
@@ -163,9 +163,9 @@ export class CreateOrganization1787188375356 implements MigrationInterface {
           CHECK (role IN ('admin', 'member')),
 
         created_at   timestamptz NOT NULL DEFAULT now(),
-        created_by   uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT,
+        created_by   uuid        NOT NULL REFERENCES iam.users(id) ON DELETE RESTRICT,
         updated_at   timestamptz NOT NULL DEFAULT now(),
-        updated_by   uuid        NOT NULL REFERENCES identity.users(id) ON DELETE RESTRICT
+        updated_by   uuid        NOT NULL REFERENCES iam.users(id) ON DELETE RESTRICT
       )
     `)
     // One live invitation per address per org. Partial on both end states, so

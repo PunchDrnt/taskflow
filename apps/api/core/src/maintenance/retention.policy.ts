@@ -17,11 +17,11 @@ export const RETENTION_DAYS = {
 export const PURGE_BATCH_SIZE = 1_000
 
 /**
- * Every `created_by` points at `identity.users` with RESTRICT, so users are
+ * Every `created_by` points at `iam.users` with RESTRICT, so users are
  * anonymised rather than removed. A sweep that tried would succeed only on
  * people who had created nothing yet.
  */
-export const NEVER_PURGED = ['identity.users']
+export const NEVER_PURGED = ['iam.users']
 
 export interface PurgeTarget {
   /** `schema.table`, for logs and tests. */

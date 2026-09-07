@@ -97,7 +97,7 @@ packages/
 ```
 apps/api/core/src/
 ├─ modules/
-│   ├─ identity/      users, auth, session, password + RBAC ระดับระบบ
+│   ├─ iam/           users, auth, session, password + RBAC ระดับระบบ
 │   │   ├─ auth/          login, session, password reset
 │   │   ├─ user/          profile
 │   │   └─ system/        RBAC (ตารางสร้าง Phase 0 · โค้ด Phase 7)
@@ -160,7 +160,7 @@ port ที่ publish ออกมาอยู่ช่วง 4xxx (`S3_PORT=49
 - ถือ admin token ไว้ในตัว จึง bind กับ `127.0.0.1` เท่านั้น · บน Bangmod ต้องอยู่หลัง Caddy ที่มี auth หรือไม่เปิดออกเลย
 - ถ้าแค่อยากดูไฟล์ ใช้ `aws --endpoint-url http://localhost:4900 s3 ls s3://taskflow --recursive` ก็พอ (ลองแล้ว upload/download/delete ผ่านหมด)
 
-**Phase 1 ทำแค่ 6 module:** `identity`, `organization`, `project`, `task`, `notify`, `storage`
+**Phase 1 ทำแค่ 6 module:** `iam`, `organization`, `project`, `task`, `notify`, `storage`
 
 ### File Layout Within a Module
 
@@ -421,7 +421,7 @@ TypeORM ต้องระบุ type ชัดเจน ไม่งั้น�
 
 #### `org_id` scoping
 
-> 🔒 **ต้องทำ** — `org_id` ทุกตารางที่แถวของมันเป็นของ org ใด org หนึ่ง · ที่ไม่มีคือที่ไม่ได้เป็นของ org ไหนเลย: schema `identity`, `billing.plans` และ `organization.organizations` (org_id เท่ากับ id ตัวเอง — [เกณฑ์เต็ม](./02-database/rules.md#multi-tenancy)) · Phase 0 ต้องมี test ว่า org A มองไม่เห็นข้อมูล org B
+> 🔒 **ต้องทำ** — `org_id` ทุกตารางที่แถวของมันเป็นของ org ใด org หนึ่ง · ที่ไม่มีคือที่ไม่ได้เป็นของ org ไหนเลย: schema `iam`, `billing.plans` และ `organization.organizations` (org_id เท่ากับ id ตัวเอง — [เกณฑ์เต็ม](./02-database/rules.md#multi-tenancy)) · Phase 0 ต้องมี test ว่า org A มองไม่เห็นข้อมูล org B
 
 **ตัดสินแล้ว: Phase 0 ทำชั้น application · RLS เลื่อนไป Phase 2**
 
@@ -456,12 +456,12 @@ export class OrgScopedRepository<T> {
 
 // query builder ไม่มีตัวไหนเป็น default — ทุก call site ต้องบอกว่าเอาแบบไหน
 projects.queryBuilder.withOrg('project').andWhere(...)  // scope ด้วย org
-users.queryBuilder.base('user')                         // identity ไม่มี org_id
+users.queryBuilder.base('user')                         // iam ไม่มี org_id
 ```
 
 **`withOrg` ไม่มีอยู่บน entity ที่ไม่มีคอลัมน์ `orgId`** — `users.queryBuilder.withOrg()` compile ไม่ผ่าน · ก่อนหน้านี้มันพังตอน runtime ด้วย `Property "orgId" was not found in "User"`
 
-`base()` คือ `createQueryBuilder` เปล่า ๆ ของ TypeORM — สำหรับ `identity.*` กับ `billing.plans` ที่**ไม่มี `org_id` ตั้งแต่แรก** มันคือตัวที่ถูกต้อง ไม่ใช่ทางหนี (profile ของ user ไม่ผูกกับ org เพราะ user อยู่ได้หลาย org) · ส่วนบนตารางที่**มี** `org_id` การเรียก `base()` คือการข้าม org ซึ่งต้องมีเหตุผลอธิบายได้
+`base()` คือ `createQueryBuilder` เปล่า ๆ ของ TypeORM — สำหรับ `iam.*` กับ `billing.plans` ที่**ไม่มี `org_id` ตั้งแต่แรก** มันคือตัวที่ถูกต้อง ไม่ใช่ทางหนี (profile ของ user ไม่ผูกกับ org เพราะ user อยู่ได้หลาย org) · ส่วนบนตารางที่**มี** `org_id` การเรียก `base()` คือการข้าม org ซึ่งต้องมีเหตุผลอธิบายได้
 
 `withOrg` คืน type ที่**ตัด `where` / `orWhere` ออก** — สองตัวนี้คือทางเดียวที่จะปลด scope โดยไม่ตั้งใจ (`where` แทนที่เงื่อนไขทั้งหมดที่ตั้งไว้รวมถึง org · `orWhere` ขยายออกไปจากมัน) · `andWhere` กับ `Brackets` ใช้แทนได้หมด
 
@@ -633,7 +633,7 @@ FK cascade เป็น**ตาข่ายนิรภัยตอน hard dele
 
 | Action     | ใช้เมื่อ                           | ตัวอย่าง                                                          |
 | ---------- | ------------------------------- | --------------------------------------------------------------- |
-| `CASCADE`  | ลูกไม่มีความหมายถ้าพ่อหาย            | `project.statuses.project_id`, `identity.sessions.user_id`      |
+| `CASCADE`  | ลูกไม่มีความหมายถ้าพ่อหาย            | `project.statuses.project_id`, `iam.sessions.user_id`      |
 | `SET NULL` | ลูกยังมีความหมาย แค่ขาดข้อมูลอ้างอิง    | `task.tasks.sprint_id`, `chat.channels.default_assignee_id`     |
 | `RESTRICT` | บังคับให้ application จัดการลำดับเอง | `task.tasks.project_id`, `task.tasks.status_id`, `*.created_by` |
 
@@ -653,7 +653,7 @@ FK cascade เป็น**ตาข่ายนิรภัยตอน hard dele
 | Soft-deleted ทั่วไป                    | hard delete หลัง **90 วัน**  | ถังขยะ                          |
 | `users` (`pending_deletion`)         | anonymize หลัง **30 วัน**    | ให้เวลากู้บัญชีคืน                   |
 | `notify.outbox` (`sent`)             | ลบหลัง **30 วัน**            | ส่งไปแล้วไม่มีประโยชน์              |
-| `identity.sessions` (หมดอายุ/revoked) | ลบหลัง **7 วัน**             | โตเร็วมาก ไม่มีค่าเก็บ              |
+| `iam.sessions` (หมดอายุ/revoked) | ลบหลัง **7 วัน**             | โตเร็วมาก ไม่มีค่าเก็บ              |
 | `password_reset_tokens`              | ลบหลัง **1 วัน**             | อายุแค่ 30 นาที เก็บไว้ตอบ ticket    |
 | `organization.invitations` (จบแล้ว)    | ลบหลัง **90 วัน**            | ใครเชิญ/ยกเลิก อยู่ใน `audit.logs`  |
 | `notify.notifications` (อ่านแล้ว)      | ลบหลัง **90 วัน**            | กล่องขาเข้า ไม่ใช่ประวัติ             |
@@ -692,8 +692,8 @@ CREATE TABLE audit.logs_2026_08 PARTITION OF audit.logs
 | `retention`        | 03:15 | ทั้ง 5 นโยบายในตารางข้างบน                                                          |
 
 - **ลำดับการลบเป็นเรื่องจริง ไม่ใช่รายละเอียด** — `tasks.project_id` เป็น RESTRICT ลบ project ก่อน task ไม่ได้ · ลำดับจึงอ่านจาก `pg_constraint` ตอนรันแล้ว topological sort ไม่ใช่ลิสต์ที่เขียนมือ ตารางใหม่ที่ลืมใส่ในลิสต์คือแถวที่ไม่มีวันถูกลบ และไม่มีอะไรฟ้อง
-- **`identity.users` ไม่เคย hard delete** — anonymize อย่างเดียว เพราะ `created_by` ของทุกตารางชี้มาที่นี่แบบ RESTRICT · ถ้า sweep ลบได้จริงมันจะลบได้เฉพาะคนที่ยังไม่ทันสร้างอะไร ซึ่งแปลว่าพฤติกรรมขึ้นกับว่าคนนั้นทำงานไปมากแค่ไหนก่อนลาออก
-- **นับ 30 วันของ `pending_deletion` จาก `deletion_requested_at`** ไม่ใช่ `deleted_at` (นั่นคือปลายทาง คือวันที่ anonymize เสร็จ) และไม่ใช่ `updated_at` (แตะแถวทีนึงนับใหม่ทุกที) — [เหตุผลเต็ม](./02-database/schema.md#schema-identity)
+- **`iam.users` ไม่เคย hard delete** — anonymize อย่างเดียว เพราะ `created_by` ของทุกตารางชี้มาที่นี่แบบ RESTRICT · ถ้า sweep ลบได้จริงมันจะลบได้เฉพาะคนที่ยังไม่ทันสร้างอะไร ซึ่งแปลว่าพฤติกรรมขึ้นกับว่าคนนั้นทำงานไปมากแค่ไหนก่อนลาออก
+- **นับ 30 วันของ `pending_deletion` จาก `deletion_requested_at`** ไม่ใช่ `deleted_at` (นั่นคือปลายทาง คือวันที่ anonymize เสร็จ) และไม่ใช่ `updated_at` (แตะแถวทีนึงนับใหม่ทุกที) — [เหตุผลเต็ม](./02-database/schema.md#schema-iam)
 - **`pg_try_advisory_lock`** กันสอง instance ยิง cron พร้อมกัน · ตัวที่สอง**ข้าม**ไม่ใช่ต่อคิว — กว่าจะได้ lock งานก็เสร็จไปแล้ว
 - **`JOBS_ENABLED=false`** ปิด job ทั้งสองในโปรเซสนั้น (default `true`) — มีไว้สำหรับเครื่อง dev ที่ต่อ DB ร่วมกัน
 - ตารางที่ลบไม่ผ่าน (เช่น project ที่ soft delete แล้วแต่ task ยังไม่ถูกลบตาม) จะ log แล้วข้าม ไม่ล้มทั้ง sweep · แต่ตารางนั้นค้างจนกว่าจะแก้ต้นเหตุ เพราะ batch เดียวคือ statement เดียว
@@ -772,7 +772,7 @@ Cookie flags: `httpOnly · Secure · SameSite=Lax`
 code เดียวสำหรับทั้งสองจะพาคนที่อยู่สามบริษัทไปหน้า "สร้าง org แรกของคุณ"
 
 > **เก็บใน cookie ไม่ใช่ `sessions.active_org_id`** — [กติกาทิศทาง FK](./02-database/rules.md#foreign-key-rules)
-> ให้ชี้ทางเดียว `task → project → organization → identity` · FK จาก `identity.sessions`
+> ให้ชี้ทางเดียว `task → project → organization → iam` · FK จาก `iam.sessions`
 > ขึ้นไปหา `organization.organizations` เดินย้อนทาง และ `uuid` เปล่าที่ไม่มี FK
 > แย่กว่าไม่มีคอลัมน์ เพราะไม่มีอะไรกันไม่ให้มันชี้ไป org ที่ถูกลบไปแล้ว
 
@@ -920,7 +920,7 @@ POST /auth/reset-password { code, newPassword, confirmNewPassword }
 
 - ขั้นต่ำ 8 ตัว
 - Hash ด้วย **argon2id** (หรือ bcrypt cost 12 ถ้าไม่อยากเพิ่ม dependency)
-- Login ผิดหลายครั้ง → **ล็อกบัญชี ไม่ใช่นับใน memory** — `identity.users.failed_login_attempts`
+- Login ผิดหลายครั้ง → **ล็อกบัญชี ไม่ใช่นับใน memory** — `iam.users.failed_login_attempts`
   + `locked_until` · จำนวนครั้งกับระยะเวลาเป็น env var ([กติกาเต็ม](./04-features/phase-1.md#auth--users))
 
 ### CSRF

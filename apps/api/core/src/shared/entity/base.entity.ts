@@ -17,15 +17,15 @@ import {
  * | ------------------------ | ------ | ----------- | --------- | ----------------------------------- |
  * | `BaseEntity`              | yes    | yes         | yes       | anything a person deletes and may   |
  * |                          |        |             |           | want back — tasks, projects, teams  |
- * | `SoftDeletableEntity`     | no     | yes         | yes       | identity.users, organizations, plans |
+ * | `SoftDeletableEntity`     | no     | yes         | yes       | iam.users, organizations, plans |
  * | `OrgScopedEntity`         | yes    | no          | yes       | notify.outbox, billing.ai_usage,    |
  * |                          |        |             |           | organization.members, team_members, |
  * |                          |        |             |           | project.members — a `role` column   |
  * |                          |        |             |           | on the last three is what makes     |
  * |                          |        |             |           | them updatable                       |
  * | `TimestampedEntity`       | no     | no          | yes       | sessions, password_reset_tokens     |
- * | `CreatedEntity`           | no     | no          | no        | identity.role_permissions,          |
- * |                          |        |             |           | identity.user_roles                 |
+ * | `CreatedEntity`           | no     | no          | no        | iam.role_permissions,          |
+ * |                          |        |             |           | iam.user_roles                 |
  * | `OrgScopedCreatedEntity`  | yes    | no          | no        | task.assignees                      |
  * | `OrgScopedCreatedSoftDeletableEntity` | yes | yes | no | discussion.attachments             |
  *

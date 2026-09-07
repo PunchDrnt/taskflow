@@ -10,20 +10,20 @@ import { createOrgScopedRepository } from '#shared/org-scope/org-scoped.reposito
 import { SYSTEM_USER_ID } from '#shared/system-user'
 
 import type { Env } from '../src/config/env'
-import { AuthService } from '../src/modules/identity/auth/auth.service'
-import { LockoutService } from '../src/modules/identity/auth/lockout.service'
-import { PasswordService } from '../src/modules/identity/auth/password.service'
-import { Session } from '../src/modules/identity/auth/session.entity'
+import { AuthService } from '../src/modules/iam/auth/auth.service'
+import { LockoutService } from '../src/modules/iam/auth/lockout.service'
+import { PasswordService } from '../src/modules/iam/auth/password.service'
+import { Session } from '../src/modules/iam/auth/session.entity'
 import {
   ROTATION_GRACE_MS,
   SessionService,
-} from '../src/modules/identity/auth/session.service'
+} from '../src/modules/iam/auth/session.service'
 import {
   ACCESS_TOKEN_TTL_SECONDS,
   TokenService,
-} from '../src/modules/identity/auth/token.service'
-import { User } from '../src/modules/identity/user/user.entity'
-import { UserService } from '../src/modules/identity/user/user.service'
+} from '../src/modules/iam/auth/token.service'
+import { User } from '../src/modules/iam/user/user.entity'
+import { UserService } from '../src/modules/iam/user/user.service'
 import { OrganizationMember } from '../src/modules/organization/member.entity'
 import { MembershipService } from '../src/modules/organization/membership.service'
 import { createMigratedTestDataSource, hasTestDatabase } from './database'
@@ -99,7 +99,7 @@ describe.skipIf(!hasTestDatabase)('auth', () => {
         : overrides.passwordHash
 
     const [user] = (await dataSource.query(
-      `INSERT INTO identity.users
+      `INSERT INTO iam.users
          (email, password_hash, name, nickname, status, created_by, updated_by)
        VALUES ($1, $2, $3, $3, $4, $5, $5) RETURNING id`,
       [emailOf(name), hash, name, overrides.status ?? 'active', SYSTEM_USER_ID],
@@ -139,7 +139,7 @@ describe.skipIf(!hasTestDatabase)('auth', () => {
 
   const userRow = async (id: string) => {
     const [row] = (await dataSource.query(
-      `SELECT failed_login_attempts, locked_until FROM identity.users WHERE id = $1`,
+      `SELECT failed_login_attempts, locked_until FROM iam.users WHERE id = $1`,
       [id],
     )) as { failed_login_attempts: number; locked_until: Date | null }[]
 
@@ -163,9 +163,9 @@ describe.skipIf(!hasTestDatabase)('auth', () => {
     auth = built.auth
     sessions = built.sessions
 
-    await dataSource.query(`DELETE FROM identity.sessions`)
+    await dataSource.query(`DELETE FROM iam.sessions`)
     await dataSource.query(`DELETE FROM organization.members`)
-    await dataSource.query(`DELETE FROM identity.users WHERE id <> $1`, [
+    await dataSource.query(`DELETE FROM iam.users WHERE id <> $1`, [
       SYSTEM_USER_ID,
     ])
   })
@@ -295,7 +295,7 @@ describe.skipIf(!hasTestDatabase)('auth', () => {
       await failUntilLocked('ivan')
 
       await dataSource.query(
-        `UPDATE identity.users SET locked_until = now() - interval '1 minute' WHERE id = $1`,
+        `UPDATE iam.users SET locked_until = now() - interval '1 minute' WHERE id = $1`,
         [userId],
       )
 
@@ -380,7 +380,7 @@ describe.skipIf(!hasTestDatabase)('auth', () => {
       )
 
       const [row] = (await dataSource.query(
-        `SELECT revoked_reason FROM identity.sessions WHERE user_id = $1`,
+        `SELECT revoked_reason FROM iam.sessions WHERE user_id = $1`,
         [userId],
       )) as { revoked_reason: string | null }[]
 
@@ -466,7 +466,7 @@ describe.skipIf(!hasTestDatabase)('auth', () => {
       expect(await auth.authenticate(sid)).not.toBeNull()
 
       await dataSource.query(
-        `UPDATE identity.users SET status = 'deactivated' WHERE id = $1`,
+        `UPDATE iam.users SET status = 'deactivated' WHERE id = $1`,
         [userId],
       )
 
@@ -523,7 +523,7 @@ describe.skipIf(!hasTestDatabase)('auth', () => {
       const sid = decodeSid(tokens.accessToken)
 
       await dataSource.query(
-        `UPDATE identity.sessions SET expires_at = now() - interval '1 day' WHERE id = $1`,
+        `UPDATE iam.sessions SET expires_at = now() - interval '1 day' WHERE id = $1`,
         [sid],
       )
 
@@ -557,7 +557,7 @@ describe.skipIf(!hasTestDatabase)('auth', () => {
       const { tokens } = await login('vera')
 
       const [row] = (await dataSource.query(
-        `SELECT current_token_hash FROM identity.sessions`,
+        `SELECT current_token_hash FROM iam.sessions`,
       )) as { current_token_hash: string }[]
 
       expect(row!.current_token_hash).not.toBe(tokens.refreshToken)
@@ -592,7 +592,7 @@ describe.skipIf(!hasTestDatabase)('auth', () => {
 
   async function sessionsOf(userId: string): Promise<number> {
     const [row] = (await dataSource.query(
-      `SELECT count(*)::int AS count FROM identity.sessions WHERE user_id = $1`,
+      `SELECT count(*)::int AS count FROM iam.sessions WHERE user_id = $1`,
       [userId],
     )) as { count: number }[]
 

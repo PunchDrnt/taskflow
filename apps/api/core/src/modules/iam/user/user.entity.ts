@@ -2,8 +2,8 @@ import { Column, Entity } from 'typeorm'
 
 import { SoftDeletableEntity } from '#shared/entity/base.entity'
 
-/** A person. One belongs to many orgs, which is why identity has no org_id. */
-@Entity({ schema: 'identity', name: 'users' })
+/** A person. One belongs to many orgs, which is why iam has no org_id. */
+@Entity({ schema: 'iam', name: 'users' })
 export class User extends SoftDeletableEntity {
   /** citext, so `A@x.com` and `a@x.com` collide without a lower() wrapper. */
   @Column('citext')

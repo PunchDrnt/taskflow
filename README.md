@@ -104,20 +104,20 @@ Services inject `OrgScopedRepository`, never TypeORM's `Repository`, and an ESLi
 
 ```ts
 projects.queryBuilder.withOrg('project').andWhere(...)  // scoped
-users.queryBuilder.base('user')                         // identity has no org
+users.queryBuilder.base('user')                         // iam has no org
 ```
 
 `withOrg` is a conditional property: it does not exist on entities without an `orgId` column, so `users.queryBuilder.withOrg()` fails to compile rather than at runtime. What it returns has `where` and `orWhere` removed — `where` replaces every condition set so far, org included — enforced by the type on the first call and by a Proxy for the rest of the chain, since `andWhere` returns `this` and the type stops helping.
 
-`base` is TypeORM's plain builder. For `identity.*` and `billing.plans`, which have no `org_id` at all, that is simply correct; anywhere else it is a deliberate crossing that should be explainable.
+`base` is TypeORM's plain builder. For `iam.*` and `billing.plans`, which have no `org_id` at all, that is simply correct; anywhere else it is a deliberate crossing that should be explainable.
 
 [apps/api/core/test/org-isolation.spec.ts](apps/api/core/test/org-isolation.spec.ts) covers this against a real Postgres and has no exceptions.
 
 ### Entities
 
-One per table under `src/modules/<module>/*.entity.ts`, each listed in `src/database/entities.ts`. They describe columns and nothing else — no relations for `created_by` and friends, since importing identity's `User` into every module would break the boundary rule that a service wanting a name calls `UserService` rather than joining. Constraints, indexes and foreign keys stay in migrations.
+One per table under `src/modules/<module>/*.entity.ts`, each listed in `src/database/entities.ts`. They describe columns and nothing else — no relations for `created_by` and friends, since importing iam's `User` into every module would break the boundary rule that a service wanting a name calls `UserService` rather than joining. Constraints, indexes and foreign keys stay in migrations.
 
-`base.entity.ts` offers four shapes rather than one, because `org_id` and soft delete are independent: most tables want `BaseEntity`, the identity schema and `billing.plans` have no `org_id`, sessions and password reset tokens have neither, and `audit.logs` uses none of them.
+`base.entity.ts` offers four shapes rather than one, because `org_id` and soft delete are independent: most tables want `BaseEntity`, the iam schema and `billing.plans` have no `org_id`, sessions and password reset tokens have neither, and `audit.logs` uses none of them.
 
 Entities are registered explicitly in `entities.ts` rather than discovered by glob — a `*.entity.js` glob resolves differently under `nest build` than under Vitest's SWC transform, and the difference shows up as an "entity metadata not found" error in one runner but not the other. Entity properties are camelCase and mapped to snake_case columns by `snake-naming.strategy.ts`, so `@Column({ name })` is only needed to override.
 
@@ -135,7 +135,7 @@ That map is hand-written, unlike retention's purge order which is read from the 
 
 The order tables are purged in is a topological sort over `pg_constraint`, read at run time. A hand-written list would be wrong in a way nothing detects — `tasks.project_id` is `RESTRICT`, so tasks genuinely have to go before projects, and a table added without a thought for retention is rows that are simply never deleted.
 
-`identity.users` is never hard-deleted. Every `created_by` in the schema points at it with `ON DELETE RESTRICT`, which is the decision that history keeps an author, so a user who asks to be deleted is anonymised in place instead.
+`iam.users` is never hard-deleted. Every `created_by` in the schema points at it with `ON DELETE RESTRICT`, which is the decision that history keeps an author, so a user who asks to be deleted is anonymised in place instead.
 
 Scheduled work is declared per process, so two containers fire the same cron on the same second. `pg_try_advisory_lock` means the second one skips — by the time the lock is free the work is done. `JOBS_ENABLED=false` turns both jobs off in a process entirely, which is what you want on a development machine pointed at a shared database.
 
