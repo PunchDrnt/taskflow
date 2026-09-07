@@ -61,11 +61,16 @@ describe('cookie attributes', () => {
     },
   )
 
-  it('scopes the refresh token to the path Caddy exposes, not the Nest route', () => {
-    // /api is stripped by `handle_path` before setGlobalPrefix('v1') is
-    // reached, so the browser's URL keeps it. Write the Nest path here and the
-    // cookie is scoped to a path no request ever has, and is never sent.
-    expect(cookies.optionsFor(REFRESH_TOKEN_COOKIE).path).toBe('/api/v1/auth')
+  it('scopes every cookie to the whole origin', () => {
+    // The refresh token and the challenge were scoped to `/api/v1/auth` and
+    // were widened on purpose: a path-scoped cookie is not sent with page
+    // requests, so the Next proxy and Server Actions never held the token and
+    // could not renew a session. See COOKIE_PATH in auth.cookies.ts.
+    //
+    // Pinned so that narrowing one again is a failing test rather than a
+    // Thursday spent working out why every cold load renders signed out.
+    expect(cookies.optionsFor(REFRESH_TOKEN_COOKIE).path).toBe('/')
+    expect(cookies.optionsFor(TWO_FACTOR_COOKIE).path).toBe('/')
 
     expect(cookies.optionsFor(ACCESS_TOKEN_COOKIE).path).toBe('/')
     expect(cookies.optionsFor(ACTIVE_ORG_COOKIE).path).toBe('/')

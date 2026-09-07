@@ -49,8 +49,9 @@ import { TwoFactorService } from './two-factor.service'
  * cookie rather than in an access token the guard would look for.
  *
  * Logout works off the **refresh** cookie rather than the access token, which
- * is why it needs no session id from the caller: that cookie is scoped to
- * exactly this path, so it is present here and nowhere else in the API.
+ * is why it needs no session id from the caller: it names the session by
+ * itself, and it keeps working once the access token has expired — which is
+ * exactly when somebody closing a laptop lid is likely to be signing out.
  */
 @ApiTags('auth')
 @Controller('auth')

@@ -156,6 +156,15 @@ services:
       # The server half reads these at runtime, unlike the two above.
       SENTRY_DSN: ${SENTRY_DSN}
       SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-production}
+      # Where proxy.ts, Server Components and Server Actions reach the API:
+      # container to container, inside the compose network, never through
+      # Caddy. Hard-coded rather than taken from .env because it is a service
+      # name on a private network — there is nothing here for an operator to
+      # choose, and one more variable to forget is a real cost.
+      #
+      # The browser is unaffected: it asks this same origin for `/api/*` and
+      # Caddy forwards it, which is what keeps every request same-origin.
+      API_INTERNAL_URL: http://api:4001
 
   caddy:
     image: caddy:2-alpine

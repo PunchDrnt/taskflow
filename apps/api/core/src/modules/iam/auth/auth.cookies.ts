@@ -2,6 +2,13 @@ import { Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import type { CookieOptions, Response } from 'express'
 
+import {
+  ACCESS_TOKEN_COOKIE,
+  ACTIVE_ORG_COOKIE,
+  REFRESH_TOKEN_COOKIE,
+  TWO_FACTOR_COOKIE,
+} from '@repo/shared'
+
 import type { Env } from '../../../config/env'
 import {
   ACCESS_TOKEN_TTL_SECONDS,
@@ -10,26 +17,54 @@ import {
   type Tokens,
 } from './token.service'
 
-export const ACCESS_TOKEN_COOKIE = 'access_token'
-export const REFRESH_TOKEN_COOKIE = 'refresh_token'
-export const ACTIVE_ORG_COOKIE = 'active_org'
+/**
+ * The names come from `@repo/shared` and the attributes stay here.
+ *
+ * The split is the point: the web app's proxy has to recognise `access_token`
+ * to know whether to refresh before a render, so the *name* is shared state
+ * between two runtimes — and a name that drifts fails silently, with everyone
+ * signed out every fifteen minutes and nothing in any log. The *attributes*
+ * are still one place, this file, which is the 🔒 rule the docblock below
+ * describes.
+ *
+ * Re-exported so the four call sites in this module keep importing cookie
+ * names from the file that sets cookies.
+ */
+export {
+  ACCESS_TOKEN_COOKIE,
+  ACTIVE_ORG_COOKIE,
+  REFRESH_TOKEN_COOKIE,
+  TWO_FACTOR_COOKIE,
+}
 
 /**
- * Carries a half-finished login between the password step and the code step.
- * Scoped to the auth path like the refresh token, and for the same reason:
- * nothing outside those two endpoints has any use for it.
+ * Every cookie is scoped to the whole origin. **This was `/api/v1/auth` for
+ * the refresh token and the two-factor challenge, and widening it was a
+ * deliberate trade** — docs/01-architecture.md#auth carries the same note.
+ *
+ * The narrow scope bought one thing: a request that leaked its `Cookie` header
+ * anywhere outside the auth endpoints gave up a fifteen-minute access token
+ * rather than a fifteen-day refresh token. What it cost was not obvious until
+ * it was measured against a real browser: **a path-scoped cookie is not sent
+ * with page requests**, so neither Next's proxy nor a Server Action ever had
+ * the token in hand, and renewing a session became something only client-side
+ * JavaScript could do. The visible consequence was that any cold load more
+ * than fifteen minutes after the last one rendered signed-out and had to
+ * repair itself after hydration — which is most cold loads.
+ *
+ * Both cookies stay `httpOnly`, so no script reads either one at any path, and
+ * every request that now carries the refresh token is same-origin to the same
+ * server that issued it. The exposure that is actually added is to first-party
+ * logging: anything recording a full `Cookie` header now records a longer-
+ * lived credential. That is worth knowing about and worth keeping out of logs;
+ * it is not worth an architecture where the server cannot renew its own
+ * session.
+ *
+ * The two-factor challenge moves for a reason of its own: a login driven from
+ * a Server Action would otherwise work for the password step and fail at the
+ * code step, having set a cookie the next action cannot see.
  */
-export const TWO_FACTOR_COOKIE = 'two_factor_challenge'
-
-/**
- * Where the browser sends the refresh token, and nowhere else. This is the
- * path as *Caddy* sees it, not as Nest does: `handle_path /api/*` strips the
- * prefix before the request reaches `setGlobalPrefix('v1')`, so the browser's
- * URL is `/api/v1/auth/...` while the route is `/v1/auth/...`. Writing the
- * Nest path here would scope the cookie to a path that never appears in a URL,
- * and it would simply never be sent.
- */
-const REFRESH_TOKEN_PATH = '/api/v1/auth'
+const COOKIE_PATH = '/'
 
 /**
  * 🔒 The one place cookie attributes exist.
@@ -46,8 +81,8 @@ const REFRESH_TOKEN_PATH = '/api/v1/auth'
  * - `secure` follows NODE_ENV — a Secure cookie is dropped over plain http, so
  *   pinning it on would break `yarn dev` and pinning it off would ship tokens
  *   in the clear. It is the one attribute that has to vary.
- * - `path` — only the refresh token narrows it, so an access token leaking out
- *   of one endpoint does not carry the thing that mints new ones with it.
+ * - `path` — `/` for all four, so the server half of the web app can read them
+ *   too. See `COOKIE_PATH` above for what that costs and why it is paid.
  *
  * Spread across four call sites these drift: one `set` forgets `httpOnly`, one
  * `clear` disagrees on `path` and leaves a cookie the browser keeps sending
@@ -69,10 +104,7 @@ export class AuthCookies {
       httpOnly: true,
       secure: this.secure,
       sameSite: 'lax',
-      path:
-        name === REFRESH_TOKEN_COOKIE || name === TWO_FACTOR_COOKIE
-          ? REFRESH_TOKEN_PATH
-          : '/',
+      path: COOKIE_PATH,
       maxAge: ttlSecondsFor(name) * 1000,
     }
   }

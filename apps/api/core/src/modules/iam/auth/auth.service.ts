@@ -332,8 +332,9 @@ export class AuthService {
 
   /**
    * Which session a refresh token belongs to, for logout. The refresh cookie
-   * is what logout has to work from: it is scoped to `/api/v1/auth`, so it is
-   * the one credential guaranteed to be present on exactly these routes.
+   * is what logout has to work from: it names one session, where an access
+   * token would have to be trusted for the `sid` inside it — and logging out
+   * has to keep working after that token has expired.
    */
   findSessionByRefreshToken(token: string): Promise<SessionRecord | null> {
     return this.sessions

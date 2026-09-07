@@ -1,5 +1,6 @@
 export * from './api-error.js'
 export * from './constants.js'
+export * from './cookies.js'
 export * from './schemas/auth.js'
 export * from './schemas/id.js'
 export * from './schemas/user.js'
