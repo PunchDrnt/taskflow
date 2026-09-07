@@ -19,7 +19,7 @@ import { MeTwoFactorController } from './me-two-factor.controller'
 import { MeController } from './me.controller'
 import { PasswordResetToken } from './password-reset-token.entity'
 import { PasswordResetService } from './password-reset.service'
-import { PasswordService } from './password.service'
+import { PasswordModule } from './password.module'
 import { RecoveryCode } from './recovery-code.entity'
 import { Session } from './session.entity'
 import { SessionService } from './session.service'
@@ -45,6 +45,7 @@ import { TwoFactorService } from './two-factor.service'
   imports: [
     AuditModule,
     AuthCookiesModule,
+    PasswordModule,
     UserModule,
     OrganizationModule,
     JwtModule.registerAsync({
@@ -77,7 +78,6 @@ import { TwoFactorService } from './two-factor.service'
     provideOrgRepository(PasswordResetToken),
     provideOrgRepository(TotpCredential),
     provideOrgRepository(RecoveryCode),
-    PasswordService,
     TokenService,
     SessionService,
     LockoutService,

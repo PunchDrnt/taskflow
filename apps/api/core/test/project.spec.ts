@@ -11,10 +11,12 @@ import { SYSTEM_USER_ID } from '#shared/system-user'
 
 import { AuditService } from '../src/modules/audit/audit.service'
 import { AuditLog } from '../src/modules/audit/log.entity'
+import { PasswordService } from '../src/modules/iam/auth/password.service'
 import { User } from '../src/modules/iam/user/user.entity'
 import { UserService } from '../src/modules/iam/user/user.service'
 import { OrganizationMember } from '../src/modules/organization/member.entity'
 import { MemberService } from '../src/modules/organization/member.service'
+import { MembershipService } from '../src/modules/organization/membership.service'
 import { ProjectMember } from '../src/modules/project/project-member.entity'
 import { ProjectMemberService } from '../src/modules/project/project-member.service'
 import { Project } from '../src/modules/project/project.entity'
@@ -143,6 +145,7 @@ describe.skipIf(!hasTestDatabase)('project', () => {
     const audit = new AuditService(
       createOrgScopedRepository(dataSource, AuditLog),
     )
+    const users = new UserService(createOrgScopedRepository(dataSource, User))
 
     projects = new ProjectService(
       createOrgScopedRepository(dataSource, Project),
@@ -160,8 +163,13 @@ describe.skipIf(!hasTestDatabase)('project', () => {
         dataSource,
         permissions,
         audit,
+        users,
+        new PasswordService(),
+        new MembershipService(
+          createOrgScopedRepository(dataSource, OrganizationMember),
+        ),
       ),
-      new UserService(createOrgScopedRepository(dataSource, User)),
+      users,
       audit,
     )
 

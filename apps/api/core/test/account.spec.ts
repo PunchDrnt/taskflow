@@ -895,11 +895,31 @@ describe.skipIf(!hasTestDatabase)('account', () => {
       ).toBe(false)
     })
 
-    it('refuses an avatar that is not a URL, and accepts null', () => {
-      expect(
-        updateProfileSchema.safeParse({ ...valid, avatarUrl: 'nope' }).success,
-      ).toBe(false)
-      expect(updateProfileSchema.safeParse(valid).success).toBe(true)
+    it('takes an avatar as a storage key or as an external URL', () => {
+      // ⚠️ This used to require a URL. The bucket is private and stays
+      // private, so a URL to an object in it stops working the moment the
+      // signature expires — `POST /v1/me/avatar-upload` hands back a key, and
+      // `GET /v1/users/:id/avatar` is what turns it into a picture. An
+      // ordinary http(s) URL is still accepted for a picture hosted elsewhere.
+      for (const avatarUrl of [
+        'org-1/avatar/user-1/abc-photo.png',
+        'https://cdn.example.test/me.png',
+        null,
+      ]) {
+        expect(
+          updateProfileSchema.safeParse({ ...valid, avatarUrl }).success,
+        ).toBe(true)
+      }
+    })
+
+    it('refuses an avatar path that climbs out of its prefix', () => {
+      // The key is handed back by the API, but nothing stops a client sending
+      // its own — and it is read back as an object path.
+      for (const avatarUrl of ['../../etc/passwd', '/absolute/path', '']) {
+        expect(
+          updateProfileSchema.safeParse({ ...valid, avatarUrl }).success,
+        ).toBe(false)
+      }
     })
 
     it('has no email field, so one sent along is dropped', () => {

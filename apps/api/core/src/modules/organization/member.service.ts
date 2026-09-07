@@ -2,7 +2,11 @@ import { Injectable } from '@nestjs/common'
 import { InjectDataSource } from '@nestjs/typeorm'
 import { DataSource } from 'typeorm'
 
-import { ORGANIZATION_ERROR_CODES, type OrgRole } from '@repo/shared'
+import {
+  ORGANIZATION_ERROR_CODES,
+  type AddOrgMemberInput,
+  type OrgRole,
+} from '@repo/shared'
 
 import { ApiException } from '#shared/http/api-exception'
 import { InjectOrgRepository } from '#shared/org-scope/org-repository.provider'
@@ -12,7 +16,10 @@ import { requireOrgContext } from '#shared/org-scope/request-context'
 import { actorFromContext } from '../../permission/actor'
 import { PermissionService } from '../../permission/permission.service'
 import { AuditService } from '../audit/audit.service'
+import { PasswordService } from '../iam/auth/password.service'
+import { ACTIVE_USER_STATUS, UserService } from '../iam/user/user.service'
 import { OrganizationMember } from './member.entity'
+import { MembershipService } from './membership.service'
 
 /** One row of the members list, before names are attached. */
 export interface OrgMember {
@@ -20,6 +27,12 @@ export interface OrgMember {
   role: OrgRole
   /** `created_at` under the name it has on this screen. */
   joinedAt: Date
+  /**
+   * `iam.users.status`. A deactivated colleague stays in this list — the
+   * specification is explicit that they do — so the screen needs to be able
+   * to say which ones can no longer sign in.
+   */
+  status?: string
 }
 
 /**
@@ -37,6 +50,9 @@ export class MemberService {
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly permissions: PermissionService,
     private readonly audit: AuditService,
+    private readonly users: UserService,
+    private readonly passwords: PasswordService,
+    private readonly memberships: MembershipService,
   ) {}
 
   list(): Promise<OrgMember[]> {
@@ -54,6 +70,195 @@ export class MemberService {
       .withOrg('member')
       .andWhere('member.userId = :userId', { userId })
       .getOne()
+  }
+
+  /**
+   * Creates an account and puts it in this organisation, in one transaction.
+   *
+   * Phase 1's way of adding people. `organization.invitations` is migrated and
+   * unread until Phase 2, so until then somebody with the rights types the
+   * details in — which is what the checklist means by "a seed script or an
+   * admin API", chosen as the API because it is auditable and does not need
+   * shell access to production.
+   *
+   * If the address already has an account, that account is joined to this
+   * organisation instead of a second one being made: one person, several
+   * companies, is the case this system has from Phase 1.
+   *
+   * The password is set rather than emailed. The reset flow already exists and
+   * is the safe way to hand one over; inventing a second invitation mechanism
+   * here is what Phase 2 is for.
+   */
+  async add(input: AddOrgMemberInput): Promise<OrgMember> {
+    const { orgId, userId: actorId } = requireOrgContext()
+
+    // The same rule as changing a role: an admin runs the org's people, but
+    // may not create an owner. `id` is absent because no row exists yet.
+    this.permissions.assert(actorFromContext(), 'update', 'Member', {
+      newRole: input.role,
+    })
+
+    const existing = await this.users.findByEmail(input.email)
+
+    if (existing && (await this.findByUserId(existing.id))) {
+      throw new ApiException(
+        409,
+        ORGANIZATION_ERROR_CODES.ACCOUNT_EXISTS,
+        'ผู้ใช้นี้อยู่ในองค์กรนี้อยู่แล้ว',
+      )
+    }
+
+    const user =
+      existing ??
+      (await this.users.create({
+        email: input.email,
+        username: input.username,
+        name: input.name,
+        nickname: input.nickname,
+        passwordHash: await this.passwords.hash(input.password),
+      }))
+
+    return this.dataSource.transaction(async (manager) => {
+      const inserted = await manager.insert(OrganizationMember, {
+        orgId,
+        userId: user.id,
+        role: input.role,
+        createdBy: actorId,
+        updatedBy: actorId,
+      })
+
+      const member = inserted.generatedMaps[0] as OrganizationMember
+
+      await this.audit.record(manager, {
+        entityType: 'member',
+        entityId: member.id,
+        action: 'created',
+        changes: {
+          userId: { from: null, to: user.id },
+          role: { from: null, to: input.role },
+          // Says whether this created an account or attached one that already
+          // existed, which is the question somebody reading the log will have.
+          accountCreated: { from: null, to: existing === null },
+        },
+      })
+
+      return {
+        userId: user.id,
+        role: input.role,
+        joinedAt: member.createdAt ?? new Date(),
+        status: user.status,
+      }
+    })
+  }
+
+  /**
+   * Switches a colleague's account off, or back on.
+   *
+   * docs/04-features/phase-1.md#user-states--three-different-things: they stay
+   * in this list, their finished work keeps their name, and **the tasks they
+   * are holding stay with them** — switching an account off is not a decision
+   * about who does the work, and making it one silently would be the system
+   * reassigning things nobody asked it to.
+   *
+   * 🔒 **Refused when the account belongs to more than one organisation.**
+   * `iam.users.status` is account-level: one company's admin flipping it would
+   * lock the person out of every other company they work with. The
+   * specification never contemplated that — its own example routes the shared
+   * account to "remove them from the organisation", which is Phase 2 — and a
+   * cross-org effect is the one kind of mistake this codebase treats as
+   * binding. Refusing is the honest answer until removal exists.
+   */
+  async setActive(userId: string, active: boolean): Promise<OrgMember> {
+    const { userId: actorId } = requireOrgContext()
+
+    const member = await this.findByUserId(userId)
+
+    if (!member) throw ApiException.notFound('ไม่พบสมาชิกนี้ในองค์กร')
+
+    // An admin may not touch an owner: `newRole` repeats the current role so
+    // only that rule can fire, not the one about creating owners.
+    this.permissions.assert(actorFromContext(), 'update', 'Member', {
+      id: member.id,
+      userId: member.userId,
+      role: member.role as OrgRole,
+      newRole: member.role as OrgRole,
+    })
+
+    const user = await this.users.findById(userId)
+
+    if (!user) throw ApiException.notFound('ไม่พบสมาชิกนี้ในองค์กร')
+
+    const next = active ? ACTIVE_USER_STATUS : 'deactivated'
+
+    if (user.status === next) {
+      return {
+        userId,
+        role: member.role as OrgRole,
+        joinedAt: member.createdAt,
+        status: user.status,
+      }
+    }
+
+    if (!active) {
+      await this.refuseIfShared(userId)
+      await this.refuseIfLastOwner(member)
+    }
+
+    await this.dataSource.transaction(async (manager) => {
+      await this.users.setStatus(userId, next, actorId)
+
+      await this.audit.record(manager, {
+        entityType: 'member',
+        entityId: member.id,
+        action: active ? 'reactivated' : 'deactivated',
+        changes: { status: { from: user.status, to: next } },
+      })
+    })
+
+    return {
+      userId,
+      role: member.role as OrgRole,
+      joinedAt: member.createdAt,
+      status: next,
+    }
+  }
+
+  /** 🔒 See `setActive` — the account is not this organisation's alone. */
+  private async refuseIfShared(userId: string): Promise<void> {
+    const orgs = await this.memberships.listForUser(userId)
+
+    if (orgs.length <= 1) return
+
+    throw new ApiException(
+      409,
+      ORGANIZATION_ERROR_CODES.USER_IN_OTHER_ORGS,
+      'บัญชีนี้อยู่ในองค์กรอื่นด้วย การปิดบัญชีจะทำให้เขาเข้าองค์กรอื่นไม่ได้ ' +
+        'ให้เอาออกจากองค์กรนี้แทน (มาใน Phase 2)',
+      { organizations: orgs.length },
+    )
+  }
+
+  /**
+   * An organisation whose only owner cannot sign in is one nobody can
+   * administer — the same hole the last-owner rule on `changeRole` closes,
+   * reached by a different door.
+   */
+  private async refuseIfLastOwner(member: OrganizationMember): Promise<void> {
+    if (member.role !== 'owner') return
+
+    const owners = await this.members.queryBuilder
+      .withOrg('member')
+      .andWhere("member.role = 'owner'")
+      .andWhere('member.userId != :userId', { userId: member.userId })
+      .getCount()
+
+    if (owners > 0) return
+
+    throw new ApiException(
+      409,
+      ORGANIZATION_ERROR_CODES.LAST_OWNER,
+      'ปิดบัญชีเจ้าขององค์กรคนสุดท้ายไม่ได้ กรุณาตั้งเจ้าขององค์กรคนอื่นก่อน',
+    )
   }
 
   /**

@@ -28,6 +28,14 @@ export const TASK_ERROR_CODES = {
    * would suggest. Un-archiving is the way back, and it is one click.
    */
   PROJECT_ARCHIVED: 'PROJECT_ARCHIVED',
+  /**
+   * The account is deactivated, so it takes no new work.
+   *
+   * The work it already holds stays exactly where it is — switching an
+   * account off is not a decision about who does the job, and making it one
+   * silently would be the system reassigning things nobody asked it to.
+   */
+  USER_INACTIVE: 'USER_INACTIVE',
 } as const
 
 export const taskTitleSchema = z

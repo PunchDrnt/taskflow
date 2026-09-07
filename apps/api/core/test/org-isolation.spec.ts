@@ -1,12 +1,22 @@
 import type { DataSource } from 'typeorm'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
-import { OrgScopedRepository } from '#shared/org-scope/org-scoped.repository'
+import { CascadeSoftDelete } from '#shared/entity/cascade-soft-delete'
+import {
+  createOrgScopedRepository,
+  OrgScopedRepository,
+} from '#shared/org-scope/org-scoped.repository'
 import { runWithRequestContext } from '#shared/org-scope/request-context'
 import { SYSTEM_USER_ID } from '#shared/system-user'
 
+import { AuditService } from '../src/modules/audit/audit.service'
+import { AuditLog } from '../src/modules/audit/log.entity'
 import { Organization } from '../src/modules/organization/organization.entity'
 import { Project } from '../src/modules/project/project.entity'
+import { ProjectService } from '../src/modules/project/project.service'
+import { Task } from '../src/modules/task/task.entity'
+import { TasksInStatusService } from '../src/modules/task/tasks-in-status.service'
+import { PermissionService } from '../src/permission/permission.service'
 import { createMigratedTestDataSource, hasTestDatabase } from './database'
 
 /**
@@ -388,4 +398,132 @@ describe.skipIf(!hasTestDatabase)('cross-org isolation', () => {
     // later, and never as an unscoped query that quietly returns everything.
     expect(() => projects.find()).toThrow(/No request context/)
   })
+  /**
+   * 🔒 The statements written by hand, which the repository cannot cover.
+   *
+   * Everything else in this file tests `OrgScopedRepository`, and every
+   * service goes through it — so a new endpoint inherits the guarantee. Raw
+   * SQL does not. These two are the hand-written statements Phase 1 §6 added,
+   * and both are `UPDATE`s, where getting the scope wrong writes to another
+   * company rather than merely reading from it.
+   */
+  describe('the hand-written statements', () => {
+    let tasks: OrgScopedRepository<Task>
+    let projectsOfB: Project
+
+    const projectService = (): ProjectService =>
+      new ProjectService(
+        projects,
+        dataSource,
+        new PermissionService(),
+        new AuditService(createOrgScopedRepository(dataSource, AuditLog)),
+        new CascadeSoftDelete(dataSource),
+      )
+
+    beforeAll(async () => {
+      tasks = new OrgScopedRepository(dataSource.getRepository(Task))
+      projectsOfB = (await asOrg(orgB, () => projects.find()))[0]!
+    })
+
+    it("allocateTaskNumber cannot bump another org's counter", async () => {
+      const before = projectsOfB.nextTaskNumber
+
+      // A 404 rather than a number: the row exists, but not for this caller,
+      // and `WHERE org_id = $2` is what makes RETURNING come back empty.
+      await expect(
+        asOrg(orgA, () =>
+          dataSource.transaction((manager) =>
+            projectService().allocateTaskNumber(manager, projectsOfB.id),
+          ),
+        ),
+      ).rejects.toThrow()
+
+      const after = await dataSource
+        .getRepository(Project)
+        .findOneByOrFail({ id: projectsOfB.id })
+
+      expect(after.nextTaskNumber).toBe(before)
+    })
+
+    it("reconcileCompletion cannot reach another org's tasks", async () => {
+      const statusB = await newStatus(orgB, projectsOfB)
+      const taskB = await newTask(orgB, projectsOfB, statusB)
+
+      // Same status id in the argument, a different org in the context: the
+      // `WHERE org_id = $2` in the raw UPDATE is the only thing standing
+      // between the two.
+      await asOrg(orgA, () =>
+        dataSource.transaction((manager) =>
+          new TasksInStatusService(tasks).reconcileCompletion(
+            manager,
+            statusB,
+            true,
+          ),
+        ),
+      )
+
+      const [row] = (await dataSource.query(
+        `SELECT completed_at FROM task.tasks WHERE id = $1`,
+        [taskB],
+      )) as { completed_at: Date | null }[]
+
+      expect(row!.completed_at).toBeNull()
+    })
+
+    it('countInStatus counts only this org', async () => {
+      const statusB = await newStatus(orgB, projectsOfB)
+      await newTask(orgB, projectsOfB, statusB)
+
+      expect(
+        await asOrg(orgA, () =>
+          new TasksInStatusService(tasks).countInStatus(statusB),
+        ),
+      ).toBe(0)
+      expect(
+        await asOrg(orgB, () =>
+          new TasksInStatusService(tasks).countInStatus(statusB),
+        ),
+      ).toBe(1)
+    })
+  })
+
+  const newStatus = async (
+    org: Organization,
+    project: Project,
+  ): Promise<string> => {
+    const [row] = (await dataSource.query(
+      `INSERT INTO project.statuses
+         (org_id, project_id, name, color, sort_order, is_default,
+          created_by, updated_by)
+       VALUES ($1, $2, $3, 'gray', 'a0', false, $4, $4) RETURNING id`,
+      [
+        org.id,
+        project.id,
+        `s-${crypto.randomUUID().slice(0, 8)}`,
+        SYSTEM_USER_ID,
+      ],
+    )) as { id: string }[]
+
+    return row!.id
+  }
+
+  const newTask = async (
+    org: Organization,
+    project: Project,
+    statusId: string,
+  ): Promise<string> => {
+    const [row] = (await dataSource.query(
+      `INSERT INTO task.tasks
+         (org_id, project_id, title, status_id, number, sort_order, depth,
+          created_by, updated_by)
+       VALUES ($1, $2, 'x', $3,
+               (SELECT coalesce(max(number), 0) + 1
+                  FROM task.tasks WHERE project_id = $2),
+               'a0', 0, $4, $4)
+       RETURNING id`,
+      [org.id, project.id, statusId, SYSTEM_USER_ID],
+    )) as { id: string }[]
+
+    return row!.id
+  }
 })

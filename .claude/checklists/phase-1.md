@@ -33,18 +33,19 @@ unique เต็ม · `views.sort_order` / `is_default`
       · push ตรงเข้า main ได้ = ของที่ไม่เคยผ่านอะไรขึ้น production ได้ ([ผัง](../docs/01-architecture.md#branching))
 - [ ] **CI trigger `push: [main]`** — comment ไว้ใน `ci.yml` พร้อมเงื่อนไขปลดล็อกว่า _"Put this back once work arrives through pull requests"_ · **เงื่อนไขนั้นสำเร็จไปแล้ว** (Phase 0 จบ งานเข้าทาง PR ตั้งแต่ #2) เหลือแค่กด
       ช่องที่มันปิดคือ merge commit ที่ต่างจาก PR head · เปิด branch protection แบบ require up-to-date แทนก็ได้ เลือกอย่างใดอย่างหนึ่ง ไม่ต้องทำทั้งคู่
-- [ ] 🔒 **Test invariant ที่ DB บังคับเองไม่ได้** — Phase 0 เลื่อนมาเพราะยังไม่มี service ให้บังคับ **Phase 1 มีแล้ว หมดข้ออ้าง**
+- [x] 🔒 **Test invariant ที่ DB บังคับเองไม่ได้** — Phase 0 เลื่อนมาเพราะยังไม่มี service ให้บังคับ **Phase 1 มีแล้ว หมดข้ออ้าง**
   - [x] org ต้องมี `role='owner'` ≥1 แถวเสมอ (ห้ามลบ/ลดสิทธิ์คนสุดท้าย) — `test/organization.spec.ts` รวมเคสถอดพร้อมกันสองอัน
   - [x] project ต้องมี `is_done_type` ≥1 อัน — `test/status.spec.ts` ปฏิเสธทั้งการลบและการเปลี่ยน kind ของอันสุดท้าย
         · ถ้าไม่มีเลย = ไม่มีอะไรใน project นั้นถูกนับว่าเสร็จได้อีกเลย และตัวเลข progress ทุกอันอ่านเป็นศูนย์ตลอดไปโดยไม่มี error
-  - [ ] `completed_at`/`completed_by` มีค่า **ก็ต่อเมื่อ** status ของ task นั้น `is_done_type` — คุมสองทาง ดู §6
+  - [x] `completed_at`/`completed_by` มีค่า **ก็ต่อเมื่อ** status ของ task นั้น `is_done_type` — คุมสองทาง ดู §6
+        · ทาง A `test/task.spec.ts` · ทาง B `test/status.spec.ts` · ทั้งคู่ยิงจริงกับ Postgres
 - [x] 🔒 **`FeatureService.isEnabled()` เคย return `true` เสมอ — "ดักด้วย feature flag" จึงแปลว่า "เปิดอยู่"**
       · [`04-features/phase-1.md`](../docs/04-features/phase-1.md#auth--users) เขียนว่า `/register` ดักด้วย `isEnabled(org, 'public_registration')` "ซึ่ง return `false` ตั้งแต่บรรทัดแรก" — โค้ดตอนนั้น `return true`
       · ใครสร้าง `/register` ตามสเปกโดยไม่เปิดไฟล์ดู จะได้ public registration ที่เปิดอยู่ = ใครรู้ URL ก็สมัครเข้ามาแล้วรอให้ใครสักคนเผลอเพิ่มเข้า org
       · **ตัดสินแล้ว: allow-list ว่าง ปิดหมดเป็น default** — `ENABLED_FEATURES` เป็น `Set` เปล่า ชื่อที่ไม่ได้อยู่ในนั้นคือปิด · การเพิ่มชื่อเข้า `FEATURES` จึงเป็นการ**ดัก** feature ไม่ใช่การเปิด
       · doc ไม่ต้องแก้ — **โค้ดขยับมาตรงกับ doc** ไม่ใช่ทางกลับกัน
       · test ครอบว่าไม่มี feature ไหนเปิดอยู่จริง และชื่อที่ยังไม่มีใครเปิด return `false` — ไม่ใช่เชื่อคอมเมนต์
-- [ ] **`iam.oauth_accounts` — migrate ไว้ แต่ feature ปิด ยังไม่ใช้** (ตัดสินแล้ว)
+- [x] **`iam.oauth_accounts` — migrate ไว้ แต่ feature ปิด ยังไม่ใช้** (ตัดสินแล้ว)
       · ตารางลงตาม schema ใน [`02-database/schema.md`](../docs/02-database/schema.md#schema-iam) · เป็นแพทเทิร์นเดียวกับ `iam.roles`/`permissions` ที่ migrate ตั้งแต่ Phase 0 แล้วไม่มีใครอ่านจนถึง Phase 7
       · **Google login ยังไม่เปิดใช้** — ปิดด้วยกลไกที่ปิดได้จริง ดูข้อบน ไม่ใช่ `FeatureService` ตามสภาพปัจจุบัน
       · **hard delete** (`CreatedEntity`) ตามสามคำถามใน [`02-database/rules.md`](../docs/02-database/rules.md#base-entity) — ลืม `deleted_at IS NULL` ใน flow ล็อกอินคือช่องให้คนที่ unlink แล้วเข้ากลับมาได้ · จึงไม่ต้องแตะ `AGGREGATE_CHILDREN`/`ROOTS` เลย และ index เป็น `UNIQUE` ธรรมดาไม่ใช่ partial
@@ -167,10 +168,22 @@ unique เต็ม · `views.sort_order` / `is_default`
 - [x] โปรไฟล์: ชื่อจริง · **ชื่อเล่น** · รูป — `PATCH /v1/me` · ชื่อเล่นเป็น required เหมือนชื่อจริง
       · ชื่อเล่นไม่ใช่ของตกแต่ง — คนไทยเรียกชื่อเล่นเป็นหลัก ค้นด้วยชื่อจริงอย่างเดียวหาไม่เจอ
       · ⏳ **อีเมลยังแก้ไม่ได้** — ต้องยืนยันที่อยู่ใหม่ก่อนถึงจะเปลี่ยนได้ ยกไป Phase 2 พร้อม flow ยืนยัน
-- [ ] อัปโหลดรูปผ่าน `StorageService` (presigned) — เขียนรอไว้แล้ว Phase 1 ใช้จริงครั้งแรก
-      · `avatarUrl` รับค่าแล้วใน `PATCH /v1/me` · ที่ยังขาดคือ endpoint ขอ presigned PUT
-- [ ] Deactivate / Reactivate (admin/owner กด) — assign งานใหม่ให้ไม่ได้ งานเก่ายังอยู่
-- [ ] สร้าง user ช่วงแรกด้วย admin API หรือ seed script — **หน้าจอจัดการ user อยู่ Phase 2**
+- [x] อัปโหลดรูปผ่าน `StorageService` (presigned) — เขียนรอไว้แล้ว Phase 1 ใช้จริงครั้งแรก
+      · `POST /v1/me/avatar-upload` → `{ uploadUrl, key }` · browser PUT ตรงเข้า storage แล้วส่ง key กลับมาที่ `PATCH /v1/me`
+      · ไฟล์ไม่ผ่าน Node เลย — upload ที่ทิ้งกลางคันเหลือแค่ object ที่ไม่มีใครอ้างถึง
+        และ API ไม่กลายเป็น proxy ที่ memory limit คือ file size limit จริง
+      · **เก็บ key ไม่ใช่ URL** เพราะ bucket เป็น private · `GET /v1/users/:userId/avatar` เป็นที่เดียวที่แปลงกลับเป็นรูป
+- [x] Deactivate / Reactivate (admin/owner กด) — assign งานใหม่ให้ไม่ได้ งานเก่ายังอยู่
+      · `POST|DELETE /v1/org/members/:userId/deactivate` · ยังอยู่ในลิสต์สมาชิก (`status` บอกว่า deactivated)
+      · assign งานใหม่ → 409 `USER_INACTIVE` · assignee picker ไม่เสนอชื่อ · **งานที่ถืออยู่ไม่ขยับ**
+      · 🔒 **บัญชีที่อยู่หลาย org ปิดไม่ได้** 409 `USER_IN_OTHER_ORGS` — `iam.users.status` เป็นระดับบัญชี
+        org หนึ่งกดปิดจะล็อกเขาออกจากอีกบริษัทด้วย · ทางที่ถูกคือ remove จาก org ซึ่งอยู่ Phase 2
+      · ปิดบัญชี owner คนสุดท้ายไม่ได้ 409 `LAST_OWNER` — org ที่ owner เข้าไม่ได้คือ org ที่ไม่มีใครดูแล
+- [x] สร้าง user ช่วงแรกด้วย admin API หรือ seed script — **หน้าจอจัดการ user อยู่ Phase 2**
+      · `POST /v1/org/members` สร้าง account + membership ในทรานแซกชันเดียว · เลือก API ไม่ใช่ script
+        เพราะมี audit และไม่ต้องมี shell บน production
+      · อีเมลที่มี account อยู่แล้ว → ผูกเข้า org นี้ ไม่สร้างใบที่สอง
+      · admin ตั้งใครเป็น owner ไม่ได้ (กฎเดียวกับ `changeRole`)
 
 ---
 
@@ -432,7 +445,10 @@ unique เต็ม · `views.sort_order` / `is_default`
 ## 11. ปิด Phase 1
 
 - [ ] `yarn build` / `lint` / `check-types` / `test` เขียวหมด
-- [ ] 🔒 `org-isolation.spec.ts` ยังไม่มีข้อยกเว้น และครอบ endpoint ใหม่ทั้งหมด
+- [x] 🔒 `org-isolation.spec.ts` ยังไม่มีข้อยกเว้น และครอบ endpoint ใหม่ทั้งหมด
+      · ทุก service เดินผ่าน `OrgScopedRepository` ซึ่งไฟล์นี้คุมทั้งชั้นอยู่แล้ว — endpoint ใหม่ได้การันตีมาฟรี
+      · **SQL ที่เขียนมือไม่ได้มาฟรี** จึงเพิ่มเคสเฉพาะสามอันของ §6: `allocateTaskNumber`
+        `reconcileCompletion` `countInStatus` — สองอันแรกเป็น `UPDATE` ซึ่งพลาดแล้วไป**เขียน**ทับบริษัทอื่น
 - [ ] `schema-drift.spec.ts` เขียว (ถ้ามี migration ใหม่)
 - [ ] Deploy ขึ้น Bangmod แล้วล็อกอินได้จริง — **ยังไม่ใช่การเปิดให้ทั้งบริษัทใช้**
       เส้นนั้นอยู่ท้าย Phase 3

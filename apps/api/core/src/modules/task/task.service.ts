@@ -36,7 +36,7 @@ import { PermissionService } from '../../permission/permission.service'
 import { AuditService } from '../audit/audit.service'
 import { changesBetween } from '../audit/changes'
 import type { AuditLog } from '../audit/log.entity'
-import { UserService } from '../iam/user/user.service'
+import { ACTIVE_USER_STATUS, UserService } from '../iam/user/user.service'
 import { EmailService } from '../notify/email.service'
 import { ProjectMemberService } from '../project/project-member.service'
 import { Project } from '../project/project.entity'
@@ -473,6 +473,20 @@ export class TaskService {
       taskId,
       'update',
     )
+
+    const target = await this.users.findById(input.userId)
+
+    // docs/04-features/phase-1.md#user-states--three-different-things: a
+    // deactivated colleague keeps the work they are already holding — nothing
+    // is reassigned on their behalf — but no new work may be put on somebody
+    // who can no longer sign in to see it.
+    if (target === null || target.status !== ACTIVE_USER_STATUS) {
+      throw new ApiException(
+        409,
+        TASK_ERROR_CODES.USER_INACTIVE,
+        'บัญชีนี้ถูกปิดใช้งานอยู่ มอบหมายงานใหม่ให้ไม่ได้',
+      )
+    }
 
     if (!(await this.members.find(task.projectId, input.userId))) {
       if (!input.addToProject) {

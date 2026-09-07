@@ -14,7 +14,7 @@ import { OrgScopedRepository } from '#shared/org-scope/org-scoped.repository'
 import { requireOrgContext } from '#shared/org-scope/request-context'
 
 import { AuditService } from '../audit/audit.service'
-import { UserService } from '../iam/user/user.service'
+import { ACTIVE_USER_STATUS, UserService } from '../iam/user/user.service'
 import { MemberService } from '../organization/member.service'
 import { ProjectMember } from './project-member.entity'
 import { ProjectService } from './project.service'
@@ -259,10 +259,14 @@ export class ProjectMemberService {
     return people
       .filter(
         (person) =>
-          needle === '' ||
-          [person.name, person.nickname, person.email, person.username].some(
-            (field) => field.toLowerCase().includes(needle),
-          ),
+          // A deactivated colleague may not be given new work, so the picker
+          // does not offer them. They stay in the members list, which is a
+          // different screen answering a different question.
+          person.status === ACTIVE_USER_STATUS &&
+          (needle === '' ||
+            [person.name, person.nickname, person.email, person.username].some(
+              (field) => field.toLowerCase().includes(needle),
+            )),
       )
       .sort(
         (a, b) =>

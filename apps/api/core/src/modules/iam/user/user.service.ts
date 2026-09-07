@@ -203,6 +203,28 @@ export class UserService {
   }
 
   /**
+   * Switches an account off, or back on.
+   *
+   * `status` rather than a column of its own, because the lifecycle of a user
+   * is one thing with four values, and a second flag beside it is one more
+   * pair that can disagree (docs/04-features/phase-1.md#user-states--three-different-things).
+   * The login path already refuses anything that is not `active`, so nothing
+   * else has to learn about this.
+   *
+   * `updated_by` moves: a person did this to somebody else, which is exactly
+   * what that column is for — unlike `setLockoutState`, which is the system
+   * counting.
+   */
+  async setStatus(id: string, status: string, actorId: string): Promise<void> {
+    await this.users.queryBuilder
+      .base('user')
+      .update(User)
+      .set({ status, updatedAt: new Date(), updatedBy: actorId })
+      .where('id = :id', { id })
+      .execute()
+  }
+
+  /**
    * Replaces the stored hash. The caller has already checked whatever had to
    * be true first — the current password, or a valid reset token — because
    * those two paths differ in nothing else and deciding here would mean this

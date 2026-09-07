@@ -12,8 +12,10 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger'
 import type { Response } from 'express'
 
 import {
+  avatarUploadSchema,
   setActiveOrgSchema,
   updateProfileSchema,
+  type AvatarUploadInput,
   type OrgRole,
   type SetActiveOrgInput,
   type UpdateProfileInput,
@@ -29,6 +31,7 @@ import {
   MembershipService,
   type Membership,
 } from '../../organization/membership.service'
+import { StorageService } from '../../storage/storage.service'
 import { UserService } from '../user/user.service'
 import { AuthCookies } from './auth.cookies'
 import { TwoFactorService } from './two-factor.service'
@@ -70,6 +73,7 @@ export class MeController {
     private readonly users: UserService,
     private readonly twoFactor: TwoFactorService,
     private readonly cookies: AuthCookies,
+    private readonly storage: StorageService,
   ) {}
 
   /**
@@ -140,6 +144,49 @@ export class MeController {
    * guard re-checks it on every request regardless. Setting it to somebody
    * else's org gets a 403 here and would get one there too.
    */
+  /**
+   * Somewhere to PUT a new avatar, and the URL to record once it is there.
+   *
+   * Two round trips rather than one multipart upload through the API, and
+   * worth it: the file never occupies a Node process, an abandoned upload
+   * leaves nothing but an unreferenced object, and the API does not become a
+   * proxy whose memory limit is the real file size limit.
+   *
+   * `@SkipOrgScope()` because a profile picture belongs to the person, not to
+   * whichever organisation they are acting for — but the key is filed under
+   * the active org when there is one, so a bucket listing still groups by
+   * customer. With no active org it goes under the user's own id.
+   *
+   * Reading it back is `GET /v1/users/:userId/avatar`, which presigns and
+   * redirects — one place rather than a presigned URL attached to every row of
+   * every member list and every assignee chip, most of which are never drawn.
+   */
+  @Post('avatar-upload')
+  @SkipOrgScope()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'A URL to upload a new profile picture to' })
+  @ApiZodBody(avatarUploadSchema)
+  async avatarUpload(
+    @Body(new ZodValidationPipe(avatarUploadSchema)) body: AvatarUploadInput,
+  ): Promise<{ uploadUrl: string; key: string }> {
+    const { userId, orgId } = requireRequestContext()
+
+    const key = this.storage.keyFor(
+      orgId ?? userId,
+      'avatar',
+      userId,
+      body.fileName,
+    )
+
+    return {
+      uploadUrl: await this.storage.presignedUpload(key),
+      // What to send back in `PATCH /v1/me`. The key, not a URL: the bucket
+      // is private and stays private, so there is no URL that keeps working.
+      // `GET /v1/users/:id/avatar` is what turns it back into a picture.
+      key,
+    }
+  }
+
   @Post('active-org')
   @SkipOrgScope()
   @HttpCode(HttpStatus.OK)

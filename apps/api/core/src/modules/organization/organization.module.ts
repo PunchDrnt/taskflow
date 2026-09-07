@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common'
 import { provideOrgRepository } from '#shared/org-scope/org-repository.provider'
 
 import { AuditModule } from '../audit/audit.module'
+import { PasswordModule } from '../iam/auth/password.module'
 import { UserModule } from '../iam/user/user.module'
 import { OrganizationMember } from './member.entity'
 import { MemberService } from './member.service'
@@ -22,6 +23,10 @@ import { OrganizationService } from './organization.service'
  * `MembershipService` is exported for `AuthModule`, which needs it to answer
  * "which org is this request for" before any context exists.
  *
+ * `PasswordModule` is imported rather than `AuthModule`: adding a colleague
+ * sets their first password, and `AuthModule` imports *this* module for
+ * `MembershipService`. That one leaf has no dependencies of its own.
+ *
  * `MemberService` is exported for `ProjectModule`, which has to answer one
  * question about this module's tables and must not read them itself: adding
  * somebody to a project requires that they are in the organisation, and
@@ -29,7 +34,7 @@ import { OrganizationService } from './organization.service'
  * database stops a person from another company being written in.
  */
 @Module({
-  imports: [AuditModule, UserModule],
+  imports: [AuditModule, PasswordModule, UserModule],
   controllers: [OrganizationController],
   providers: [
     provideOrgRepository(OrganizationMember),

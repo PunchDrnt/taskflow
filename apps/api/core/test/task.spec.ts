@@ -13,11 +13,13 @@ import { SYSTEM_USER_ID } from '#shared/system-user'
 import type { Env } from '../src/config/env'
 import { AuditService } from '../src/modules/audit/audit.service'
 import { AuditLog } from '../src/modules/audit/log.entity'
+import { PasswordService } from '../src/modules/iam/auth/password.service'
 import { User } from '../src/modules/iam/user/user.entity'
 import { UserService } from '../src/modules/iam/user/user.service'
 import { EmailService } from '../src/modules/notify/email.service'
 import { OrganizationMember } from '../src/modules/organization/member.entity'
 import { MemberService } from '../src/modules/organization/member.service'
+import { MembershipService } from '../src/modules/organization/membership.service'
 import { ProjectMember } from '../src/modules/project/project-member.entity'
 import { ProjectMemberService } from '../src/modules/project/project-member.service'
 import { Project } from '../src/modules/project/project.entity'
@@ -140,6 +142,11 @@ describe.skipIf(!hasTestDatabase)('tasks', () => {
         dataSource,
         permissions,
         audit,
+        users,
+        new PasswordService(),
+        new MembershipService(
+          createOrgScopedRepository(dataSource, OrganizationMember),
+        ),
       ),
       users,
       audit,
@@ -179,6 +186,10 @@ describe.skipIf(!hasTestDatabase)('tasks', () => {
   })
 
   beforeEach(async () => {
+    // The four accounts are made once in `beforeAll`, so anything a test does
+    // to them outlives it — a deactivation here would silently fail every
+    // later assignment.
+    await dataSource.query(`UPDATE iam.users SET status = 'active'`)
     await dataSource.query(`DELETE FROM notify.outbox`)
     await dataSource.query(`DELETE FROM task.assignees`)
     await dataSource.query(`DELETE FROM task.tasks`)
@@ -944,6 +955,52 @@ describe.skipIf(!hasTestDatabase)('tasks', () => {
       await asOwner(() => projects.setArchived(apollo, true))
 
       expect(await mine()).toEqual([])
+    })
+  })
+
+  describe('a deactivated colleague', () => {
+    const deactivate = async (userId: string): Promise<void> => {
+      await dataSource.query(
+        `UPDATE iam.users SET status = 'deactivated' WHERE id = $1`,
+        [userId],
+      )
+    }
+
+    it('takes no new work', async () => {
+      const task = await asOwner(() => tasks.create(apollo, { title: 'งาน' }))
+      await deactivate(member)
+
+      expect(
+        await codeOf(
+          asOwner(() =>
+            tasks.assign(task.id, { userId: member, addToProject: false }),
+          ),
+        ),
+      ).toBe('USER_INACTIVE')
+    })
+
+    it('keeps the work it already holds', async () => {
+      const task = await asOwner(() => tasks.create(apollo, { title: 'งาน' }))
+
+      await asOwner(() =>
+        tasks.assign(task.id, { userId: member, addToProject: false }),
+      )
+      await deactivate(member)
+
+      // Switching an account off is not a decision about who does the job.
+      expect(
+        (await asOwner(() => tasks.findById(task.id))).assigneeIds,
+      ).toEqual([member])
+    })
+
+    it('is not offered by the assignee picker', async () => {
+      await deactivate(member)
+
+      const offered = await asOwner(() =>
+        projectMembers.assignable(apollo, { scope: 'project' }),
+      )
+
+      expect(offered.map((person) => person.userId)).not.toContain(member)
     })
   })
 

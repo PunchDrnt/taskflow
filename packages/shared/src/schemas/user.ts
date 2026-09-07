@@ -51,27 +51,67 @@ export const phoneSchema = z
  * cost is that old @-mentions and links stop resolving, which for a hundred
  * colleagues is a smaller problem than being stuck with a name you mistyped.
  */
+export const personNameSchema = z
+  .string()
+  .trim()
+  .min(1, 'กรุณากรอกชื่อ')
+  .max(200, 'ชื่อยาวเกินไป')
+
+/**
+ * Required, like `name`. Thai users are addressed by their nickname first, so
+ * a profile without one is not searchable by what colleagues actually call
+ * the person — see docs/04-features/phase-1.md#auth--users.
+ */
+export const nicknameSchema = z
+  .string()
+  .trim()
+  .min(1, 'กรุณากรอกชื่อเล่น')
+  .max(100, 'ชื่อเล่นยาวเกินไป')
+
 export const updateProfileSchema = z.object({
   username: usernameSchema,
-  name: z.string().trim().min(1, 'กรุณากรอกชื่อ').max(200, 'ชื่อยาวเกินไป'),
-  /**
-   * Required, like `name`. Thai users are addressed by their nickname first,
-   * so a profile without one is not searchable by what colleagues actually
-   * call the person — see docs/04-features/phase-1.md#auth--users.
-   */
-  nickname: z
-    .string()
-    .trim()
-    .min(1, 'กรุณากรอกชื่อเล่น')
-    .max(100, 'ชื่อเล่นยาวเกินไป'),
+  name: personNameSchema,
+  nickname: nicknameSchema,
   /** Null clears it. Optional in the sense that most people will not have one. */
   phone: phoneSchema.nullable(),
   /**
-   * Null clears the picture. A URL rather than an upload: the file goes
-   * straight to object storage through a presigned PUT, and this records
-   * where it landed.
+   * Where the picture is. Null clears it.
+   *
+   * Either the **storage key** the upload endpoint handed back, or an ordinary
+   * http(s) URL for a picture hosted somewhere else. Both, because the bucket
+   * is private: a key cannot be rendered directly, so `GET /v1/users/:id/avatar`
+   * presigns and redirects, while an external URL is already a picture and
+   * needs no help.
+   *
+   * The file itself never passes through the API — see `avatarUploadSchema`.
    */
-  avatarUrl: z.url('ลิงก์รูปไม่ถูกต้อง').max(2048).nullable(),
+  avatarUrl: z
+    .string()
+    .trim()
+    .min(1)
+    .max(2048)
+    .refine(
+      (value) => !value.includes('..') && !value.startsWith('/'),
+      'ที่อยู่รูปไม่ถูกต้อง',
+    )
+    .nullable(),
 })
 
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>
+
+/**
+ * Asking for somewhere to put a new avatar.
+ *
+ * The browser PUTs the file straight to object storage and then sends the
+ * resulting URL back through `PATCH /v1/me`. Two round trips rather than one
+ * multipart upload through the API, and worth it: the file never occupies a
+ * Node process, an upload that is abandoned halfway leaves nothing behind but
+ * an unreferenced object, and the API never becomes a proxy whose memory
+ * limits are the real file size limit.
+ */
+export const avatarUploadSchema = z.object({
+  /** Only for the object key, so a stored file is recognisable in the bucket. */
+  fileName: z.string().trim().min(1, 'กรุณาระบุชื่อไฟล์').max(255),
+})
+
+export type AvatarUploadInput = z.infer<typeof avatarUploadSchema>
