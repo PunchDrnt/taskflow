@@ -38,14 +38,36 @@ describe('PermissionService', () => {
       expect(permissions.can(admin, 'delete', 'Project', {})).toBe(true)
     })
 
-    it('gives a member the run of the org read-only, plus new projects', () => {
+    it('gives a member the run of the org read-only and nothing more', () => {
       const member = actor('member')
 
-      // A project is a channel, not a department — anyone may start one.
-      expect(permissions.can(member, 'create', 'Project', {})).toBe(true)
       expect(permissions.can(member, 'read', 'Task', {})).toBe(true)
       expect(permissions.can(member, 'delete', 'Project', {})).toBe(false)
       expect(permissions.can(member, 'update', 'Team', {})).toBe(false)
+    })
+
+    it('does not let a member start a project', () => {
+      // docs/04-features/phase-1.md#project — only an owner or an admin. The
+      // rule read the other way round until §4, so this is pinned rather than
+      // left to the comment beside it.
+      expect(permissions.can(actor('member'), 'create', 'Project', {})).toBe(
+        false,
+      )
+      expect(permissions.can(actor('admin'), 'create', 'Project', {})).toBe(
+        true,
+      )
+      expect(permissions.can(actor('owner'), 'create', 'Project', {})).toBe(
+        true,
+      )
+    })
+
+    it('does not let a project admin start another project', () => {
+      // Being trusted inside one project says nothing about starting new ones
+      // — the conditional rules below grant `manage Project` on a named id,
+      // and `create` names no row for them to match.
+      const lead = actor('member', { projectRoles: { 'project-1': 'admin' } })
+
+      expect(permissions.can(lead, 'create', 'Project', {})).toBe(false)
     })
   })
 
@@ -104,9 +126,9 @@ describe('PermissionService', () => {
     })
 
     it('still allows what is permitted unconditionally', () => {
-      // 'create Project' comes from the org role and names no row, so an
-      // empty resource is the honest way to ask.
-      expect(permissions.can(lead, 'create', 'Project', {})).toBe(true)
+      // `can('read', 'all')` comes from the org role and names no row, so an
+      // empty resource is the honest way to ask and the answer is yes.
+      expect(permissions.can(lead, 'read', 'Task', {})).toBe(true)
     })
   })
 

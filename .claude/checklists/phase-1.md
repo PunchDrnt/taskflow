@@ -209,10 +209,19 @@ unique เต็ม · `views.sort_order` / `is_default`
 ## 4. Project
 
 - [ ] สร้าง / แก้ไข / ลบ project (soft delete)
+      · ✅ **สร้างแล้ว** — `POST /v1/projects` สร้าง project + status ตั้งต้น 4 อัน + แถว member ของคนสร้าง **ในทรานแซกชันเดียว**
+        `tasks.status_id` เป็น NOT NULL ฉะนั้น project ที่ไม่มี status ไม่ใช่ project ว่าง แต่เป็น project ที่รับงานใบแรกไม่ได้ และดูปกติทุกอย่างจนกว่าจะมีคนลอง
+      · ⚠️ **`ability.ts` เคยเขียนกลับข้างกับ docs** — `can('create', 'Project')` อยู่ใน block ของ `member`
+        พร้อมคอมเมนต์ว่า "project เป็น Slack channel ใครก็สร้างได้" แต่ [`04-features/phase-1.md`](../docs/04-features/phase-1.md#project) เขียนไว้ตั้งแต่แรกว่า **owner/admin เท่านั้น**
+        · ไม่มีใครเห็นเพราะยังไม่เคยมีใครเรียก `can` กับ subject นี้เลย · **โค้ดขยับมาตรงกับ doc** doc ไม่ต้องแก้ (แพทเทิร์นเดียวกับ `FeatureService` ใน §0)
+        · เหตุผลของ doc ผูกกับกติกาข้างล่างพอดี: member เห็นเฉพาะ project ที่ตัวเองอยู่ คนที่มองไม่เห็นว่ามีอะไรอยู่แล้วบ้าง ไม่ใช่คนที่ควรตัดสินว่าต้องมีอันใหม่
+      · **ไม่มีกฎ "project admin คนสุดท้าย"** ต่างจาก owner คนสุดท้ายของ org — project ที่ไม่เหลือ admin เลย org owner/admin ยังจัดการได้อยู่ จึงเข้าถึงไม่ได้แบบ org ไร้ owner ไม่ได้
 - [ ] **`key_prefix` บังคับกรอกตอนสร้าง** · uppercase `^[A-Z][A-Z0-9]{1,5}$` · ซ้ำกันได้ในหนึ่ง org
       · คอลัมน์ + CHECK ลงแล้ว เหลือฟอร์มกับ validation ฝั่ง API/web · **regex ตาม docs ไม่ใช่ตาม prototype**
         (prototype ยอมให้ `12` ผ่าน ซึ่งตัวแรกต้องเป็นตัวอักษร)
+      · ✅ `keyPrefixSchema` ใน `@repo/shared` ใช้ regex ของ docs ตรงกับ CHECK ในตาราง — ค่าที่ API รับแต่ DB ปฏิเสธจะโผล่มาเป็น 500
 - [ ] `color` เป็น token จาก palette 8 สี (ไม่ใช่ hex) — คอลัมน์ลงแล้ว `icon` เอาออกแล้ว
+      · ✅ `paletteColorSchema` อ่านจาก `STATUS_COLORS` ตัวเดียวกับ status — ลิสต์เดียว สีที่ project ใช้ได้แต่ status ใช้ไม่ได้จึงเป็นไปไม่ได้
 - [ ] Project member อิสระจากทีม (แบบ Slack channel) — role `admin` / `member`
 - [ ] 🔒 **กั้นสิทธิ์ระดับ project จริงตั้งแต่ phase นี้ ไม่ใช่แค่ซ่อนใน sidebar**
       · member เห็นเฉพาะ project ที่ตัวเองเป็นสมาชิก · org owner/admin เห็นทุก project ใน org ตัวเอง
@@ -232,6 +241,9 @@ unique เต็ม · `views.sort_order` / `is_default`
 - [ ] **หน้าจอแก้ status ต่อ project** — เพิ่ม/ลบ/เปลี่ยนชื่อ/เปลี่ยนสี/จัดลำดับ
       · กติกาข้างล่างไม่มีที่ให้กดถ้าไม่มีหน้านี้
 - [ ] `sort_order` เป็น LexoRank เหมือน task
+      · ✅ **ตัวช่วยเขียนแล้ว** — `#shared/sort-order` (`between` / `sequence`) · fractional indexing base-62 เรียงตาม ASCII
+        ให้ตรงกับ `COLLATE "C"` ของคอลัมน์ · แทรกกลางเขียนแถวเดียว ไม่ใช่เขียนใหม่ทั้งลิสต์
+      · 🔒 key ห้ามลงท้ายด้วยหลักต่ำสุด — `'V'` กับ `'V0'` เป็นเลขเดียวกันแต่ไบต์ไม่เท่ากัน ลิสต์ที่มีทั้งคู่คือสองแถวที่คนอ่านแยกไม่ออกแต่ Postgres แยก
 - [ ] Partial unique index คุม "อย่างมากหนึ่ง" มีตั้งแต่ Phase 0 แล้ว — `is_default` ต่อ project
 - [ ] ห้ามลบ status ที่มี task ใช้อยู่ / ห้ามลบอันสุดท้าย
 - [ ] status เป็นทั้ง done และ cancelled พร้อมกันไม่ได้

@@ -71,10 +71,22 @@ export function defineAbilityFor(actor: Actor): AppAbility {
   }
 
   if (actor.orgRole === 'member') {
+    // Read of *what* is not settled here. A member may read the things they
+    // are in, and which projects those are is a question about rows — see the
+    // conditional rules below, and `ProjectService.list`, which asks it as a
+    // join rather than by testing this rule against every project in the org.
     can('read', 'all')
-    // A project is a Slack channel, not a department: anyone in the org may
-    // start one, and creating it makes them its admin.
-    can('create', 'Project')
+
+    // ⚠️ **A member may not create a project**, and this used to say the
+    // opposite — `can('create', 'Project')`, on the reasoning that a project
+    // is a Slack channel and anyone may start one. The specification says
+    // otherwise and always did (docs/04-features/phase-1.md#project: "สร้าง
+    // project ได้เฉพาะ org owner / admin"), for a reason that only shows up at
+    // this company's size: at ~100 people and four projects, letting everyone
+    // start one means projects appear that nobody is responsible for tidying
+    // away. It also pairs with the rule right below — a member sees only the
+    // projects they are in, so the person deciding a new one is needed would
+    // be deciding it without being able to see what already exists.
   }
 
   for (const [projectId, role] of Object.entries(actor.projectRoles ?? {})) {

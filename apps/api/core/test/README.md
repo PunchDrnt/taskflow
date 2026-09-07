@@ -67,3 +67,9 @@ each other's data and fail in ways that depend on timing.
 | `outbox.spec.ts`              | Notification queue and delivery: retries, backoff, giving up         |
 | `storage.spec.ts`             | The bucket is private: presigned URLs work, plain ones get 403       |
 | `sentry.spec.ts`              | Unhandled errors are reported; an `HttpException` is not             |
+| `auth.spec.ts`                | 🔒 Login, lockout, and refresh rotation that cannot be raced         |
+| `account.spec.ts`             | Profile, password change, and the reset link's single use            |
+| `two-factor.spec.ts`          | TOTP enrolment, replay of a used step, recovery codes                |
+| `organization.spec.ts`        | 🔒 An organisation never ends up without an owner                    |
+| `project.spec.ts`             | Who may start a project, and that one arrives able to hold work      |
+| `docs-links.spec.ts`          | Every link in `.claude/docs` points at something that exists         |
