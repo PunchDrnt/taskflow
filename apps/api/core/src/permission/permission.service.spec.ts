@@ -1,5 +1,6 @@
-import { ForbiddenException } from '@nestjs/common'
 import { describe, expect, it } from 'vitest'
+
+import { ApiException } from '#shared/http/api-exception'
 
 import type { Actor, OrgRole } from './actor'
 import { PermissionService } from './permission.service'
@@ -110,22 +111,55 @@ describe('PermissionService', () => {
   })
 
   describe('assert', () => {
-    it('throws Forbidden rather than returning false', () => {
+    it('throws a client-shaped 403 rather than returning false', () => {
       expect(() =>
         permissions.assert(actor('member'), 'delete', 'Organization', {}),
-      ).toThrow(ForbiddenException)
+      ).toThrow(ApiException)
 
       expect(() =>
         permissions.assert(actor('owner'), 'delete', 'Organization', {}),
       ).not.toThrow()
     })
 
-    it('names the row it refused', () => {
-      expect(() =>
+    it('carries a message a person can read and a code a client can branch on', () => {
+      // The body reaches a screen as it stands. A developer-facing English
+      // sentence in `message` would be shown to whoever hit the refusal.
+      const thrown = catchApiException(() =>
+        permissions.assert(actor('member'), 'delete', 'Organization', {}),
+      )
+
+      expect(thrown.getStatus()).toBe(403)
+      expect(thrown.code).toBe('FORBIDDEN')
+      expect(thrown.message).toMatch(/ไม่มีสิทธิ์/)
+      expect(thrown.details).toEqual({
+        action: 'delete',
+        subject: 'Organization',
+      })
+    })
+
+    it('does not name the row it refused', () => {
+      // A refusal that names the id confirms the row exists. This codebase
+      // answers 404 rather than 403 for a row in another org for exactly that
+      // reason, and a 403 that leaks the id would undo it.
+      const thrown = catchApiException(() =>
         permissions.assert(actor('member'), 'delete', 'Project', {
           id: 'project-9',
         }),
-      ).toThrow(/project-9/)
+      )
+
+      expect(JSON.stringify(thrown.getResponse())).not.toMatch(/project-9/)
     })
   })
 })
+
+/** The thrown ApiException, or a failure that says nothing was thrown. */
+function catchApiException(fn: () => void): ApiException {
+  try {
+    fn()
+  } catch (error) {
+    if (error instanceof ApiException) return error
+    throw error
+  }
+
+  throw new Error('expected assert to throw, and it did not')
+}
