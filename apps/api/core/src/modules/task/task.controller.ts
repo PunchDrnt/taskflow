@@ -8,15 +8,20 @@ import {
   Param,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common'
 import { ApiOperation, ApiTags } from '@nestjs/swagger'
 
 import {
   assignTaskSchema,
+  myTasksQuerySchema,
   projectMemberUserIdSchema,
   taskIdSchema,
   updateTaskSchema,
+  wholeList,
   type AssignTaskInput,
+  type MyTasksQuery,
+  type Page,
   type UpdateTaskInput,
 } from '@repo/shared'
 
@@ -62,6 +67,27 @@ export class TaskController {
     private readonly users: UserService,
   ) {}
 
+  /**
+   * My Tasks — everything assigned to the caller, across every project they
+   * can see.
+   *
+   * Declared before `:taskId`, or Nest would match `/tasks` against nothing
+   * and `/tasks?…` against this anyway — but the ordering matters the moment
+   * another literal segment is added here, and it costs nothing to keep the
+   * specific routes above the parameterised one.
+   *
+   * Closed statuses are hidden unless `includeClosed=true`.
+   */
+  @Get()
+  @ApiOperation({ summary: 'Tasks assigned to me' })
+  async mine(
+    @Query(new ZodValidationPipe(myTasksQuerySchema)) query: MyTasksQuery,
+  ): Promise<Page<TaskResponse>> {
+    const page = await this.tasks.myTasks(query)
+
+    return { ...page, data: await withAssignees(this.users, page.data) }
+  }
+
   @Get(':taskId')
   @ApiOperation({ summary: 'One task' })
   async findOne(
@@ -106,31 +132,33 @@ export class TaskController {
   @ApiOperation({ summary: 'What has happened to this task' })
   async activity(
     @Param('taskId', new ZodValidationPipe(taskIdSchema)) taskId: string,
-  ): Promise<ActivityEntry[]> {
+  ): Promise<Page<ActivityEntry>> {
     const rows = await this.tasks.activity(taskId)
     const actors = await this.people(rows.map((row) => row.actorId))
     const byId = new Map(actors.map((actor) => [actor.userId, actor]))
 
-    return rows.map((row) => ({
-      id: row.id,
-      action: row.action,
-      occurredAt: row.occurredAt,
-      changes: row.changesJson,
-      actor: byId.get(row.actorId) ?? {
-        userId: row.actorId,
-        name: null,
-        nickname: null,
-        avatarUrl: null,
-      },
-    }))
+    return wholeList(
+      rows.map((row) => ({
+        id: row.id,
+        action: row.action,
+        occurredAt: row.occurredAt,
+        changes: row.changesJson,
+        actor: byId.get(row.actorId) ?? {
+          userId: row.actorId,
+          name: null,
+          nickname: null,
+          avatarUrl: null,
+        },
+      })),
+    )
   }
 
   @Get(':taskId/assignees')
   @ApiOperation({ summary: 'Who has this task' })
   async listAssignees(
     @Param('taskId', new ZodValidationPipe(taskIdSchema)) taskId: string,
-  ): Promise<AssigneeView[]> {
-    return this.people(await this.tasks.listAssignees(taskId))
+  ): Promise<Page<AssigneeView>> {
+    return wholeList(await this.people(await this.tasks.listAssignees(taskId)))
   }
 
   /**
@@ -146,8 +174,8 @@ export class TaskController {
   async assign(
     @Param('taskId', new ZodValidationPipe(taskIdSchema)) taskId: string,
     @Body(new ZodValidationPipe(assignTaskSchema)) body: AssignTaskInput,
-  ): Promise<AssigneeView[]> {
-    return this.people(await this.tasks.assign(taskId, body))
+  ): Promise<Page<AssigneeView>> {
+    return wholeList(await this.people(await this.tasks.assign(taskId, body)))
   }
 
   /** Takes the task off them. They stay in the project. */

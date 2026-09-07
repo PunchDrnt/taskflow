@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 import { TASK_PRIORITIES } from '../constants.js'
+import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from '../pagination.js'
 import { idSchema } from './id.js'
 
 /** Codes the client branches on, beside the module that raises them. */
@@ -143,3 +144,92 @@ export const assignableQuerySchema = z.object({
 export type AssignableQuery = z.infer<typeof assignableQuerySchema>
 
 export const taskIdSchema = idSchema('task id ไม่ถูกต้อง')
+
+/**
+ * How a list is ordered.
+ *
+ * Each of these maps to a **NOT NULL** SQL expression in the API — a nullable
+ * ordering column cannot be paged with a keyset cursor, because
+ * `(a, b) > (NULL, c)` is NULL rather than true and the page comes back empty.
+ * `dueDate` and `priority` are nullable columns and are handled there rather
+ * than being left off this list, since "what is due first" and "what is
+ * urgent" are the two questions the list view exists to answer.
+ */
+export const TASK_SORT_FIELDS = [
+  /** The manual order — what a person dragged the cards into. */
+  'order',
+  'dueDate',
+  'priority',
+  'created',
+  'title',
+] as const
+
+export type TaskSortField = (typeof TASK_SORT_FIELDS)[number]
+
+/** Repeated query params arrive as one string or several; both mean a list. */
+const many = <T extends z.ZodType>(item: T) =>
+  z
+    .union([item, z.array(item)])
+    .transform((value) => (Array.isArray(value) ? value : [value]))
+    // `.optional()` last, so an absent parameter leaves the key absent rather
+    // than present-and-undefined — the difference between "no filter" and
+    // "a filter of nothing" at every call site that spreads this type.
+    .optional()
+
+/**
+ * Filtering, sorting, searching and paging one list of tasks.
+ *
+ * **Every condition is ANDed; there is no OR between them.** Several values
+ * inside one condition is "is in" — `?priority=high&priority=urgent` means
+ * either of those, and that is the only disjunction the grammar has. An OR
+ * across different fields is a query builder, and a query builder is Phase 4's
+ * saved views, not a URL somebody sends a colleague.
+ *
+ * 🔒 Paging is `cursor`, never an offset — see `shared/http/cursor.ts`.
+ *
+ * The whole state lives in the query string on purpose: docs say a filtered
+ * list has to be shareable as a link, and that is what makes it so without a
+ * table to store views in.
+ */
+export const listTasksQuerySchema = z.object({
+  statusId: many(idSchema('status id ไม่ถูกต้อง')),
+  assigneeId: many(idSchema('user id ไม่ถูกต้อง')),
+  priority: many(taskPrioritySchema),
+  /** Inclusive, and both may be given to bracket a range. */
+  dueAfter: dueDateSchema.optional(),
+  dueBefore: dueDateSchema.optional(),
+  /** Matched against the title, case-insensitively. */
+  q: z.string().trim().max(200).optional(),
+  sort: z.enum(TASK_SORT_FIELDS).default('order'),
+  dir: z.enum(['asc', 'desc']).default('asc'),
+  limit: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(MAX_PAGE_SIZE)
+    .default(DEFAULT_PAGE_SIZE),
+  cursor: z.string().optional(),
+})
+
+export type ListTasksQuery = z.infer<typeof listTasksQuerySchema>
+
+/**
+ * My Tasks — everything assigned to the caller, across every project they can
+ * see.
+ *
+ * **`includeClosed` defaults to false**, which hides statuses that count as
+ * done *or* cancelled. Opening this screen should show what there is to do,
+ * not a pile of what has already been dealt with; docs/04-features/phase-1.md
+ * says so and it is the difference between a screen people open daily and one
+ * they open once.
+ *
+ * Phase 1 has no team assignment, so "mine" means assigned to me directly.
+ */
+export const myTasksQuerySchema = listTasksQuerySchema.extend({
+  includeClosed: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((value) => value === 'true'),
+})
+
+export type MyTasksQuery = z.infer<typeof myTasksQuerySchema>

@@ -21,11 +21,13 @@ import {
   projectIdSchema,
   projectMemberUserIdSchema,
   updateProjectSchema,
+  wholeList,
   type AddProjectMemberInput,
   type AssignableQuery,
   type ChangeProjectMemberRoleInput,
   type CreateProjectInput,
   type ListProjectsQuery,
+  type Page,
   type UpdateProjectInput,
 } from '@repo/shared'
 
@@ -80,8 +82,8 @@ export class ProjectController {
   list(
     @Query(new ZodValidationPipe(listProjectsQuerySchema))
     query: ListProjectsQuery,
-  ): Promise<ProjectView[]> {
-    return this.projects.list(query)
+  ): Promise<Page<ProjectView>> {
+    return this.projects.list(query).then(wholeList)
   }
 
   /** 404 rather than 403 when the caller may not see it — see the service. */
@@ -152,7 +154,7 @@ export class ProjectController {
   @ApiOperation({ summary: 'Who is in this project' })
   async listMembers(
     @Param('id', new ZodValidationPipe(projectIdSchema)) id: string,
-  ): Promise<ProjectMemberView[]> {
+  ): Promise<Page<ProjectMemberView>> {
     const members = await this.members.list(id)
 
     // Names come from iam through its service, never from a join: this module
@@ -163,17 +165,19 @@ export class ProjectController {
     )
     const byId = new Map(people.map((person) => [person.id, person]))
 
-    return members.map((member) => {
-      const person = byId.get(member.userId)
+    return wholeList(
+      members.map((member) => {
+        const person = byId.get(member.userId)
 
-      return {
-        ...member,
-        name: person?.name ?? null,
-        nickname: person?.nickname ?? null,
-        email: person?.email ?? null,
-        avatarUrl: person?.avatarUrl ?? null,
-      }
-    })
+        return {
+          ...member,
+          name: person?.name ?? null,
+          nickname: person?.nickname ?? null,
+          email: person?.email ?? null,
+          avatarUrl: person?.avatarUrl ?? null,
+        }
+      }),
+    )
   }
 
   /**
@@ -189,8 +193,8 @@ export class ProjectController {
   listAssignable(
     @Param('id', new ZodValidationPipe(projectIdSchema)) id: string,
     @Query(new ZodValidationPipe(assignableQuerySchema)) query: AssignableQuery,
-  ): Promise<AssignableUser[]> {
-    return this.members.assignable(id, query)
+  ): Promise<Page<AssignableUser>> {
+    return this.members.assignable(id, query).then(wholeList)
   }
 
   @Post(':id/members')

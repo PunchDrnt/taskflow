@@ -261,6 +261,10 @@ DELETE /api/v1/tasks/:id
 }
 ```
 
+**ทุก list ห่อเหมือนกันหมด แม้ตัวที่ไม่มีวันแบ่งหน้า** — statuses, members, assignable ก็ห่อ
+· `wholeList(rows)` ใน `@repo/shared` คืน `meta: { nextCursor: null, hasMore: false }`
+· client ที่ต้องจำว่า endpoint ไหนห่อไม่ห่อ คือ client ที่จำผิดในวันที่ endpoint นั้นเปลี่ยนไปแบ่งหน้า
+
 **Error — RFC 7807 แบบย่อ**
 
 ```jsonc
@@ -277,6 +281,26 @@ DELETE /api/v1/tasks/:id
 `?limit=50&cursor=xxx`
 
 ใช้ cursor ไม่ใช่ offset เพราะ list เรียงด้วย LexoRank ที่แทรกกลางได้ — offset จะข้ามแถวหรือแสดงซ้ำ
+
+**helper อยู่ที่ [`#shared/http/cursor`](../../apps/api/core/src/shared/http/cursor.ts)** ·
+cursor = `[ค่าของ expression ที่ใช้เรียง, id]` เข้ารหัส base64url ของ JSON — **ทึบโดยตั้งใจ**
+client ที่แกะอ่านคือ client ที่ผูกตัวเองกับลำดับ วันที่เพิ่ม tiebreaker ก็พังโดยมองจากฝั่งนี้ไม่เห็น
+
+> 🔒 **expression ที่ใช้เรียงต้องเป็น NOT NULL ทุกตัว** — keyset resume คือ row comparison
+> และ `(a, b) > (NULL, c)` ได้ NULL ไม่ใช่ true · คอลัมน์ที่ null ได้จะคืน**หน้าว่าง**แทนหน้าถัดไป
+> โดยไม่มี error · `due_date` เลยเป็น `COALESCE(due_date, 'infinity')` และ priority เป็น rank
+> (ดู `TASK_SORTS`) — ไม่ใช่ตัดสองอันนี้ทิ้ง เพราะ "อะไรครบกำหนดก่อน" กับ "อะไรด่วน"
+> คือสองคำถามที่ list view มีไว้ตอบ
+
+**ดึงเกินมา 1 แถวเพื่อตอบ `hasMore`** ไม่ใช่ `COUNT(*)` ซ้ำ filter เดิม — count นั้นคือ full scan
+ทุกครั้งที่พิมพ์ในช่องค้นหา เพื่อแสดงสิ่งที่ไม่มีหน้าจอไหนแสดง
+
+**cursor เพี้ยน = 400 ไม่ใช่ 500** — มันเดินทางใน URL ที่คนก๊อป แก้ และตัดครึ่ง
+
+**Filter — AND ทุกข้อ · หลายค่าในข้อเดียวคือ "is in"**
+
+`?priority=high&priority=urgent` = อันใดอันหนึ่ง · **ไม่มี OR ข้ามฟิลด์** — นั่นคือ query builder
+และ query builder คือ saved view ของ Phase 4 ไม่ใช่ URL ที่ส่งให้เพื่อนกด
 
 **HTTP status ที่ใช้**
 

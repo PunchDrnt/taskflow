@@ -16,7 +16,9 @@ import {
   projectIdSchema,
   statusIdSchema,
   updateStatusSchema,
+  wholeList,
   type CreateStatusInput,
+  type Page,
   type UpdateStatusInput,
 } from '@repo/shared'
 
@@ -45,8 +47,8 @@ export class StatusController {
   list(
     @Param('projectId', new ZodValidationPipe(projectIdSchema))
     projectId: string,
-  ): Promise<StatusView[]> {
-    return this.statuses.list(projectId)
+  ): Promise<Page<StatusView>> {
+    return this.statuses.list(projectId).then(wholeList)
   }
 
   @Post()

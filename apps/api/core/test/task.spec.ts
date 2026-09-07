@@ -2,7 +2,7 @@ import type { ConfigService } from '@nestjs/config'
 import type { DataSource } from 'typeorm'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
-import type { OrgRole } from '@repo/shared'
+import type { ListTasksQuery, MyTasksQuery, OrgRole } from '@repo/shared'
 
 import { CascadeSoftDelete } from '#shared/entity/cascade-soft-delete'
 import { ApiException } from '#shared/http/api-exception'
@@ -26,7 +26,7 @@ import { Status } from '../src/modules/project/status.entity'
 import { StatusService } from '../src/modules/project/status.service'
 import { Assignee } from '../src/modules/task/assignee.entity'
 import { Task } from '../src/modules/task/task.entity'
-import { TaskService } from '../src/modules/task/task.service'
+import { TaskService, type TaskView } from '../src/modules/task/task.service'
 import { TasksInStatusService } from '../src/modules/task/tasks-in-status.service'
 import { PermissionService } from '../src/permission/permission.service'
 import { createMigratedTestDataSource, hasTestDatabase } from './database'
@@ -104,8 +104,16 @@ describe.skipIf(!hasTestDatabase)('tasks', () => {
     return { at: row!.completed_at, by: row!.completed_by }
   }
 
+  /** The default query, so a test only spells out what it is actually varying. */
+  const LIST: ListTasksQuery = { sort: 'order', dir: 'asc', limit: 50 }
+
+  const board = async (
+    query: Partial<ListTasksQuery> = {},
+  ): Promise<TaskView[]> =>
+    (await tasks.list(apollo, { ...LIST, ...query })).data
+
   const titlesInOrder = async (): Promise<string[]> =>
-    (await asOwner(() => tasks.list(apollo))).map((task) => task.title)
+    (await asOwner(() => board())).map((task) => task.title)
 
   beforeAll(async () => {
     dataSource = await createMigratedTestDataSource()
@@ -416,7 +424,7 @@ describe.skipIf(!hasTestDatabase)('tasks', () => {
       await asOwner(() => tasks.update(second!, { statusId: done }))
       await asOwner(() => tasks.update(first!, { statusId: done }))
 
-      const inDone = (await asOwner(() => tasks.list(apollo)))
+      const inDone = (await asOwner(() => board()))
         .filter((task) => task.statusId === done)
         .map((task) => task.title)
 
@@ -538,9 +546,7 @@ describe.skipIf(!hasTestDatabase)('tasks', () => {
         tasks.assign(task.id, { userId: member, addToProject: false }),
       )
 
-      expect((await asOwner(() => tasks.list(apollo)))[0]!.assigneeIds).toEqual(
-        [member],
-      )
+      expect((await asOwner(() => board()))[0]!.assigneeIds).toEqual([member])
     })
   })
 
@@ -550,7 +556,7 @@ describe.skipIf(!hasTestDatabase)('tasks', () => {
 
       // 404, not 403: a 403 would confirm the project exists, which is the
       // thing project-level visibility withholds.
-      expect(await codeOf(asPlain(() => tasks.list(apollo)))).toBe('NOT_FOUND')
+      expect(await codeOf(asPlain(() => board()))).toBe('NOT_FOUND')
     })
 
     it('answers 404 for a task in a project the caller cannot see', async () => {
@@ -588,7 +594,7 @@ describe.skipIf(!hasTestDatabase)('tasks', () => {
       await asOwner(() => projectMembers.changeRole(apollo, member, 'admin'))
       await asMember(() => tasks.remove(task.id))
 
-      expect(await asOwner(() => tasks.list(apollo))).toEqual([])
+      expect(await asOwner(() => board())).toEqual([])
     })
 
     it('lets an org owner work in a project they never joined', async () => {
@@ -597,7 +603,7 @@ describe.skipIf(!hasTestDatabase)('tasks', () => {
 
       await asOwner(() => tasks.remove(task.id))
 
-      expect(await asOwner(() => tasks.list(apollo))).toEqual([])
+      expect(await asOwner(() => board())).toEqual([])
     })
   })
 
@@ -614,7 +620,7 @@ describe.skipIf(!hasTestDatabase)('tasks', () => {
     })
 
     it('takes no edits', async () => {
-      const [task] = await asOwner(() => tasks.list(apollo))
+      const [task] = await asOwner(() => board())
 
       expect(
         await codeOf(asOwner(() => tasks.update(task!.id, { title: 'x' }))),
@@ -640,7 +646,7 @@ describe.skipIf(!hasTestDatabase)('tasks', () => {
 
       await asOwner(() => tasks.remove(task.id))
 
-      expect(await asOwner(() => tasks.list(apollo))).toEqual([])
+      expect(await asOwner(() => board())).toEqual([])
 
       const [row] = (await dataSource.query(
         `SELECT deleted_at, deleted_by FROM task.tasks WHERE id = $1`,
@@ -662,6 +668,282 @@ describe.skipIf(!hasTestDatabase)('tasks', () => {
       )) as { deleted_at: Date | null }[]
 
       expect(row!.deleted_at).toBeInstanceOf(Date)
+    })
+  })
+
+  describe('filtering, sorting and searching', () => {
+    /** Three tasks whose fields differ in every dimension the list filters on. */
+    const spread = async (): Promise<Record<string, string>> => {
+      const made: Record<string, string> = {}
+
+      const rows = [
+        { title: 'เขียนสเปก', priority: 'urgent' as const, due: '2026-10-01' },
+        { title: 'รีวิวโค้ด', priority: 'low' as const, due: '2026-09-10' },
+        { title: 'เขียนเทส', priority: undefined, due: undefined },
+      ]
+
+      for (const row of rows) {
+        const task = await asOwner(() =>
+          tasks.create(apollo, {
+            title: row.title,
+            ...(row.priority ? { priority: row.priority } : {}),
+            ...(row.due
+              ? { dueDate: new Date(`${row.due}T00:00:00+07:00`) }
+              : {}),
+          }),
+        )
+
+        made[row.title] = task.id
+      }
+
+      return made
+    }
+
+    it('matches a title case-insensitively, anywhere in it', async () => {
+      await spread()
+
+      expect(
+        (await asOwner(() => board({ q: 'เขียน' }))).map((t) => t.title),
+      ).toEqual(['เขียนสเปก', 'เขียนเทส'])
+    })
+
+    it('takes several values in one filter as "is in"', async () => {
+      await spread()
+
+      const found = await asOwner(() => board({ priority: ['urgent', 'low'] }))
+
+      expect(found.map((task) => task.title).sort()).toEqual(
+        ['รีวิวโค้ด', 'เขียนสเปก'].sort(),
+      )
+    })
+
+    it('ANDs different filters rather than ORing them', async () => {
+      await spread()
+
+      // Both conditions hold for nothing: the urgent one is not called รีวิว.
+      expect(
+        await asOwner(() => board({ priority: ['urgent'], q: 'รีวิว' })),
+      ).toEqual([])
+    })
+
+    it('brackets a due date range, and a task with no date is in neither end', async () => {
+      await spread()
+
+      const found = await asOwner(() =>
+        board({ dueBefore: new Date('2026-09-30T23:59:59+07:00') }),
+      )
+
+      expect(found.map((task) => task.title)).toEqual(['รีวิวโค้ด'])
+    })
+
+    it('🔒 sorts by due date with the undated last, not missing', async () => {
+      await spread()
+
+      // COALESCE(due_date, 'infinity'): a nullable ordering column cannot be
+      // paged with a keyset cursor, and dropping the undated rows entirely
+      // would be the other way to get a NOT NULL expression.
+      expect(
+        (await asOwner(() => board({ sort: 'dueDate' }))).map((t) => t.title),
+      ).toEqual(['รีวิวโค้ด', 'เขียนสเปก', 'เขียนเทส'])
+    })
+
+    it('🔒 sorts by priority as a rank, not alphabetically', async () => {
+      await spread()
+
+      // Alphabetically 'high' sits between 'low' and 'urgent', which is the
+      // exact wrong answer for the question the column is asked.
+      expect(
+        (await asOwner(() => board({ sort: 'priority', dir: 'desc' }))).map(
+          (t) => t.priority,
+        ),
+      ).toEqual(['urgent', 'low', null])
+    })
+
+    it('filters by assignee without multiplying the rows', async () => {
+      const made = await spread()
+
+      await asOwner(() =>
+        tasks.assign(made['เขียนสเปก']!, {
+          userId: member,
+          addToProject: false,
+        }),
+      )
+      await asOwner(() =>
+        tasks.assign(made['เขียนสเปก']!, {
+          userId: owner,
+          addToProject: false,
+        }),
+      )
+
+      // Two assignees, one row — a join here would return the task twice and
+      // make `limit` a number of assignments.
+      expect(
+        (await asOwner(() => board({ assigneeId: [member] }))).map(
+          (t) => t.title,
+        ),
+      ).toEqual(['เขียนสเปก'])
+    })
+  })
+
+  describe('🔒 cursor pagination', () => {
+    const twelve = async (): Promise<void> => {
+      for (let index = 0; index < 12; index += 1) {
+        await asOwner(() =>
+          tasks.create(apollo, {
+            title: `งาน ${String(index).padStart(2, '0')}`,
+          }),
+        )
+      }
+    }
+
+    it('walks the whole list without repeating or skipping a row', async () => {
+      await twelve()
+
+      const seen: string[] = []
+      let cursor: string | undefined
+
+      do {
+        const page = await asOwner(() =>
+          tasks.list(apollo, {
+            ...LIST,
+            limit: 5,
+            ...(cursor ? { cursor } : {}),
+          }),
+        )
+
+        seen.push(...page.data.map((task) => task.title))
+        cursor = page.meta.nextCursor ?? undefined
+      } while (cursor)
+
+      expect(seen).toHaveLength(12)
+      expect(new Set(seen).size).toBe(12)
+      expect(seen).toEqual([...seen].sort())
+    })
+
+    it('reports hasMore only while there is more', async () => {
+      await twelve()
+
+      const first = await asOwner(() =>
+        tasks.list(apollo, { ...LIST, limit: 5 }),
+      )
+      const last = await asOwner(() =>
+        tasks.list(apollo, { ...LIST, limit: 50 }),
+      )
+
+      expect(first.meta).toMatchObject({ hasMore: true })
+      expect(first.meta.nextCursor).not.toBeNull()
+      expect(last.meta).toEqual({ hasMore: false, nextCursor: null })
+    })
+
+    it('🔒 does not skip a row when one is inserted above the cursor', async () => {
+      await twelve()
+
+      const first = await asOwner(() =>
+        tasks.list(apollo, { ...LIST, limit: 5 }),
+      )
+
+      // The move an offset cannot survive: this changes how many rows sit
+      // before the reader's position between the two requests.
+      const moved = first.data[4]!
+      await asOwner(() => tasks.update(moved.id, { afterId: null }))
+
+      const second = await asOwner(() =>
+        tasks.list(apollo, {
+          ...LIST,
+          limit: 5,
+          cursor: first.meta.nextCursor!,
+        }),
+      )
+
+      // The keyset resumes from the row itself, so nothing before it can be
+      // re-served and nothing after it is jumped over.
+      expect(second.data.map((task) => task.title)).toEqual([
+        'งาน 05',
+        'งาน 06',
+        'งาน 07',
+        'งาน 08',
+        'งาน 09',
+      ])
+    })
+
+    it('answers a mangled cursor with 400, not 500', async () => {
+      // They travel in URLs that people copy, edit and truncate.
+      expect(
+        await codeOf(
+          asOwner(() =>
+            tasks.list(apollo, { ...LIST, cursor: 'not-a-real-cursor' }),
+          ),
+        ),
+      ).toBe('VALIDATION_FAILED')
+    })
+  })
+
+  describe('My Tasks', () => {
+    const mine = async (query: Partial<MyTasksQuery> = {}): Promise<string[]> =>
+      (
+        await asMember(() =>
+          tasks.myTasks({ ...LIST, includeClosed: false, ...query }),
+        )
+      ).data.map((task) => task.title)
+
+    const assignedToMember = async (title: string): Promise<string> => {
+      const task = await asOwner(() => tasks.create(apollo, { title }))
+
+      await asOwner(() =>
+        tasks.assign(task.id, { userId: member, addToProject: false }),
+      )
+
+      return task.id
+    }
+
+    it('is what is assigned to the caller and nothing else', async () => {
+      await assignedToMember('ของฉัน')
+      await asOwner(() => tasks.create(apollo, { title: 'ของคนอื่น' }))
+
+      expect(await mine()).toEqual(['ของฉัน'])
+    })
+
+    it('hides done and cancelled work by default', async () => {
+      const id = await assignedToMember('เสร็จแล้ว')
+      await assignedToMember('ยังไม่เสร็จ')
+      const done = await statusNamed('Done')
+
+      await asOwner(() => tasks.update(id, { statusId: done }))
+
+      // Opening this should show what there is to do, not a pile of what has
+      // already been dealt with.
+      expect(await mine()).toEqual(['ยังไม่เสร็จ'])
+      expect((await mine({ includeClosed: true })).sort()).toEqual(
+        ['เสร็จแล้ว', 'ยังไม่เสร็จ'].sort(),
+      )
+    })
+
+    it('also hides cancelled, not only done', async () => {
+      const id = await assignedToMember('ยกเลิกไป')
+      const cancelled = await statusNamed('Cancelled')
+
+      await asOwner(() => tasks.update(id, { statusId: cancelled }))
+
+      expect(await mine()).toEqual([])
+    })
+
+    it('🔒 drops work in a project the caller can no longer see', async () => {
+      await assignedToMember('งานเก่า')
+
+      // Being assigned is not the same as being able to see. Removing somebody
+      // from a project leaves their assignment rows behind, and without the
+      // visibility gate they would keep reading that project from here.
+      await asOwner(() => projectMembers.remove(apollo, member))
+
+      expect(await mine()).toEqual([])
+    })
+
+    it('leaves out work in an archived project', async () => {
+      await assignedToMember('งานในคลัง')
+
+      await asOwner(() => projects.setArchived(apollo, true))
+
+      expect(await mine()).toEqual([])
     })
   })
 

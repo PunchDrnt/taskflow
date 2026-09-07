@@ -365,6 +365,34 @@ export class StatusService {
     return status
   }
 
+  /**
+   * The statuses that mean a piece of work is no longer open — finished or
+   * abandoned — for one project or for the whole organisation.
+   *
+   * My Tasks hides these by default, and it asks here rather than joining
+   * `project.statuses` itself: that table belongs to this module. An
+   * organisation this size has a few dozen statuses, so the list is short
+   * enough to hand over as ids.
+   *
+   * ⚠️ Takes an id, not a permission — the caller has already settled what
+   * they may see.
+   */
+  closedStatusIds(projectId?: string): Promise<string[]> {
+    const builder = this.statuses.queryBuilder
+      .withOrg('status')
+      .select('status.id', 'id')
+      .andWhere('status.deletedAt IS NULL')
+      .andWhere('(status.isDoneType OR status.isCancelledType)')
+
+    if (projectId !== undefined) {
+      builder.andWhere('status.projectId = :projectId', { projectId })
+    }
+
+    return builder
+      .getRawMany<{ id: string }>()
+      .then((rows) => rows.map((row) => row.id))
+  }
+
   /** Live statuses of one project, in board order. */
   private rows(projectId: string): Promise<Status[]> {
     return this.statuses.queryBuilder

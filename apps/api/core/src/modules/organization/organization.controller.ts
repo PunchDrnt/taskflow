@@ -15,9 +15,11 @@ import {
   createOrganizationSchema,
   memberUserIdSchema,
   updateOrganizationSchema,
+  wholeList,
   type ChangeMemberRoleInput,
   type CreateOrganizationInput,
   type OrgRole,
+  type Page,
   type UpdateOrganizationInput,
 } from '@repo/shared'
 
@@ -109,7 +111,7 @@ export class OrganizationController {
   @Get('members')
   @RequirePermission('read', 'Organization')
   @ApiOperation({ summary: 'Everyone in this organisation' })
-  async listMembers(): Promise<MemberView[]> {
+  async listMembers(): Promise<Page<MemberView>> {
     const members = await this.members.list()
 
     // Names come from iam through its service, never from a join: this module
@@ -120,17 +122,19 @@ export class OrganizationController {
     )
     const byId = new Map(people.map((person) => [person.id, person]))
 
-    return members.map((member) => {
-      const person = byId.get(member.userId)
+    return wholeList(
+      members.map((member) => {
+        const person = byId.get(member.userId)
 
-      return {
-        ...member,
-        name: person?.name ?? null,
-        nickname: person?.nickname ?? null,
-        email: person?.email ?? null,
-        avatarUrl: person?.avatarUrl ?? null,
-      }
-    })
+        return {
+          ...member,
+          name: person?.name ?? null,
+          nickname: person?.nickname ?? null,
+          email: person?.email ?? null,
+          avatarUrl: person?.avatarUrl ?? null,
+        }
+      }),
+    )
   }
 
   /**

@@ -382,30 +382,45 @@ unique เต็ม · `views.sort_order` / `is_default`
 
 ## 9. List view + My Tasks
 
-- [ ] **List view รับ config คอลัมน์เป็น array จากที่เดียว** (hard-code ไว้ก่อนได้)
+- [ ] **List view รับ config คอลัมน์เป็น array จากที่เดียว** (hard-code ไว้ก่อนได้) ⏳ งาน web
       · ห้ามเขียน `<th>` ตายตัวใน JSX — Phase 4 ต่อ `view.columns` จะได้แก้จุดเดียว
-- [ ] Filter · sort · group · search — **เก็บสถานะใน URL ไม่ save เป็น view** (view ที่ตั้งชื่อได้อยู่ Phase 4)
+- [x] Filter · sort · group · search — **เก็บสถานะใน URL ไม่ save เป็น view** (view ที่ตั้งชื่อได้อยู่ Phase 4)
+      · API: `GET /v1/projects/:id/tasks?statusId=&assigneeId=&priority=&dueAfter=&dueBefore=&q=&sort=&dir=&limit=&cursor=`
+      · **AND ทุกข้อ · หลายค่าในข้อเดียว = "is in"** — ไม่มี OR ข้ามฟิลด์ นั่นคือ query builder ของ Phase 4
+      · sort: `order` `dueDate` `priority` `created` `title` — `priority` เรียงตาม rank ไม่ใช่ตัวอักษร
+        (ตัวอักษรจะได้ `high` อยู่ระหว่าง `low` กับ `urgent` ซึ่งผิดพอดีกับคำถามที่ถาม)
+      · group by ทำฝั่ง client จากผลลัพธ์ — ไม่ต้องมี endpoint (⏳ งาน web)
       · filter ตาม: คน · status · priority · วันที่
       · filter "งานของคนที่ inactive" **ตัดออกแล้ว** — ถามด้วย filter assignee ธรรมดาได้อยู่แล้ว
         และงานของคนที่ถูก deactivate คาไว้ที่เดิม ไม่ได้หายไปไหน
-- [ ] **My Tasks** — Phase 1 มีแค่งานที่ assign ให้ตัวเองโดยตรง · **default ซ่อน done/cancelled**
-- [ ] 🔒 **Pagination เป็น cursor ไม่ใช่ offset**
+- [x] **My Tasks** — Phase 1 มีแค่งานที่ assign ให้ตัวเองโดยตรง · **default ซ่อน done/cancelled**
+      · `GET /v1/tasks` · `includeClosed=true` ถึงจะเห็นของที่ปิดแล้ว
+      · 🔒 **กั้นด้วย project visibility ด้วย** — ถูกเอาออกจาก project แล้วแถว assignee ยังอยู่
+        ถ้าไม่กั้นจะยังอ่านงานของ project นั้นได้ต่อจากหน้าจอที่ไม่มีใครคิดว่าเป็นหน้า project
+      · project ที่ archive ไม่โผล่ (ตามสเปก)
+- [x] 🔒 **Pagination เป็น cursor ไม่ใช่ offset**
       · `OrgScopedRepository` ตัด `skip` ออกจาก type แล้ว (`ScopedFindManyOptions`) — เขียน offset ไม่ผ่าน compile
       · เหตุผล: `sort_order` เป็น LexoRank แทรกกลางได้ → page ถัดไปซ้ำแถวเดิมหรือข้ามแถว
-      · **ต้องเขียน cursor helper ใน `shared/`** เป็นงานจริงของ phase นี้ ไม่ใช่ของที่มีอยู่แล้ว
+      · ✅ `#shared/http/cursor` — `[ค่า expression ที่เรียง, id]` base64url ของ JSON · ทึบโดยตั้งใจ
+      · 🔒 **expression ที่เรียงต้อง NOT NULL** — `(a,b) > (NULL,c)` ได้ NULL ไม่ใช่ true → หน้าว่างเงียบๆ
+        `due_date` เลยเป็น `COALESCE(due_date,'infinity')` · priority เป็น rank
+      · ดึงเกิน 1 แถวตอบ `hasMore` ไม่ใช่ `COUNT(*)` ซ้ำ filter เดิม · cursor เพี้ยน = 400 ไม่ใช่ 500
 
 ---
 
 ## 10. API surface
 
-- [ ] `/api/v1/*` · path nested ชั้นเดียว · resource พหูพจน์ · แก้ไขใช้ `PATCH`
-- [ ] ⚠️ **`setGlobalPrefix('v1')` ไม่ใช่ `'api/v1'` · และต้อง `exclude` health** — บรรทัดเดียวที่ทำ deploy พังได้โดย dev ไม่มีทางเจอ
+- [x] `/api/v1/*` · path nested ชั้นเดียว · resource พหูพจน์ · แก้ไขใช้ `PATCH`
+- [x] ⚠️ **`setGlobalPrefix('v1')` ไม่ใช่ `'api/v1'` · และต้อง `exclude` health** — บรรทัดเดียวที่ทำ deploy พังได้โดย dev ไม่มีทางเจอ
       · `/api/v1/*` คือ path ที่ **browser** เห็น · Caddy `handle_path /api/*` [ตัด `/api` ทิ้งก่อนถึง Nest](../docs/01-architecture.md#path-ownership) แล้ว ใส่ `'api/v1'` จะได้ `/api/api/v1/...`
       · healthcheck ของ service `api` ยิง `127.0.0.1:4001/health/live` **ตรง ไม่ผ่าน Caddy** — ไม่ exclude แล้ว path กลายเป็น `/v1/health/live` → container unhealthy → `depends_on: service_healthy` บล็อก `web` กับ `caddy` ทั้งกอง
       · dev ไม่เจอเพราะไม่มี Caddy ในเครื่อง · ตอนนี้ `main.ts` ยังไม่มี `setGlobalPrefix` เลย บรรทัดนี้คือของใหม่ที่ phase นี้เพิ่ม
-- [ ] Error shape ตาม [`01-architecture.md`](../docs/01-architecture.md#api) — `code` เป็น string คงที่ให้ frontend เช็ค, `message` ภาษาไทยแสดงผู้ใช้ได้เลย
+- [x] Error shape ตาม [`01-architecture.md`](../docs/01-architecture.md#api) — `code` เป็น string คงที่ให้ frontend เช็ค, `message` ภาษาไทยแสดงผู้ใช้ได้เลย
+- [x] **ทุก list ห่อ `{ data, meta }` เหมือนกันหมด** แม้ตัวที่ไม่มีวันแบ่งหน้า (`wholeList()` ใน `@repo/shared`)
+      · client ที่ต้องจำว่า endpoint ไหนห่อไม่ห่อ คือ client ที่จำผิดในวันที่ endpoint นั้นเปลี่ยนไปแบ่งหน้า
+      · แก้ย้อนของ §3-§5 ที่คืน array เปล่าไปแล้วด้วย
 - [ ] Swagger ครบทุก endpoint — `/docs` เป็นของที่คนอื่นในทีมใช้จริงแล้ว phase นี้
-- [ ] zod schema ที่ใช้ร่วมสองฝั่งอยู่ใน `@repo/shared` — อย่า duplicate ฝั่ง web
+- [x] zod schema ที่ใช้ร่วมสองฝั่งอยู่ใน `@repo/shared` — อย่า duplicate ฝั่ง web
 
 ---
 

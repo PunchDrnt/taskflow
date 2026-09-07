@@ -6,13 +6,17 @@ import {
   HttpStatus,
   Param,
   Post,
+  Query,
 } from '@nestjs/common'
 import { ApiOperation, ApiTags } from '@nestjs/swagger'
 
 import {
   createTaskSchema,
+  listTasksQuerySchema,
   projectIdSchema,
   type CreateTaskInput,
+  type ListTasksQuery,
+  type Page,
 } from '@repo/shared'
 
 import { ZodValidationPipe } from '#shared/http/zod-validation.pipe'
@@ -38,13 +42,21 @@ export class ProjectTaskController {
     private readonly users: UserService,
   ) {}
 
+  /**
+   * The board and the list view read the same rows; the query string is what
+   * separates them. Filters are ANDed, several values in one filter is "is
+   * in", and paging is a cursor — see `listTasksQuerySchema`.
+   */
   @Get()
-  @ApiOperation({ summary: "This project's tasks, in board order" })
+  @ApiOperation({ summary: "This project's tasks, filtered and paged" })
   async list(
     @Param('projectId', new ZodValidationPipe(projectIdSchema))
     projectId: string,
-  ): Promise<TaskResponse[]> {
-    return withAssignees(this.users, await this.tasks.list(projectId))
+    @Query(new ZodValidationPipe(listTasksQuerySchema)) query: ListTasksQuery,
+  ): Promise<Page<TaskResponse>> {
+    const page = await this.tasks.list(projectId, query)
+
+    return { ...page, data: await withAssignees(this.users, page.data) }
   }
 
   /** Quick add: a title is the only required field. */

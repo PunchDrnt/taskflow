@@ -68,4 +68,21 @@ export class ApiException extends HttpException {
       details,
     )
   }
+
+  /**
+   * The request itself is malformed, in a way no schema caught — a cursor
+   * somebody truncated when they pasted the URL, and its kind. `VALIDATION_FAILED`
+   * so the client branches the same way it does for a rejected body.
+   */
+  static badRequest(
+    message = 'คำขอไม่ถูกต้อง',
+    details?: unknown,
+  ): ApiException {
+    return new ApiException(
+      HttpStatus.BAD_REQUEST,
+      API_ERROR_CODES.VALIDATION_FAILED,
+      message,
+      details,
+    )
+  }
 }

@@ -1,18 +1,29 @@
 import { Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { InjectDataSource } from '@nestjs/typeorm'
-import { DataSource, QueryFailedError, type EntityManager } from 'typeorm'
+import {
+  DataSource,
+  QueryFailedError,
+  type EntityManager,
+  type SelectQueryBuilder,
+} from 'typeorm'
 
 import {
   TASK_ERROR_CODES,
+  wholeList,
   type AssignTaskInput,
   type CreateTaskInput,
+  type ListTasksQuery,
+  type MyTasksQuery,
+  type Page,
   type TaskPriority,
+  type TaskSortField,
   type UpdateTaskInput,
 } from '@repo/shared'
 
 import { CascadeSoftDelete } from '#shared/entity/cascade-soft-delete'
 import { ApiException } from '#shared/http/api-exception'
+import { decodeCursor, toPage } from '#shared/http/cursor'
 import { InjectOrgRepository } from '#shared/org-scope/org-repository.provider'
 import { OrgScopedRepository } from '#shared/org-scope/org-scoped.repository'
 import { requireOrgContext } from '#shared/org-scope/request-context'
@@ -54,6 +65,35 @@ export interface TaskView {
 }
 
 const UNIQUE_VIOLATION = '23505'
+
+/**
+ * How each sort is expressed in SQL, and how its value is cast back when a
+ * cursor resumes from it.
+ *
+ * 🔒 **Every expression here is NOT NULL, and that is the whole design.** A
+ * keyset cursor resumes with a row comparison, and `(a, b) > (NULL, c)`
+ * evaluates to NULL rather than true — so a nullable ordering column returns
+ * an empty page instead of the next one, with no error to notice. `due_date`
+ * and `priority` are both nullable columns, and both are questions the list
+ * view exists to answer, so they are made total here rather than left out:
+ *
+ * - a task with no due date sorts as `infinity`, which is where "no deadline"
+ *   belongs when the list is "what is due first";
+ * - priority becomes a rank, so `urgent` and `low` order by what they mean
+ *   rather than alphabetically, where `high` would sit between them.
+ */
+const TASK_SORTS: Record<TaskSortField, { sql: string; cast: string }> = {
+  order: { sql: 'task.sort_order', cast: 'text' },
+  dueDate: { sql: "COALESCE(task.due_date, 'infinity')", cast: 'timestamptz' },
+  priority: {
+    sql: `CASE task.priority
+            WHEN 'urgent' THEN 4 WHEN 'high' THEN 3
+            WHEN 'medium' THEN 2 WHEN 'low' THEN 1 ELSE 0 END`,
+    cast: 'int',
+  },
+  created: { sql: 'task.created_at', cast: 'timestamptz' },
+  title: { sql: 'task.title', cast: 'text' },
+}
 
 /** The task, its project, and what the caller is in that project. */
 interface TaskContext {
@@ -104,26 +144,67 @@ export class TaskService {
   private readonly appUrl: string
 
   /**
-   * Every live task in the project, in board order.
+   * One project's tasks — the board, and the list view over the same rows.
    *
-   * No pagination and no filters: those are §9's list view, which owns the
-   * cursor rule and the filter grammar. At this company's size a project's
-   * whole board is a few hundred rows, and a half-built filter API now would
-   * be one §9 has to break.
+   * Closed statuses are *not* hidden here: a board draws every column it has,
+   * and Done is one of them. Hiding them is My Tasks' default, where the
+   * question being asked is different.
    */
-  async list(projectId: string): Promise<TaskView[]> {
+  async list(
+    projectId: string,
+    query: ListTasksQuery,
+  ): Promise<Page<TaskView>> {
     const { project } = await this.projects.findVisible(projectId)
 
-    const rows = await this.tasks.queryBuilder
+    const builder = this.tasks.queryBuilder
       .withOrg('task')
       .andWhere('task.projectId = :projectId', { projectId })
-      .andWhere('task.deletedAt IS NULL')
-      .orderBy('task.sortOrder', 'ASC')
-      .getMany()
 
-    const assignees = await this.assigneesOf(rows.map((task) => task.id))
+    return this.paginate(builder, query, () => project)
+  }
 
-    return rows.map((task) => view(task, project, assignees.get(task.id) ?? []))
+  /**
+   * Everything assigned to the caller, across every project they can see.
+   *
+   * 🔒 **Project visibility gates this too.** Being assigned is not the same
+   * as being able to see: somebody removed from a project keeps the
+   * assignment rows, and without this they would go on reading that project's
+   * work from a screen nobody thinks of as a project screen. The visible set
+   * comes from `ProjectService.list`, which is the one place that rule is
+   * written as SQL — replicating its join here would be a third statement of
+   * a rule that is already stated twice.
+   *
+   * Archived projects are excluded, because `list` excludes them by default
+   * and the specification says their work does not appear here.
+   *
+   * `includeClosed` defaults to false: opening this should show what there is
+   * to do, not a pile of what has been dealt with.
+   */
+  async myTasks(query: MyTasksQuery): Promise<Page<TaskView>> {
+    const { userId } = requireOrgContext()
+
+    const visible = await this.projects.list()
+    const byId = new Map(visible.map((project) => [project.id, project]))
+
+    if (visible.length === 0) return emptyPage()
+
+    const builder = this.tasks.queryBuilder
+      .withOrg('task')
+      .andWhere('task.projectId IN (:...projectIds)', {
+        projectIds: [...byId.keys()],
+      })
+      .andWhere(assignedTo('mine'), { mine: [userId] })
+
+    if (!query.includeClosed) {
+      const closed = await this.statuses.closedStatusIds()
+
+      if (closed.length > 0) {
+        builder.andWhere('task.statusId NOT IN (:...closed)', { closed })
+      }
+    }
+
+    // Non-null: the query is filtered to exactly these project ids.
+    return this.paginate(builder, query, (task) => byId.get(task.projectId)!)
   }
 
   async findById(taskId: string): Promise<TaskView> {
@@ -468,6 +549,93 @@ export class TaskService {
   }
 
   /**
+   * Applies the filters, the ordering and the cursor, and shapes the page.
+   *
+   * **Every filter is ANDed; several values inside one is "is in".** That is
+   * the whole grammar — an OR across different fields is a query builder, and
+   * a query builder is Phase 4's saved views rather than something a person
+   * can send a colleague as a link.
+   *
+   * 🔒 The resume is a keyset comparison on `(sort expression, id)`, never an
+   * offset: `sort_order` is a fractional index, so a drag between two requests
+   * changes how many rows sit before your position and `OFFSET` then repeats a
+   * row or skips one, silently. See `shared/http/cursor.ts`.
+   *
+   * One extra row is fetched to answer `hasMore` without a second count over
+   * the same filters.
+   */
+  private async paginate(
+    builder: SelectQueryBuilder<Task>,
+    query: ListTasksQuery,
+    projectOf: (task: Task) => Pick<Project, 'keyPrefix'>,
+  ): Promise<Page<TaskView>> {
+    const sort = TASK_SORTS[query.sort]
+    const direction = query.dir === 'desc' ? 'DESC' : 'ASC'
+
+    builder.andWhere('task.deletedAt IS NULL')
+
+    if (query.statusId) {
+      builder.andWhere('task.statusId IN (:...statusIds)', {
+        statusIds: query.statusId,
+      })
+    }
+    if (query.priority) {
+      builder.andWhere('task.priority IN (:...priorities)', {
+        priorities: query.priority,
+      })
+    }
+    if (query.assigneeId) {
+      builder.andWhere(assignedTo('assigneeIds'), {
+        assigneeIds: query.assigneeId,
+      })
+    }
+    if (query.dueAfter) {
+      builder.andWhere('task.dueDate >= :dueAfter', {
+        dueAfter: query.dueAfter,
+      })
+    }
+    if (query.dueBefore) {
+      builder.andWhere('task.dueDate <= :dueBefore', {
+        dueBefore: query.dueBefore,
+      })
+    }
+    if (query.q) {
+      // ILIKE rather than full-text: the box is a "find that card" filter over
+      // a few hundred titles, not a search engine, and `tsvector` would need a
+      // Thai dictionary Postgres does not ship.
+      builder.andWhere('task.title ILIKE :needle', { needle: `%${query.q}%` })
+    }
+
+    if (query.cursor !== undefined) {
+      const [value, id] = decodeCursor(query.cursor)
+
+      // `CAST(… AS …)` rather than `::`, which TypeORM's parameter parser
+      // reads as a placeholder named after the type.
+      builder.andWhere(
+        `(${sort.sql}, task.id) ${direction === 'ASC' ? '>' : '<'} ` +
+          `(CAST(:cursorValue AS ${sort.cast}), CAST(:cursorId AS uuid))`,
+        { cursorValue: value, cursorId: id },
+      )
+    }
+
+    const { entities, raw } = await builder
+      .addSelect(sort.sql, 'cursor_value')
+      .orderBy(sort.sql, direction)
+      .addOrderBy('task.id', direction)
+      .limit(query.limit + 1)
+      .getRawAndEntities<{ cursor_value: unknown }>()
+
+    const assignees = await this.assigneesOf(entities.map((task) => task.id))
+
+    return toPage(
+      entities.map((task, index) => ({ task, raw: raw[index] })),
+      query.limit,
+      ({ task, raw: row }) => [cursorValue(row?.cursor_value), task.id],
+      ({ task }) => view(task, projectOf(task), assignees.get(task.id) ?? []),
+    )
+  }
+
+  /**
    * Queues the "you have been assigned" mail, in the caller's transaction.
    *
    * Everything the message says is put in the payload rather than looked up
@@ -665,6 +833,34 @@ function completionFor(
   return { completedAt: new Date(), completedBy: userId }
 }
 
+/**
+ * "Assigned to one of these people", as a subquery rather than a join.
+ *
+ * A join would multiply the task row once per assignee and turn `limit` into a
+ * number of *assignments*, which is the classic way a paged list returns eight
+ * rows when it promised fifty.
+ */
+function assignedTo(parameter: string): string {
+  return `EXISTS (
+    SELECT 1 FROM task.assignees a
+     WHERE a.task_id = task.id
+       AND a.org_id = task.org_id
+       AND a.assignee_type = 'user'
+       AND a.assignee_id IN (:...${parameter})
+  )`
+}
+
+/** The ordering value as a cursor holds it — a string, whatever the column is. */
+function cursorValue(value: unknown): string {
+  if (value instanceof Date) return value.toISOString()
+
+  return String(value)
+}
+
+function emptyPage(): Page<TaskView> {
+  return wholeList<TaskView>([])
+}
+
 function refuseIfArchived(project: Project): void {
   if (project.archivedAt === null) return
 
@@ -679,7 +875,11 @@ function notFound(): ApiException {
   return ApiException.notFound('ไม่พบงานนี้')
 }
 
-function view(task: Task, project: Project, assigneeIds: string[]): TaskView {
+function view(
+  task: Task,
+  project: Pick<Project, 'keyPrefix'>,
+  assigneeIds: string[],
+): TaskView {
   return {
     id: task.id,
     projectId: task.projectId,
