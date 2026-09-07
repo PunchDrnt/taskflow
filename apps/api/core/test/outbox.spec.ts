@@ -53,7 +53,7 @@ describe.skipIf(!hasTestDatabase)('notification outbox', () => {
 
   const asOrg = <R>(fn: () => R): R =>
     runWithRequestContext(
-      { orgId, userId: SYSTEM_USER_ID, sessionId: null },
+      { orgId, userId: SYSTEM_USER_ID, orgRole: null, sessionId: null },
       fn,
     )
 

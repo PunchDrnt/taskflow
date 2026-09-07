@@ -34,7 +34,7 @@ unique เต็ม · `views.sort_order` / `is_default`
 - [ ] **CI trigger `push: [main]`** — comment ไว้ใน `ci.yml` พร้อมเงื่อนไขปลดล็อกว่า _"Put this back once work arrives through pull requests"_ · **เงื่อนไขนั้นสำเร็จไปแล้ว** (Phase 0 จบ งานเข้าทาง PR ตั้งแต่ #2) เหลือแค่กด
       ช่องที่มันปิดคือ merge commit ที่ต่างจาก PR head · เปิด branch protection แบบ require up-to-date แทนก็ได้ เลือกอย่างใดอย่างหนึ่ง ไม่ต้องทำทั้งคู่
 - [ ] 🔒 **Test invariant ที่ DB บังคับเองไม่ได้** — Phase 0 เลื่อนมาเพราะยังไม่มี service ให้บังคับ **Phase 1 มีแล้ว หมดข้ออ้าง**
-  - [ ] org ต้องมี `role='owner'` ≥1 แถวเสมอ (ห้ามลบ/ลดสิทธิ์คนสุดท้าย)
+  - [x] org ต้องมี `role='owner'` ≥1 แถวเสมอ (ห้ามลบ/ลดสิทธิ์คนสุดท้าย) — `test/organization.spec.ts` รวมเคสถอดพร้อมกันสองอัน
   - [ ] project ต้องมี `is_done_type` ≥1 อัน
   - [ ] `completed_at`/`completed_by` มีค่า **ก็ต่อเมื่อ** status ของ task นั้น `is_done_type` — คุมสองทาง ดู §6
 - [x] 🔒 **`FeatureService.isEnabled()` เคย return `true` เสมอ — "ดักด้วย feature flag" จึงแปลว่า "เปิดอยู่"**
@@ -175,14 +175,32 @@ unique เต็ม · `views.sort_order` / `is_default`
 
 ## 3. Organization
 
-- [ ] Role ระดับ org: `owner` / `admin` / `member`
-- [ ] **Owner มีได้หลายคน** (โมเดล GitHub ไม่ใช่ Primary Owner แบบ Slack)
-- [ ] 🔒 ห้ามลบหรือลดสิทธิ์ owner คนสุดท้าย — ดู §0 เรื่อง test
-- [ ] `PermissionService.assert` ต่อเข้ากับ guard ตัวที่สอง — `can()` เขียนไว้แล้วตั้งแต่ Phase 0 ยังไม่มีใครเรียก
+- [x] Role ระดับ org: `owner` / `admin` / `member` — [ตารางว่าใครทำอะไรได้](../docs/01-architecture.md#org-role-ทำอะไรได้-และเช็คที่ไหน)
+- [x] **Owner มีได้หลายคน** (โมเดล GitHub ไม่ใช่ Primary Owner แบบ Slack)
+- [x] 🔒 ห้ามลบหรือลดสิทธิ์ owner คนสุดท้าย — ดู §0 เรื่อง test
+      · เงื่อนไขอยู่ใน `UPDATE` ไม่ใช่ `SELECT` นับก่อน · `RETURNING` ว่าง = ถูกปฏิเสธ = `LAST_OWNER`
+      · **เคสที่ทำให้ต้องเป็นแบบนี้:** สอง admin ถอด owner สองคนสุดท้ายพร้อมกัน — อ่านเจอ "มี owner สองคน" ทั้งคู่
+        ผ่านทั้งคู่ เหลือศูนย์ ไม่มี error ที่ไหน แก้ได้ทางเดียวคือ `UPDATE` มือบน production
+      · `test/organization.spec.ts` ยิงสองอันขนานจริงแล้วเช็คว่าเหลือ owner หนึ่งคน
+      · **ลบสมาชิกออกจาก org เป็นของ Phase 2** ([ตาราง user states](../docs/04-features/phase-1.md#user-states--three-different-things))
+        แต่กติกาอยู่ใน statement เดียวกันแล้ว ตอนเพิ่ม remove จะได้ไม่ต้องเขียนซ้ำ
+- [x] `PermissionService.assert` ต่อเข้ากับ guard ตัวที่สอง — `can()` เขียนไว้แล้วตั้งแต่ Phase 0 ยังไม่มีใครเรียก
       · อย่าลืมว่า `can` บังคับส่ง resource · เวอร์ชันไม่ส่ง resource คือ `isEverAllowedTo()` ใช้ตอนวาดปุ่มเท่านั้น
+      · ✅ `@RequirePermission(action, 'Organization')` สำหรับ resource ที่รู้จาก context ·
+        แถวที่ต้อง load ก่อนเช็คใน service (`PATCH /v1/org/members/:userId`) · `ContextResolvedSubject` กันไว้ที่ type
+      · ⚠️ **ผูกกับ route ไม่ใช่ `APP_GUARD`** — มันอ่าน context ที่ `AuthGuard` เติม จึงต้องรันทีหลัง
+        และลำดับ global guard ตัดสินโดยลำดับ provider ของ module = ความปลอดภัยทุก route ไปขึ้นกับลำดับ import ใน `app.module.ts`
+      · `orgRole` เข้าไปอยู่ใน `RequestContext` แล้ว — guard อ่าน `organization.members` ไปแล้วตอนตัดสินว่า request นี้ของ org ไหน
+        เก็บ role ที่เจอมาด้วยเลย ไม่ต้อง query ซ้ำใน controller
 - [ ] **หนึ่งคนอยู่ได้หลาย org** — org switcher บนสุดของ sidebar · หน้า Home เป็นปลายทางหลัง login
       ไม่ใช่ project ใด project หนึ่ง · คนที่ยังไม่อยู่ org ไหนเห็นหน้าที่บอกให้ติดต่อ admin
-- [ ] **สร้าง org มี API ยังไม่มีหน้าจอ** — Phase 1-3 สร้างผ่าน API เท่านั้น
+- [x] **สร้าง org มี API ยังไม่มีหน้าจอ** — Phase 1-3 สร้างผ่าน API เท่านั้น
+      · `POST /v1/org` · `@SkipOrgScope()` เพราะคนที่สร้าง org แรกยังไม่ได้อยู่ org ไหน
+      · org + แถว owner อยู่ใน transaction เดียว — org ที่ไม่มี owner คือสิ่งที่กฎ owner คนสุดท้ายมีไว้กันพอดี
+      · audit row เขียนใน context ของ org ที่เพิ่งเกิด ไม่ใช่ของ caller ที่ยังไม่มี org (`org_id` เป็น NOT NULL)
+- [ ] ยังไม่ได้ทำ: `DELETE /v1/org` — `ability.ts` เขียนกติกาไว้แล้วว่า owner ลบได้ แต่ยังไม่มี endpoint
+      · จงใจ: ไม่มีหน้าจอ ไม่มี flow ยืนยัน และ spec ยังไม่ได้บอกว่าสมาชิกของ org ที่ถูกลบเป็นยังไงต่อ
+      · `CascadeSoftDelete` รองรับอยู่แล้ว (`organization.organizations` เป็น ROOT + ลูกประกาศครบ) เหลือแค่ตัดสินใจ
 - [x] **ตาราง `organization.invitations`** — ลงแล้ว ยังไม่มีใครอ่าน API + หน้าจอมา Phase 2
       · Phase 1 เพิ่มคนเข้า org ด้วย seed script
 

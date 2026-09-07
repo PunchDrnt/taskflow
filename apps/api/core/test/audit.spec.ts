@@ -24,7 +24,7 @@ describe.skipIf(!hasTestDatabase)('activity log', () => {
 
   const asOrg = <R>(org: string, fn: () => R): R =>
     runWithRequestContext(
-      { orgId: org, userId: SYSTEM_USER_ID, sessionId: null },
+      { orgId: org, userId: SYSTEM_USER_ID, orgRole: null, sessionId: null },
       fn,
     )
 

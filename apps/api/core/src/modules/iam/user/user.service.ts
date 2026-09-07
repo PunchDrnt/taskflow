@@ -112,6 +112,25 @@ export class UserService {
   }
 
   /**
+   * Several at once, for a list that has ids and needs names.
+   *
+   * One query rather than a `findById` per row: a members screen calls this
+   * with everyone in the organisation, and the loop version is the N+1 that
+   * only shows up once a customer has a hundred people. Order is not promised
+   * — callers index by id, because a caller that relied on position would
+   * silently pair the wrong name with the wrong row when one id is missing.
+   */
+  findByIds(ids: string[]): Promise<User[]> {
+    if (ids.length === 0) return Promise.resolve([])
+
+    return this.users.queryBuilder
+      .base('user')
+      .where('user.id IN (:...ids)', { ids })
+      .andWhere('user.deletedAt IS NULL')
+      .getMany()
+  }
+
+  /**
    * The fields a person may edit about themselves.
    *
    * `email` is deliberately not among them: it is the login identifier and is

@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common'
 
+import type { OrgRole } from '@repo/shared'
+
 import { InjectOrgRepository } from '#shared/org-scope/org-repository.provider'
 import { OrgScopedRepository } from '#shared/org-scope/org-scoped.repository'
 
@@ -11,13 +13,21 @@ export interface Membership {
   orgId: string
   name: string
   slug: string
-  /** 'owner' | 'admin' | 'member' — their role in *this* org. */
-  role: string
+  /** Their role in *this* org, which differs from org to org. */
+  role: OrgRole
 }
 
 /** What `resolveActiveOrg` decided, and whether a stale cookie must go. */
 export interface ActiveOrg {
   orgId: string | null
+  /**
+   * The caller's role in `orgId`, from the membership this just matched, and
+   * null exactly when `orgId` is. Returned here rather than looked up again
+   * by the guard because finding the membership *is* what deciding the org
+   * consists of — a second `find` over the same array is one more place for
+   * the two answers to drift apart.
+   */
+  orgRole: OrgRole | null
   /**
    * True when the cookie named an org they cannot use. Clearing it is not
    * tidiness: a choice that no longer holds would 403 every request until
@@ -87,19 +97,22 @@ export function resolveActiveOrg(
   if (cookie !== undefined && cookie !== '') {
     const chosen = memberships.find((membership) => membership.orgId === cookie)
 
-    if (chosen) return { orgId: chosen.orgId, clearCookie: false }
+    if (chosen)
+      return { orgId: chosen.orgId, orgRole: chosen.role, clearCookie: false }
 
     // Named an org they are not in, or were removed from. Not an error here —
     // the guard decides what to answer — but the cookie must not survive it.
-    return { orgId: null, clearCookie: true }
+    return { orgId: null, orgRole: null, clearCookie: true }
   }
 
   // Exactly one is not a choice, so nobody is asked to make it.
   if (memberships.length === 1) {
-    return { orgId: memberships[0]!.orgId, clearCookie: false }
+    const only = memberships[0]!
+
+    return { orgId: only.orgId, orgRole: only.role, clearCookie: false }
   }
 
   // Several and unchosen, or none at all. Both are null here and separate
   // error codes at the guard, because they need different screens.
-  return { orgId: null, clearCookie: false }
+  return { orgId: null, orgRole: null, clearCookie: false }
 }

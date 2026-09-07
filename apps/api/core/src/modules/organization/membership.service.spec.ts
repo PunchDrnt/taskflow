@@ -21,6 +21,7 @@ describe('resolveActiveOrg', () => {
   it('honours a cookie naming an org they belong to', () => {
     expect(resolveActiveOrg([acme, globex], globex.orgId)).toEqual({
       orgId: globex.orgId,
+      orgRole: 'member',
       clearCookie: false,
     })
   })
@@ -30,6 +31,7 @@ describe('resolveActiveOrg', () => {
     // 403s every request until somebody clears their browser by hand.
     expect(resolveActiveOrg([acme], stranger)).toEqual({
       orgId: null,
+      orgRole: null,
       clearCookie: true,
     })
   })
@@ -39,6 +41,7 @@ describe('resolveActiveOrg', () => {
     // actually happens: the cookie was valid when it was set.
     expect(resolveActiveOrg([], acme.orgId)).toEqual({
       orgId: null,
+      orgRole: null,
       clearCookie: true,
     })
   })
@@ -46,6 +49,7 @@ describe('resolveActiveOrg', () => {
   it('picks the only org without being asked', () => {
     expect(resolveActiveOrg([acme], undefined)).toEqual({
       orgId: acme.orgId,
+      orgRole: 'owner',
       clearCookie: false,
     })
   })
@@ -54,6 +58,7 @@ describe('resolveActiveOrg', () => {
     // Null here, ORG_NOT_SELECTED at the guard — the client shows a picker.
     expect(resolveActiveOrg([acme, globex], undefined)).toEqual({
       orgId: null,
+      orgRole: null,
       clearCookie: false,
     })
   })
@@ -64,6 +69,7 @@ describe('resolveActiveOrg', () => {
     // create-your-first-organization page.
     expect(resolveActiveOrg([], undefined)).toEqual({
       orgId: null,
+      orgRole: null,
       clearCookie: false,
     })
   })
@@ -73,6 +79,7 @@ describe('resolveActiveOrg', () => {
     // choice naming an org called ''.
     expect(resolveActiveOrg([acme], '')).toEqual({
       orgId: acme.orgId,
+      orgRole: 'owner',
       clearCookie: false,
     })
   })
@@ -84,12 +91,21 @@ describe('resolveActiveOrg', () => {
 
     for (const memberships of [[], [acme], [acme, globex]]) {
       for (const cookie of cookies) {
-        const { orgId } = resolveActiveOrg(memberships, cookie)
+        const { orgId, orgRole } = resolveActiveOrg(memberships, cookie)
 
         expect(
           orgId === null ||
             memberships.some((membership) => membership.orgId === orgId),
         ).toBe(true)
+
+        // The role must come from the membership that was chosen, never from
+        // another one in the list. Every permission decision downstream reads
+        // it, so a role paired with the wrong org is an admin somewhere they
+        // are only a member — and it would look like an ordinary pass.
+        expect(orgRole).toBe(
+          memberships.find((membership) => membership.orgId === orgId)?.role ??
+            null,
+        )
       }
     }
   })

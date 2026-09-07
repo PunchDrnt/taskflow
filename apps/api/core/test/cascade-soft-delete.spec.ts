@@ -28,7 +28,7 @@ describe.skipIf(!hasTestDatabase)('cascade soft delete', () => {
 
   const asOrg = <R>(orgId: string, fn: () => R): R =>
     runWithRequestContext(
-      { orgId, userId: SYSTEM_USER_ID, sessionId: null },
+      { orgId, userId: SYSTEM_USER_ID, orgRole: null, sessionId: null },
       fn,
     )
 

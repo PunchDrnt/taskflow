@@ -1,5 +1,7 @@
 import { subject as tag } from '@casl/ability'
-import { ForbiddenException, Injectable } from '@nestjs/common'
+import { Injectable } from '@nestjs/common'
+
+import { ApiException } from '#shared/http/api-exception'
 
 import { defineAbilityFor, type Action, type Subject } from './ability'
 import type { Actor } from './actor'
@@ -40,7 +42,20 @@ export class PermissionService {
     return defineAbilityFor(actor).can(action, tag(subject, resource))
   }
 
-  /** The same question, for a caller that should stop if the answer is no. */
+  /**
+   * The same question, for a caller that should stop if the answer is no.
+   *
+   * `ApiException.forbidden` and not `ForbiddenException`: the message on an
+   * error body is displayed to a person as it stands (see `ApiErrorBody`), and
+   * "Not allowed to delete Organization" is written for whoever is reading a
+   * log. What the client needs to *branch* on goes in `details` — the action
+   * and subject it just asked about, which it already knows and so cannot
+   * learn anything from.
+   *
+   * The row's id stays out of both. A refusal that names the id confirms it
+   * exists, and the codebase answers 404 rather than 403 for a row in another
+   * org precisely to avoid saying that.
+   */
   assert(
     actor: Actor,
     action: Action,
@@ -48,10 +63,10 @@ export class PermissionService {
     resource: Resource,
   ): void {
     if (!this.can(actor, action, subject, resource)) {
-      const which = resource.id ? ` ${String(resource.id)}` : ''
-      throw new ForbiddenException(
-        `Not allowed to ${action} ${subject}${which}`,
-      )
+      throw ApiException.forbidden('ไม่มีสิทธิ์ดำเนินการนี้', {
+        action,
+        subject,
+      })
     }
   }
 

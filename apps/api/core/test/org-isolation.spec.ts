@@ -29,7 +29,7 @@ describe.skipIf(!hasTestDatabase)('cross-org isolation', () => {
 
   const asOrg = <R>(org: Organization, fn: () => R): R =>
     runWithRequestContext(
-      { orgId: org.id, userId: SYSTEM_USER_ID, sessionId: null },
+      { orgId: org.id, userId: SYSTEM_USER_ID, orgRole: null, sessionId: null },
       fn,
     )
 

@@ -14,6 +14,7 @@ import type { Response } from 'express'
 import {
   setActiveOrgSchema,
   updateProfileSchema,
+  type OrgRole,
   type SetActiveOrgInput,
   type UpdateProfileInput,
 } from '@repo/shared'
@@ -57,7 +58,7 @@ export interface Me {
   /** Null while the caller is in several organisations and has picked none. */
   activeOrgId: string | null
   /** The caller's role in `activeOrgId`, null when there is no active org. */
-  role: string | null
+  role: OrgRole | null
 }
 
 @ApiTags('me')

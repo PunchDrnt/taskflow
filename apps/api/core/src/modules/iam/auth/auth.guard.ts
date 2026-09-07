@@ -92,6 +92,7 @@ export class AuthGuard implements CanActivate {
     fillRequestContext({
       userId: caller.userId,
       orgId: active.orgId,
+      orgRole: active.orgRole,
       sessionId: caller.sessionId,
     })
 
