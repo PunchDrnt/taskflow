@@ -5,16 +5,27 @@ name: CI
 on:
   pull_request:
   workflow_dispatch:
-  # Off for main while Phase 0 lands there directly and every push would be a
-  # run nobody reads. Put this back once work arrives through pull requests —
-  # until then main is only as green as the last local `yarn test`.
-  # push:
-  #   branches: [main]
+  # On for main since 2026-09-07, when the branch ruleset landed and every
+  # commit started arriving through a pull request — the condition the earlier
+  # version of this comment said to wait for.
+  #
+  # It overlaps the pull_request run without replacing it. That one checks out
+  # a *simulated* merge of the head into main: a commit that never exists in
+  # history and carries no result anything can look up afterwards. This runs on
+  # the merge commit that is actually on the trunk, so "is main green" has an
+  # answer for a given SHA rather than an inference from the PR that produced
+  # it. It also still runs for anything on the ruleset's bypass list.
+  push:
+    branches: [main]
 
 # A new push supersedes the run in flight for the same branch.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # ...except on main, where the run *is* the record for that commit. Two
+  # merges close together would otherwise cancel the first, leaving a commit on
+  # the trunk with no result at all — which is the thing this trigger was added
+  # to provide.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   check:
