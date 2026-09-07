@@ -220,8 +220,11 @@ unique เต็ม · `views.sort_order` / `is_default`
       · คอลัมน์ + CHECK ลงแล้ว เหลือฟอร์มกับ validation ฝั่ง API/web · **regex ตาม docs ไม่ใช่ตาม prototype**
         (prototype ยอมให้ `12` ผ่าน ซึ่งตัวแรกต้องเป็นตัวอักษร)
       · ✅ `keyPrefixSchema` ใน `@repo/shared` ใช้ regex ของ docs ตรงกับ CHECK ในตาราง — ค่าที่ API รับแต่ DB ปฏิเสธจะโผล่มาเป็น 500
+      · schema `.toUpperCase()` ให้เอง — พิมพ์ `apl` มาได้ `APL` ไม่ใช่ 400 (ยิงจริงแล้ว)
+      · ⏳ **ติ๊กไม่ได้เพราะยังไม่มีฟอร์มฝั่ง web** — ฝั่ง API ครบแล้ว
 - [ ] `color` เป็น token จาก palette 8 สี (ไม่ใช่ hex) — คอลัมน์ลงแล้ว `icon` เอาออกแล้ว
       · ✅ `paletteColorSchema` อ่านจาก `STATUS_COLORS` ตัวเดียวกับ status — ลิสต์เดียว สีที่ project ใช้ได้แต่ status ใช้ไม่ได้จึงเป็นไปไม่ได้
+      · ⏳ **ติ๊กไม่ได้เพราะยังไม่มีตัวเลือกสีฝั่ง web** — ฝั่ง API ครบแล้ว (hex ตอบ 400)
 - [x] Project member อิสระจากทีม (แบบ Slack channel) — role `admin` / `member`
       · `GET/POST /v1/projects/:id/members` · `PATCH|DELETE .../:userId` · ชื่อดึงผ่าน `UserService.findByIds` ไม่ใช่ join (แบบเดียวกับ org members)
       · 🔒 **ต้องเช็คเองว่าคนที่เพิ่มอยู่ใน org จริง — FK ไม่ได้ครอบ** · `project.members.user_id` ชี้ `iam.users(id)` เดี่ยวๆ
