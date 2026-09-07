@@ -212,9 +212,16 @@ unique เต็ม · `views.sort_order` / `is_default`
       · `POST /v1/org` · `@SkipOrgScope()` เพราะคนที่สร้าง org แรกยังไม่ได้อยู่ org ไหน
       · org + แถว owner อยู่ใน transaction เดียว — org ที่ไม่มี owner คือสิ่งที่กฎ owner คนสุดท้ายมีไว้กันพอดี
       · audit row เขียนใน context ของ org ที่เพิ่งเกิด ไม่ใช่ของ caller ที่ยังไม่มี org (`org_id` เป็น NOT NULL)
-- [ ] ยังไม่ได้ทำ: `DELETE /v1/org` — `ability.ts` เขียนกติกาไว้แล้วว่า owner ลบได้ แต่ยังไม่มี endpoint
-      · จงใจ: ไม่มีหน้าจอ ไม่มี flow ยืนยัน และ spec ยังไม่ได้บอกว่าสมาชิกของ org ที่ถูกลบเป็นยังไงต่อ
-      · `CascadeSoftDelete` รองรับอยู่แล้ว (`organization.organizations` เป็น ROOT + ลูกประกาศครบ) เหลือแค่ตัดสินใจ
+- [x] **`DELETE /v1/org` อยู่ Phase 2** — ไม่ใช่ของค้างของ Phase 1 และไม่ใช่คำถามที่ยังไม่มีคำตอบ
+      · [roadmap ข้อ 12](../docs/03-roadmap.md) "Archive project + danger zone" วาง **โอน owner / ลบ org** ไว้ด้วยกัน
+        และสอง flow นี้อ้างกันไปมา — owner คนสุดท้ายลบ account ต้อง "ตั้ง owner ใหม่ *หรือ* ลบ org ก่อน"
+        ทำข้างเดียวได้กติกาครึ่งเดียว
+      · [`04-features/phase-2.md#danger-zone`](../docs/04-features/phase-2.md#danger-zone) ตอบครบแล้ว —
+        owner เท่านั้น · พิมพ์ชื่อ org ยืนยัน · soft delete ทั้งก้อน สมาชิกหลุดจาก org นี้แต่ account ยังอยู่
+      · ของฝั่งโค้ดพร้อมหมดแล้ว เหลือแค่ route — `ability.ts` สั่ง `cannot('delete', 'Organization')` กับ admin ไว้แล้ว
+        และ `CascadeSoftDelete` รองรับ (`organization.organizations` เป็น ROOT + ลูกประกาศครบ)
+      · ที่ Phase 1 ให้ไม่ได้คือหน้าจอยืนยัน API เปล่าๆ แปลว่า HTTP call เดียวลบทั้งบริษัท ไม่มี undo
+        และคนที่ค้างอยู่ใน org นั้นโดนเด้งกลางคัน — cookie `active_org` ชี้ไป org ที่หายไป `AuthGuard` เคลียร์ทิ้ง
 - [x] **ตาราง `organization.invitations`** — ลงแล้ว ยังไม่มีใครอ่าน API + หน้าจอมา Phase 2
       · Phase 1 เพิ่มคนเข้า org ด้วย seed script
 
