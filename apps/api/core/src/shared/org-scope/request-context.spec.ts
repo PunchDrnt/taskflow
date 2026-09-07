@@ -10,7 +10,12 @@ import {
   runWithRequestContext,
 } from './request-context'
 
-const context = { orgId: 'org-1', userId: 'user-1', sessionId: null }
+const context = {
+  orgId: 'org-1',
+  userId: 'user-1',
+  orgRole: null,
+  sessionId: null,
+}
 
 /**
  * One HTTP request, as far as AsyncLocalStorage can tell. Node's HTTP server
@@ -35,7 +40,7 @@ describe('request context', () => {
     // A person in three companies who has not picked yet, and a system-role
     // account that belongs to none. Both are signed in; neither has an org.
     runWithRequestContext(
-      { orgId: null, userId: 'user-1', sessionId: null },
+      { orgId: null, userId: 'user-1', orgRole: null, sessionId: null },
       () => {
         expect(requireRequestContext().userId).toBe('user-1')
 
@@ -78,7 +83,7 @@ describe('request context', () => {
 
     const request = (orgId: string, delay: number) =>
       runWithRequestContext(
-        { orgId, userId: `user-${orgId}`, sessionId: null },
+        { orgId, userId: `user-${orgId}`, orgRole: null, sessionId: null },
         async () => {
           await new Promise((resolve) => setTimeout(resolve, delay))
           seen.push(requireOrgContext().orgId)
@@ -95,7 +100,7 @@ describe('request context', () => {
   it('nests, so a job acting for another org restores the outer one', () => {
     runWithRequestContext(context, () => {
       runWithRequestContext(
-        { orgId: 'org-2', userId: 'system', sessionId: null },
+        { orgId: 'org-2', userId: 'system', orgRole: null, sessionId: null },
         () => {
           expect(requireRequestContext().orgId).toBe('org-2')
         },
@@ -158,6 +163,7 @@ describe('openRequestContext', () => {
         fill({
           orgId: `org-${index}`,
           userId: `user-${index}`,
+          orgRole: null,
           sessionId: `session-${index}`,
         })
 
@@ -214,7 +220,12 @@ describe('openRequestContext over HTTP', () => {
     const guard = async (orgId: string): Promise<void> => {
       const fill = openRequestContext()
       await new Promise((resolve) => setTimeout(resolve, 5)) // session lookup
-      fill({ orgId, userId: `user-${orgId}`, sessionId: `session-${orgId}` })
+      fill({
+        orgId,
+        userId: `user-${orgId}`,
+        orgRole: null,
+        sessionId: `session-${orgId}`,
+      })
     }
 
     server = createServer(async (request, response) => {

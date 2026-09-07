@@ -226,6 +226,7 @@ describe('AuthGuard', () => {
     expect(entered).toHaveBeenCalledWith({
       userId: USER,
       orgId: ACME,
+      orgRole: 'member',
       sessionId: SESSION,
     })
   })
@@ -243,6 +244,7 @@ describe('AuthGuard', () => {
     expect(entered).toHaveBeenCalledWith({
       userId: USER,
       orgId: GLOBEX,
+      orgRole: 'member',
       sessionId: SESSION,
     })
   })
@@ -306,6 +308,10 @@ describe('AuthGuard', () => {
     expect(entered).toHaveBeenCalledWith({
       userId: USER,
       orgId: null,
+      // No org means no role in one. Not a default: `actorFromContext`
+      // refuses on this rather than letting a permission question be asked
+      // about an organisation nobody has chosen.
+      orgRole: null,
       sessionId: SESSION,
     })
   })

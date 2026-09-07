@@ -1,5 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 
+import type { OrgRole } from '@repo/shared'
+
 /**
  * Who is making the current request, and for which organisation.
  *
@@ -19,6 +21,21 @@ export interface RequestContext {
   orgId: string | null
   /** The user acting. Writes are attributed to them. */
   userId: string
+  /**
+   * What the caller is in `orgId` — the input every permission question needs,
+   * and the reason it is carried rather than looked up: the guard has already
+   * read `organization.members` to decide which org this request is for, so
+   * asking again in each controller would be the same row fetched twice to
+   * answer a question already answered.
+   *
+   * Null in two different situations, and neither is a gap. `orgId` is null,
+   * so there is no org to hold a role in; or something that is not a person is
+   * acting — a cron job, a seed, a migration — which has an org but no
+   * membership. That second case is why this stays nullable even on
+   * `OrgRequestContext`: a job legitimately has an org and no role, and
+   * `actorFromContext` refuses rather than inventing one.
+   */
+  orgRole: OrgRole | null
   /**
    * The session this request arrived on, or `null` for anything that is not
    * an HTTP request — a job, a seed, a migration.
