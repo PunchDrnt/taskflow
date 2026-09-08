@@ -97,9 +97,15 @@ async function forwardedOriginHeaders(): Promise<Record<string, string>> {
  * to recover from — see the docblock above for what recovering would cost.
  */
 export async function apiForRender(): Promise<AxiosInstance> {
-  const instance = createInstance()
+  // ⚠️ The cookie read comes **first**, and the order is load-bearing rather
+  // than tidy. `cookies()` is what tells Next this render depends on the
+  // request, and a page that never reaches it is prerendered at build time —
+  // where `createInstance` asks for `API_INTERNAL_URL`, throws the "required
+  // when serving in production" error `config/env.ts` describes, and fails
+  // `next build` for a page that would have been correct at runtime.
   const cookieHeader = await currentCookieHeader()
   const origin = await forwardedOriginHeaders()
+  const instance = createInstance()
 
   instance.interceptors.request.use((config) => {
     config.headers.set({ ...origin, cookie: cookieHeader })
@@ -136,12 +142,13 @@ export async function apiForRender(): Promise<AxiosInstance> {
  * racing inside one function.
  */
 export async function apiForAction(): Promise<AxiosInstance> {
-  const instance = createInstance()
   const origin = await forwardedOriginHeaders()
 
   // Mutable, because a successful refresh changes it and the retry has to go
-  // out with the new tokens rather than the ones that just 401'd.
+  // out with the new tokens rather than the ones that just 401'd. Read before
+  // `createInstance` for the reason `apiForRender` gives.
   let cookieHeader = await currentCookieHeader()
+  const instance = createInstance()
 
   // Scoped to this instance, which is one action. Two actions running at once
   // are two server requests that could not share a promise anyway; what they

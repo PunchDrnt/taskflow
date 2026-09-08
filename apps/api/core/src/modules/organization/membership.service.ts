@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common'
 
-import type { OrgRole } from '@repo/shared'
+import type { Membership, OrgRole } from '@repo/shared'
 
 import { InjectOrgRepository } from '#shared/org-scope/org-repository.provider'
 import { OrgScopedRepository } from '#shared/org-scope/org-scoped.repository'
@@ -8,14 +8,10 @@ import { OrgScopedRepository } from '#shared/org-scope/org-scoped.repository'
 import { OrganizationMember } from './member.entity'
 import { Organization } from './organization.entity'
 
-/** One organisation a person may act for, with what the picker needs to draw it. */
-export interface Membership {
-  orgId: string
-  name: string
-  slug: string
-  /** Their role in *this* org, which differs from org to org. */
-  role: OrgRole
-}
+// `Membership` is declared in @repo/shared, not here: the web client names
+// the same shape, and one contract with two declarations drifts the first
+// time a field is added.
+export type { Membership } from '@repo/shared'
 
 /** What `resolveActiveOrg` decided, and whether a stale cookie must go. */
 export interface ActiveOrg {

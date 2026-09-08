@@ -16,7 +16,7 @@ import {
   setActiveOrgSchema,
   updateProfileSchema,
   type AvatarUploadInput,
-  type OrgRole,
+  type Me,
   type SetActiveOrgInput,
   type UpdateProfileInput,
 } from '@repo/shared'
@@ -27,10 +27,7 @@ import { SkipOrgScope } from '#shared/http/route-metadata'
 import { ZodValidationPipe } from '#shared/http/zod-validation.pipe'
 import { requireRequestContext } from '#shared/org-scope/request-context'
 
-import {
-  MembershipService,
-  type Membership,
-} from '../../organization/membership.service'
+import { MembershipService } from '../../organization/membership.service'
 import { StorageService } from '../../storage/storage.service'
 import { UserService } from '../user/user.service'
 import { AuthCookies } from './auth.cookies'
@@ -46,24 +43,6 @@ import { TwoFactorService } from './two-factor.service'
  * was created to avoid. The path is what the screen calls; the module is where
  * the dependencies already are.
  */
-/** What `GET /v1/me` answers with, and what `PATCH /v1/me` echoes back. */
-export interface Me {
-  id: string
-  email: string
-  username: string
-  name: string
-  nickname: string
-  phone: string | null
-  avatarUrl: string | null
-  status: string
-  /** Whether a second factor stands between this account and a session. */
-  twoFactorEnabled: boolean
-  organizations: Membership[]
-  /** Null while the caller is in several organisations and has picked none. */
-  activeOrgId: string | null
-  /** The caller's role in `activeOrgId`, null when there is no active org. */
-  role: OrgRole | null
-}
 
 @ApiTags('me')
 @Controller('me')

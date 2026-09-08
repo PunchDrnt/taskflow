@@ -28,7 +28,7 @@ const envSchema = z.object({
    * Caddy forwards it, which is the whole basis of `SameSite=Lax` being enough
    * (docs/01-architecture.md#csrf).
    */
-  API_INTERNAL_URL: z.url('API_INTERNAL_URL ต้องเป็น URL เต็ม').optional(),
+  API_INTERNAL_URL: z.url('API_INTERNAL_URL must be a full URL').optional(),
 })
 
 /**
