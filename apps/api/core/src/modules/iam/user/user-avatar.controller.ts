@@ -42,7 +42,7 @@ export class UserAvatarController {
   ): Promise<{ url: string; statusCode: number }> {
     const user = await this.users.findById(userId)
 
-    if (!user?.avatarUrl) throw ApiException.notFound('ยังไม่มีรูปโปรไฟล์')
+    if (!user?.avatarUrl) throw ApiException.notFound('No profile picture')
 
     const url = /^https?:\/\//.test(user.avatarUrl)
       ? user.avatarUrl

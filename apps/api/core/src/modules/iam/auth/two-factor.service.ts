@@ -332,7 +332,7 @@ export class TwoFactorService {
       throw new ApiException(
         HttpStatus.BAD_REQUEST,
         AUTH_ERROR_CODES.WRONG_CURRENT_PASSWORD,
-        'รหัสผ่านไม่ถูกต้อง',
+        'Incorrect password',
       )
     }
 
@@ -344,7 +344,7 @@ function invalidCode(): ApiException {
   return new ApiException(
     HttpStatus.UNAUTHORIZED,
     AUTH_ERROR_CODES.INVALID_TWO_FACTOR_CODE,
-    'รหัสยืนยันไม่ถูกต้องหรือถูกใช้ไปแล้ว',
+    'That verification code is wrong or has already been used',
   )
 }
 
@@ -352,7 +352,7 @@ function twoFactorLocked(): ApiException {
   return new ApiException(
     HttpStatus.UNAUTHORIZED,
     AUTH_ERROR_CODES.ACCOUNT_LOCKED,
-    'ใส่รหัสยืนยันผิดหลายครั้ง กรุณารอสักครู่',
+    'Too many wrong verification codes. Please wait a moment.',
   )
 }
 
@@ -360,7 +360,7 @@ function alreadyEnabled(): ApiException {
   return new ApiException(
     HttpStatus.CONFLICT,
     AUTH_ERROR_CODES.TWO_FACTOR_ALREADY_ENABLED,
-    'เปิดการยืนยันสองขั้นตอนไว้อยู่แล้ว',
+    'Two-factor authentication is already switched on',
   )
 }
 
@@ -368,6 +368,6 @@ function setupNotStarted(): ApiException {
   return new ApiException(
     HttpStatus.BAD_REQUEST,
     AUTH_ERROR_CODES.TWO_FACTOR_SETUP_NOT_STARTED,
-    'ยังไม่ได้เริ่มตั้งค่าการยืนยันสองขั้นตอน',
+    'Two-factor setup has not been started',
   )
 }

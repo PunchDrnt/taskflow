@@ -12,7 +12,7 @@ export const TASK_ERROR_CODES = {
    * A refusal rather than a silent join, because adding somebody to a project
    * gives them everything in it — every task, every comment, every attachment
    * — and that is not a side effect of picking a name out of a list. The
-   * client asks ("เพิ่มเข้าโปรเจกต์เลยไหม") and sends `addToProject: true`,
+   * client asks ("Add them to it?") and sends `addToProject: true`,
    * which is the confirmation docs/04-features/phase-1.md#assignee-picker
    * describes, expressed as a second request rather than as a hidden write.
    */
@@ -41,17 +41,17 @@ export const TASK_ERROR_CODES = {
 export const taskTitleSchema = z
   .string()
   .trim()
-  .min(1, 'กรุณากรอกชื่องาน')
-  .max(500, 'ชื่องานต้องไม่เกิน 500 ตัวอักษร')
+  .min(1, 'Enter a task title')
+  .max(500, 'Task title must be 500 characters or fewer')
 
 export const taskDescriptionSchema = z
   .string()
   .trim()
-  .max(20000, 'รายละเอียดต้องไม่เกิน 20000 ตัวอักษร')
+  .max(20000, 'Description must be 20000 characters or fewer')
 
 export const taskPrioritySchema = z.enum(
   TASK_PRIORITIES,
-  'ความสำคัญต้องเป็น low, medium, high หรือ urgent',
+  'Priority must be low, medium, high or urgent',
 )
 
 /**
@@ -66,7 +66,10 @@ export const taskPrioritySchema = z.enum(
  * sends the offset it meant.
  */
 export const dueDateSchema = z.iso
-  .datetime({ offset: true, message: 'วันครบกำหนดต้องเป็นวันที่แบบ ISO 8601' })
+  .datetime({
+    offset: true,
+    message: 'Due date must be an ISO 8601 date-time with an offset',
+  })
   .transform((value) => new Date(value))
 
 /**
@@ -88,7 +91,7 @@ export const createTaskSchema = z.object({
   priority: taskPrioritySchema.optional(),
   dueDate: dueDateSchema.optional(),
   /** Omitted means the project's default status. */
-  statusId: idSchema('status id ไม่ถูกต้อง').optional(),
+  statusId: idSchema('Invalid status id').optional(),
 })
 
 export type CreateTaskInput = z.infer<typeof createTaskSchema>
@@ -107,12 +110,12 @@ export const updateTaskSchema = z
     description: taskDescriptionSchema.nullable().optional(),
     priority: taskPrioritySchema.nullable().optional(),
     dueDate: dueDateSchema.nullable().optional(),
-    statusId: idSchema('status id ไม่ถูกต้อง').optional(),
-    afterId: idSchema('task id ไม่ถูกต้อง').nullable().optional(),
+    statusId: idSchema('Invalid status id').optional(),
+    afterId: idSchema('Invalid task id').nullable().optional(),
   })
   .refine(
     (body) => Object.values(body).some((value) => value !== undefined),
-    'ต้องระบุอย่างน้อยหนึ่งอย่างที่จะแก้',
+    'Provide at least one field to change',
   )
 
 export type UpdateTaskInput = z.infer<typeof updateTaskSchema>
@@ -123,7 +126,7 @@ export type UpdateTaskInput = z.infer<typeof updateTaskSchema>
  * both, so adding teams later is a schema change of nothing.
  */
 export const assignTaskSchema = z.object({
-  userId: idSchema('user id ไม่ถูกต้อง'),
+  userId: idSchema('Invalid user id'),
   /**
    * Join them to the project as a `member` if they are not in it yet. Default
    * false, so the first attempt reports `NOT_PROJECT_MEMBER` and the client
@@ -138,7 +141,7 @@ export type AssignTaskInput = z.infer<typeof assignTaskSchema>
  * Who this project can hand work to, for the assignee picker.
  *
  * Two tiers rather than one ranked list: `project` first — nearly always the
- * answer — and `org` behind the picker's "ค้นหาทั้งองค์กร" button. The middle
+ * answer — and `org` behind the picker's "Search the whole organisation" button. The middle
  * tier the original spec had ("people you assigned recently", computed from
  * the activity log) was cut in the docs: the most expensive query on the most
  * frequently opened screen, to reorder something the first tier already
@@ -151,7 +154,7 @@ export const assignableQuerySchema = z.object({
 
 export type AssignableQuery = z.infer<typeof assignableQuerySchema>
 
-export const taskIdSchema = idSchema('task id ไม่ถูกต้อง')
+export const taskIdSchema = idSchema('Invalid task id')
 
 /**
  * How a list is ordered.
@@ -200,8 +203,8 @@ const many = <T extends z.ZodType>(item: T) =>
  * table to store views in.
  */
 export const listTasksQuerySchema = z.object({
-  statusId: many(idSchema('status id ไม่ถูกต้อง')),
-  assigneeId: many(idSchema('user id ไม่ถูกต้อง')),
+  statusId: many(idSchema('Invalid status id')),
+  assigneeId: many(idSchema('Invalid user id')),
   priority: many(taskPrioritySchema),
   /** Inclusive, and both may be given to bracket a range. */
   dueAfter: dueDateSchema.optional(),

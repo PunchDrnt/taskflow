@@ -211,6 +211,6 @@ function invalidResetCode(): ApiException {
   return new ApiException(
     HttpStatus.BAD_REQUEST,
     AUTH_ERROR_CODES.INVALID_RESET_CODE,
-    'ลิงก์รีเซ็ตรหัสผ่านไม่ถูกต้องหรือหมดอายุแล้ว',
+    'That password reset link is invalid or has expired',
   )
 }

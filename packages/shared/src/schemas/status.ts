@@ -24,7 +24,7 @@ export const STATUS_ERROR_CODES = {
  * CHECK that they are never both true. Exposing them as two flags would let a
  * client send the one combination the CHECK exists to reject, and find out by
  * receiving a 500 — so the API takes the choice the settings screen actually
- * presents ("ปกติ / เสร็จ / ยกเลิก") and the service maps it to the pair.
+ * presents ("Normal / Done / Cancelled") and the service maps it to the pair.
  *
  * The distinction is not cosmetic. Cancelled work leaves the denominator of a
  * progress bar; done work stays in it. A project with no cancelled status
@@ -37,14 +37,14 @@ export type StatusKind = (typeof STATUS_KINDS)[number]
 
 export const statusKindSchema = z.enum(
   STATUS_KINDS,
-  'ประเภทต้องเป็น normal, done หรือ cancelled',
+  'Kind must be normal, done or cancelled',
 )
 
 export const statusNameSchema = z
   .string()
   .trim()
-  .min(1, 'กรุณากรอกชื่อสถานะ')
-  .max(50, 'ชื่อสถานะต้องไม่เกิน 50 ตัวอักษร')
+  .min(1, 'Enter a status name')
+  .max(50, 'Status name must be 50 characters or fewer')
 
 export const createStatusSchema = z.object({
   name: statusNameSchema,
@@ -71,13 +71,13 @@ export const updateStatusSchema = z
     kind: statusKindSchema.optional(),
     /** Only `true` is meaningful: a project always has exactly one default. */
     isDefault: z.literal(true).optional(),
-    afterId: idSchema('status id ไม่ถูกต้อง').nullable().optional(),
+    afterId: idSchema('Invalid status id').nullable().optional(),
   })
   .refine(
     (body) => Object.values(body).some((value) => value !== undefined),
-    'ต้องระบุอย่างน้อยหนึ่งอย่างที่จะแก้',
+    'Provide at least one field to change',
   )
 
 export type UpdateStatusInput = z.infer<typeof updateStatusSchema>
 
-export const statusIdSchema = idSchema('status id ไม่ถูกต้อง')
+export const statusIdSchema = idSchema('Invalid status id')

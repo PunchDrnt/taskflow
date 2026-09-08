@@ -55,7 +55,7 @@ export class OrganizationService {
     const organization = await this.orgs.findById(orgId)
 
     if (!organization || organization.deletedAt !== null) {
-      throw ApiException.notFound('ไม่พบองค์กรนี้')
+      throw ApiException.notFound('Organisation not found')
     }
 
     return view(organization)
@@ -67,7 +67,7 @@ export class OrganizationService {
     const before = await this.orgs.findById(orgId)
 
     if (!before || before.deletedAt !== null) {
-      throw ApiException.notFound('ไม่พบองค์กรนี้')
+      throw ApiException.notFound('Organisation not found')
     }
 
     const after = { ...before, ...patch }
@@ -187,6 +187,6 @@ function slugClash(error: unknown, slug: string | undefined): unknown {
   return new ApiException(
     409,
     ORGANIZATION_ERROR_CODES.SLUG_TAKEN,
-    `slug "${slug}" ถูกใช้ไปแล้ว`,
+    `Slug "${slug}" is already taken`,
   )
 }

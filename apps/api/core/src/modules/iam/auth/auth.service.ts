@@ -159,7 +159,7 @@ export class AuthService {
       throw new ApiException(
         HttpStatus.UNAUTHORIZED,
         AUTH_ERROR_CODES.ACCOUNT_INACTIVE,
-        'บัญชีนี้ถูกปิดใช้งาน',
+        'This account is deactivated',
       )
     }
 
@@ -549,7 +549,7 @@ function invalidCredentials(): ApiException {
   return new ApiException(
     HttpStatus.UNAUTHORIZED,
     AUTH_ERROR_CODES.INVALID_CREDENTIALS,
-    'อีเมลหรือรหัสผ่านไม่ถูกต้อง',
+    'Incorrect email or password',
   )
 }
 
@@ -558,7 +558,7 @@ function accountLocked(): ApiException {
   return new ApiException(
     HttpStatus.UNAUTHORIZED,
     AUTH_ERROR_CODES.ACCOUNT_LOCKED,
-    'บัญชีถูกล็อกชั่วคราวจากการเข้าสู่ระบบผิดหลายครั้ง',
+    'This account is temporarily locked after too many failed sign-ins',
   )
 }
 
@@ -566,7 +566,7 @@ function sessionExpired(): ApiException {
   return new ApiException(
     HttpStatus.UNAUTHORIZED,
     AUTH_ERROR_CODES.SESSION_EXPIRED,
-    'เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่',
+    'Your session has expired. Please sign in again.',
   )
 }
 
@@ -579,7 +579,7 @@ function wrongCurrentPassword(): ApiException {
   return new ApiException(
     HttpStatus.BAD_REQUEST,
     AUTH_ERROR_CODES.WRONG_CURRENT_PASSWORD,
-    'รหัสผ่านปัจจุบันไม่ถูกต้อง',
+    'Current password is incorrect',
   )
 }
 
@@ -588,7 +588,7 @@ function emailTaken(): ApiException {
   return new ApiException(
     HttpStatus.CONFLICT,
     AUTH_ERROR_CODES.EMAIL_TAKEN,
-    'อีเมลนี้ถูกใช้แล้ว',
+    'That email address is already taken',
   )
 }
 
@@ -597,6 +597,6 @@ function usernameTaken(): ApiException {
   return new ApiException(
     HttpStatus.CONFLICT,
     AUTH_ERROR_CODES.USERNAME_TAKEN,
-    'ชื่อผู้ใช้นี้ถูกใช้แล้ว',
+    'That username is already taken',
   )
 }

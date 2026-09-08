@@ -44,21 +44,21 @@ function rethrowConflict(error: unknown): never {
       throw new ApiException(
         HttpStatus.CONFLICT,
         AUTH_ERROR_CODES.USERNAME_TAKEN,
-        'ชื่อผู้ใช้นี้ถูกใช้แล้ว',
+        'That username is already taken',
       )
     }
     if (driver.constraint === 'users_phone_unique') {
       throw new ApiException(
         HttpStatus.CONFLICT,
         AUTH_ERROR_CODES.PHONE_TAKEN,
-        'เบอร์โทรนี้ถูกใช้แล้ว',
+        'That phone number is already taken',
       )
     }
     if (driver.constraint === 'users_email_unique') {
       throw new ApiException(
         HttpStatus.CONFLICT,
         AUTH_ERROR_CODES.EMAIL_TAKEN,
-        'อีเมลนี้ถูกใช้แล้ว',
+        'That email address is already taken',
       )
     }
   }

@@ -185,7 +185,7 @@ describe('PermissionService', () => {
 
       expect(thrown.getStatus()).toBe(403)
       expect(thrown.code).toBe('FORBIDDEN')
-      expect(thrown.message).toMatch(/ไม่มีสิทธิ์/)
+      expect(thrown.message).toMatch(/permission/)
       expect(thrown.details).toEqual({
         action: 'delete',
         subject: 'Organization',

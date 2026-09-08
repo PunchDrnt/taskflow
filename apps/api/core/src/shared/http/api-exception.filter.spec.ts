@@ -29,7 +29,7 @@ class ErrorsController {
     throw new ApiException(
       HttpStatus.UNPROCESSABLE_ENTITY,
       'STATUS_IN_USE',
-      'ลบไม่ได้ ยังมีงานใช้สถานะนี้อยู่',
+      'Cannot delete: tasks are still using this status',
       { taskCount: 12 },
     )
   }
@@ -97,7 +97,7 @@ describe('ApiExceptionFilter', () => {
     expect(body).toEqual({
       statusCode: 422,
       code: 'STATUS_IN_USE',
-      message: 'ลบไม่ได้ ยังมีงานใช้สถานะนี้อยู่',
+      message: 'Cannot delete: tasks are still using this status',
       details: { taskCount: 12 },
     })
   })
@@ -109,7 +109,7 @@ describe('ApiExceptionFilter', () => {
     expect(body).toEqual({
       statusCode: 401,
       code: 'UNAUTHENTICATED',
-      message: 'กรุณาเข้าสู่ระบบ',
+      message: 'Please sign in',
     })
     expect('details' in body).toBe(false)
   })
@@ -136,7 +136,7 @@ describe('ApiExceptionFilter', () => {
     expect(body).toMatchObject({
       statusCode: 400,
       code: 'VALIDATION_FAILED',
-      details: [{ path: 'email', message: 'อีเมลไม่ถูกต้อง' }],
+      details: [{ path: 'email', message: 'Enter a valid email address' }],
     })
   })
 

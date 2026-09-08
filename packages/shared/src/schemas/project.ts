@@ -34,19 +34,19 @@ export const keyPrefixSchema = z
   .toUpperCase()
   .regex(
     /^[A-Z][A-Z0-9]{1,5}$/,
-    'key prefix ต้องเป็นตัวพิมพ์ใหญ่ 2-6 ตัว ขึ้นต้นด้วยตัวอักษร',
+    'Key prefix must be 2-6 uppercase characters, starting with a letter',
   )
 
 export const projectNameSchema = z
   .string()
   .trim()
-  .min(1, 'กรุณากรอกชื่อโปรเจกต์')
-  .max(100, 'ชื่อโปรเจกต์ต้องไม่เกิน 100 ตัวอักษร')
+  .min(1, 'Enter a project name')
+  .max(100, 'Project name must be 100 characters or fewer')
 
 export const projectDescriptionSchema = z
   .string()
   .trim()
-  .max(2000, 'รายละเอียดต้องไม่เกิน 2000 ตัวอักษร')
+  .max(2000, 'Description must be 2000 characters or fewer')
 
 /**
  * A palette token, never a hex value — so a theme can restyle every project
@@ -59,7 +59,7 @@ export const projectDescriptionSchema = z
  */
 export const paletteColorSchema = z.enum(
   STATUS_COLORS,
-  'สีต้องเป็นสีใดสีหนึ่งใน palette',
+  'Colour must be one from the palette',
 )
 
 export const createProjectSchema = z.object({
@@ -92,7 +92,7 @@ export const updateProjectSchema = z
   })
   .refine(
     (body) => Object.values(body).some((value) => value !== undefined),
-    'ต้องระบุอย่างน้อยหนึ่งอย่างที่จะแก้',
+    'Provide at least one field to change',
   )
 
 export type UpdateProjectInput = z.infer<typeof updateProjectSchema>
@@ -103,16 +103,14 @@ export type UpdateProjectInput = z.infer<typeof updateProjectSchema>
  * and it is the org's owners who cannot be locked out of a project.
  */
 export const addProjectMemberSchema = z.object({
-  userId: idSchema('user id ไม่ถูกต้อง'),
-  role: z
-    .enum(SCOPED_ROLES, 'role ต้องเป็น admin หรือ member')
-    .default('member'),
+  userId: idSchema('Invalid user id'),
+  role: z.enum(SCOPED_ROLES, 'Role must be admin or member').default('member'),
 })
 
 export type AddProjectMemberInput = z.infer<typeof addProjectMemberSchema>
 
 export const changeProjectMemberRoleSchema = z.object({
-  role: z.enum(SCOPED_ROLES, 'role ต้องเป็น admin หรือ member'),
+  role: z.enum(SCOPED_ROLES, 'Role must be admin or member'),
 })
 
 export type ChangeProjectMemberRoleInput = z.infer<
@@ -120,8 +118,8 @@ export type ChangeProjectMemberRoleInput = z.infer<
 >
 
 /** Path parameters, validated rather than trusted into a query. */
-export const projectIdSchema = idSchema('project id ไม่ถูกต้อง')
-export const projectMemberUserIdSchema = idSchema('user id ไม่ถูกต้อง')
+export const projectIdSchema = idSchema('Invalid project id')
+export const projectMemberUserIdSchema = idSchema('Invalid user id')
 
 /**
  * Archived projects are hidden, not deleted, so a list has to say which it

@@ -12,28 +12,28 @@ export const PASSWORD_MIN_LENGTH = 8
  * and echoed back consistent instead.
  */
 export const emailSchema = z
-  .email('อีเมลไม่ถูกต้อง')
+  .email('Enter a valid email address')
   .trim()
   .toLowerCase()
-  .max(320, 'อีเมลยาวเกินไป')
+  .max(320, 'Email address is too long')
 
 /** For setting a password. Checking one at login uses `presentedPassword`. */
 export const passwordSchema = z
   .string()
   .min(
     PASSWORD_MIN_LENGTH,
-    `รหัสผ่านต้องมีอย่างน้อย ${PASSWORD_MIN_LENGTH} ตัว`,
+    `Password must be at least ${PASSWORD_MIN_LENGTH} characters`,
   )
   // argon2 has no meaningful input limit, but an unbounded one is free CPU for
   // whoever sends a megabyte of it.
-  .max(256, 'รหัสผ่านยาวเกินไป')
+  .max(256, 'Password is too long')
 
 /**
  * Deliberately not `passwordSchema`: the policy can tighten later, and an
  * account whose password predates the change must still be able to sign in.
  * Rejecting it here would also tell an attacker the length rule for free.
  */
-const presentedPassword = z.string().min(1, 'กรุณากรอกรหัสผ่าน')
+const presentedPassword = z.string().min(1, 'Enter your password')
 
 /**
  * One field, not two, and not a radio button. Whether somebody types their
@@ -50,8 +50,8 @@ const loginIdentifier = z
   .string()
   .trim()
   .toLowerCase()
-  .min(1, 'กรุณากรอกอีเมลหรือชื่อผู้ใช้')
-  .max(320, 'ยาวเกินไป')
+  .min(1, 'Enter your email or username')
+  .max(320, 'Too long')
 
 export const loginSchema = z.object({
   login: loginIdentifier,
@@ -67,7 +67,7 @@ export type LoginInput = z.infer<typeof loginSchema>
 
 /** `POST /v1/me/active-org` — which org the caller is acting for. */
 export const setActiveOrgSchema = z.object({
-  orgId: idSchema('org ไม่ถูกต้อง'),
+  orgId: idSchema('Invalid organisation id'),
 })
 
 export type SetActiveOrgInput = z.infer<typeof setActiveOrgSchema>
@@ -88,7 +88,7 @@ export const changePasswordSchema = z
   })
   .refine((value) => value.newPassword === value.confirmNewPassword, {
     path: ['confirmNewPassword'],
-    message: 'รหัสผ่านใหม่ไม่ตรงกัน',
+    message: 'New passwords do not match',
   })
 
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>
@@ -101,13 +101,13 @@ export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>
 /** `POST /v1/auth/reset-password` — the code comes from the emailed link. */
 export const resetPasswordSchema = z
   .object({
-    code: z.string().min(1, 'ลิงก์ไม่ถูกต้อง'),
+    code: z.string().min(1, 'Invalid link'),
     newPassword: passwordSchema,
     confirmNewPassword: z.string(),
   })
   .refine((value) => value.newPassword === value.confirmNewPassword, {
     path: ['confirmNewPassword'],
-    message: 'รหัสผ่านใหม่ไม่ตรงกัน',
+    message: 'New passwords do not match',
   })
 
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>
@@ -126,16 +126,20 @@ export const registerSchema = z
     username: usernameSchema,
     password: passwordSchema,
     confirmPassword: z.string(),
-    name: z.string().trim().min(1, 'กรุณากรอกชื่อ').max(200, 'ชื่อยาวเกินไป'),
+    name: z
+      .string()
+      .trim()
+      .min(1, 'Enter your name')
+      .max(200, 'Name is too long'),
     nickname: z
       .string()
       .trim()
-      .min(1, 'กรุณากรอกชื่อเล่น')
-      .max(100, 'ชื่อเล่นยาวเกินไป'),
+      .min(1, 'Enter a nickname')
+      .max(100, 'Nickname is too long'),
   })
   .refine((value) => value.password === value.confirmPassword, {
     path: ['confirmPassword'],
-    message: 'รหัสผ่านไม่ตรงกัน',
+    message: 'Passwords do not match',
   })
 
 export type RegisterInput = z.infer<typeof registerSchema>
@@ -144,8 +148,8 @@ export type RegisterInput = z.infer<typeof registerSchema>
 const twoFactorCode = z
   .string()
   .trim()
-  .min(1, 'กรุณากรอกรหัสยืนยัน')
-  .max(64, 'รหัสยืนยันยาวเกินไป')
+  .min(1, 'Enter the verification code')
+  .max(64, 'Verification code is too long')
 
 /** `POST /v1/auth/login/2fa` — the second step, holding the challenge cookie. */
 export const twoFactorLoginSchema = z.object({ code: twoFactorCode })

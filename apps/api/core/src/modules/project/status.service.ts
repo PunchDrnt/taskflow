@@ -145,7 +145,7 @@ export class StatusService {
     const all = await this.rows(projectId)
     const status = all.find((one) => one.id === statusId)
 
-    if (!status) throw ApiException.notFound('ไม่พบสถานะนี้')
+    if (!status) throw ApiException.notFound('Status not found')
 
     const nextKind = patch.kind ?? kindOf(status)
 
@@ -157,8 +157,8 @@ export class StatusService {
       throw new ApiException(
         409,
         STATUS_ERROR_CODES.LAST_DONE_STATUS,
-        'โปรเจกต์ต้องมีสถานะที่นับว่าเสร็จอย่างน้อยหนึ่งอัน ' +
-          'กรุณาตั้งสถานะอื่นเป็น "เสร็จ" ก่อน',
+        'A project must keep at least one status that counts as done. ' +
+          'Mark another status as done first.',
       )
     }
 
@@ -247,13 +247,13 @@ export class StatusService {
     const all = await this.rows(projectId)
     const status = all.find((one) => one.id === statusId)
 
-    if (!status) throw ApiException.notFound('ไม่พบสถานะนี้')
+    if (!status) throw ApiException.notFound('Status not found')
 
     if (all.length === 1) {
       throw new ApiException(
         409,
         STATUS_ERROR_CODES.LAST_STATUS,
-        'โปรเจกต์ต้องมีสถานะอย่างน้อยหนึ่งอัน',
+        'A project must keep at least one status',
       )
     }
 
@@ -261,8 +261,8 @@ export class StatusService {
       throw new ApiException(
         409,
         STATUS_ERROR_CODES.LAST_DONE_STATUS,
-        'โปรเจกต์ต้องมีสถานะที่นับว่าเสร็จอย่างน้อยหนึ่งอัน ' +
-          'กรุณาตั้งสถานะอื่นเป็น "เสร็จ" ก่อน',
+        'A project must keep at least one status that counts as done. ' +
+          'Mark another status as done first.',
       )
     }
 
@@ -270,7 +270,7 @@ export class StatusService {
       throw new ApiException(
         409,
         STATUS_ERROR_CODES.LAST_DEFAULT_STATUS,
-        'สถานะนี้เป็นสถานะตั้งต้นของงานใหม่ กรุณาตั้งสถานะอื่นเป็นตั้งต้นก่อน',
+        'This is the default status for new tasks. Make another status the default first.',
       )
     }
 
@@ -284,7 +284,7 @@ export class StatusService {
       throw new ApiException(
         409,
         STATUS_ERROR_CODES.STATUS_IN_USE,
-        `ยังมีงาน ${inUse} ใบอยู่ในสถานะนี้ กรุณาย้ายงานออกก่อน`,
+        `There are still ${inUse} tasks in this status. Move them out first.`,
         { tasks: inUse },
       )
     }
@@ -360,7 +360,7 @@ export class StatusService {
       .andWhere('status.deletedAt IS NULL')
       .getOne()
 
-    if (!status) throw ApiException.notFound('ไม่พบสถานะนี้')
+    if (!status) throw ApiException.notFound('Status not found')
 
     return status
   }
@@ -458,7 +458,7 @@ export class StatusService {
 
     const at = others.findIndex((one) => one.id === afterId)
 
-    if (at === -1) throw ApiException.notFound('ไม่พบสถานะที่จะย้ายไปต่อจาก')
+    if (at === -1) throw ApiException.notFound('No such status to move after')
 
     return between(others[at]!.sortOrder, others[at + 1]?.sortOrder ?? null)
   }
@@ -509,6 +509,6 @@ function nameClash(error: unknown, name: string | undefined): unknown {
   return new ApiException(
     409,
     STATUS_ERROR_CODES.NAME_TAKEN,
-    `มีสถานะชื่อ "${name ?? ''}" อยู่แล้วในโปรเจกต์นี้`,
+    `A status named "${name ?? ''}" already exists in this project`,
   )
 }

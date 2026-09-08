@@ -19,7 +19,7 @@ export const usernameSchema = z
   .toLowerCase()
   .regex(
     /^[a-z][a-z0-9_]{2,29}$/,
-    'ใช้ a-z 0-9 _ ยาว 3-30 ตัว และขึ้นต้นด้วยตัวอักษร',
+    'Use a-z, 0-9 and _, 3-30 characters, starting with a letter',
   )
 
 /**
@@ -38,7 +38,10 @@ export const phoneSchema = z
   .transform((value) =>
     value.startsWith('0') ? `+66${value.slice(1)}` : value,
   )
-  .refine((value) => /^\+[1-9][0-9]{7,14}$/.test(value), 'เบอร์โทรไม่ถูกต้อง')
+  .refine(
+    (value) => /^\+[1-9][0-9]{7,14}$/.test(value),
+    'Enter a valid phone number',
+  )
 
 /**
  * A person's own profile. Email is not here on purpose: changing it is an
@@ -54,8 +57,8 @@ export const phoneSchema = z
 export const personNameSchema = z
   .string()
   .trim()
-  .min(1, 'กรุณากรอกชื่อ')
-  .max(200, 'ชื่อยาวเกินไป')
+  .min(1, 'Enter your name')
+  .max(200, 'Name is too long')
 
 /**
  * Required, like `name`. Thai users are addressed by their nickname first, so
@@ -65,8 +68,8 @@ export const personNameSchema = z
 export const nicknameSchema = z
   .string()
   .trim()
-  .min(1, 'กรุณากรอกชื่อเล่น')
-  .max(100, 'ชื่อเล่นยาวเกินไป')
+  .min(1, 'Enter a nickname')
+  .max(100, 'Nickname is too long')
 
 export const updateProfileSchema = z.object({
   username: usernameSchema,
@@ -92,7 +95,7 @@ export const updateProfileSchema = z.object({
     .max(2048)
     .refine(
       (value) => !value.includes('..') && !value.startsWith('/'),
-      'ที่อยู่รูปไม่ถูกต้อง',
+      'Invalid image location',
     )
     .nullable(),
 })
@@ -111,7 +114,7 @@ export type UpdateProfileInput = z.infer<typeof updateProfileSchema>
  */
 export const avatarUploadSchema = z.object({
   /** Only for the object key, so a stored file is recognisable in the bucket. */
-  fileName: z.string().trim().min(1, 'กรุณาระบุชื่อไฟล์').max(255),
+  fileName: z.string().trim().min(1, 'Provide a file name').max(255),
 })
 
 export type AvatarUploadInput = z.infer<typeof avatarUploadSchema>

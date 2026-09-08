@@ -88,5 +88,5 @@ export function toPage<Row, View>(
 }
 
 function badCursor(): ApiException {
-  return ApiException.badRequest('cursor ไม่ถูกต้อง')
+  return ApiException.badRequest('Invalid cursor')
 }

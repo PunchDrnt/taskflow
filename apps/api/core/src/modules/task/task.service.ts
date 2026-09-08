@@ -484,7 +484,7 @@ export class TaskService {
       throw new ApiException(
         409,
         TASK_ERROR_CODES.USER_INACTIVE,
-        'บัญชีนี้ถูกปิดใช้งานอยู่ มอบหมายงานใหม่ให้ไม่ได้',
+        'That account is deactivated and cannot be given new work',
       )
     }
 
@@ -493,7 +493,7 @@ export class TaskService {
         throw new ApiException(
           409,
           TASK_ERROR_CODES.NOT_PROJECT_MEMBER,
-          'ผู้ใช้นี้ยังไม่ได้อยู่ในโปรเจกต์นี้ ต้องการเพิ่มเข้าโปรเจกต์เลยไหม',
+          'That person is not in this project yet. Add them to it?',
           { userId: input.userId },
         )
       }
@@ -544,7 +544,8 @@ export class TaskService {
       .andWhere('assignee.assigneeId = :userId', { userId })
       .getOne()
 
-    if (!row) throw ApiException.notFound('ผู้ใช้นี้ไม่ได้ถูกมอบหมายงานนี้')
+    if (!row)
+      throw ApiException.notFound('That person is not assigned to this task')
 
     await this.dataSource.transaction(async (manager) => {
       // Before the delete: the audit row names the id, and reading it back
@@ -802,7 +803,7 @@ export class TaskService {
 
     const at = column.findIndex((one) => one.id === patch.afterId)
 
-    if (at === -1) throw ApiException.notFound('ไม่พบงานที่จะย้ายไปต่อจาก')
+    if (at === -1) throw ApiException.notFound('No such task to move after')
 
     return between(column[at]!.sortOrder, column[at + 1]?.sortOrder ?? null)
   }
@@ -881,12 +882,12 @@ function refuseIfArchived(project: Project): void {
   throw new ApiException(
     409,
     TASK_ERROR_CODES.PROJECT_ARCHIVED,
-    'โปรเจกต์นี้ถูกเก็บเข้าคลังแล้ว กรุณานำออกจากคลังก่อนแก้ไขงาน',
+    'This project is archived. Un-archive it before changing its work.',
   )
 }
 
 function notFound(): ApiException {
-  return ApiException.notFound('ไม่พบงานนี้')
+  return ApiException.notFound('Task not found')
 }
 
 function view(
@@ -924,6 +925,6 @@ function alreadyAssigned(error: unknown): unknown {
   return new ApiException(
     409,
     TASK_ERROR_CODES.ALREADY_ASSIGNED,
-    'ผู้ใช้นี้ถูกมอบหมายงานนี้อยู่แล้ว',
+    'That person already has this task',
   )
 }

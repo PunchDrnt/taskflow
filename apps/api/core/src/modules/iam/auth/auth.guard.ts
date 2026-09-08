@@ -110,12 +110,12 @@ function noOrg(membershipCount: number): ApiException {
     ? new ApiException(
         HttpStatus.FORBIDDEN,
         AUTH_ERROR_CODES.NO_ORGANIZATION,
-        'ยังไม่ได้อยู่ในองค์กรใด',
+        'You do not belong to any organisation yet',
       )
     : new ApiException(
         HttpStatus.FORBIDDEN,
         AUTH_ERROR_CODES.ORG_NOT_SELECTED,
-        'กรุณาเลือกองค์กรก่อน',
+        'Choose an organisation first',
       )
 }
 

@@ -205,7 +205,7 @@ export class MeController {
     // 403 rather than 404: the caller named an id they hold, and telling them
     // it does not exist would be a lie whenever it does.
     if (!membership)
-      throw ApiException.forbidden('ไม่ได้เป็นสมาชิกขององค์กรนี้')
+      throw ApiException.forbidden('You are not a member of that organisation')
 
     this.cookies.setActiveOrg(response, membership.orgId)
 

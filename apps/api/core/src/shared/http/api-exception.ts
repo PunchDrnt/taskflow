@@ -32,7 +32,7 @@ export class ApiException extends HttpException {
 
   /** Not signed in, or the session is no longer good. */
   static unauthenticated(
-    message = 'กรุณาเข้าสู่ระบบ',
+    message = 'Please sign in',
     details?: unknown,
   ): ApiException {
     return new ApiException(
@@ -45,7 +45,7 @@ export class ApiException extends HttpException {
 
   /** Signed in, but not allowed to do this. */
   static forbidden(
-    message = 'ไม่มีสิทธิ์ดำเนินการนี้',
+    message = 'You do not have permission to do that',
     details?: unknown,
   ): ApiException {
     return new ApiException(
@@ -60,7 +60,7 @@ export class ApiException extends HttpException {
    * No such row. Also the right answer for a row in another org — 404 rather
    * than 403, so the response does not confirm that it exists somewhere.
    */
-  static notFound(message = 'ไม่พบข้อมูล', details?: unknown): ApiException {
+  static notFound(message = 'Not found', details?: unknown): ApiException {
     return new ApiException(
       HttpStatus.NOT_FOUND,
       API_ERROR_CODES.NOT_FOUND,
@@ -74,10 +74,7 @@ export class ApiException extends HttpException {
    * somebody truncated when they pasted the URL, and its kind. `VALIDATION_FAILED`
    * so the client branches the same way it does for a rejected body.
    */
-  static badRequest(
-    message = 'คำขอไม่ถูกต้อง',
-    details?: unknown,
-  ): ApiException {
+  static badRequest(message = 'Bad request', details?: unknown): ApiException {
     return new ApiException(
       HttpStatus.BAD_REQUEST,
       API_ERROR_CODES.VALIDATION_FAILED,

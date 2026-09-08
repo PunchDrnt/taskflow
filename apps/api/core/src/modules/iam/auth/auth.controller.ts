@@ -127,7 +127,7 @@ export class AuthController {
       throw new ApiException(
         HttpStatus.UNAUTHORIZED,
         AUTH_ERROR_CODES.SESSION_EXPIRED,
-        'หมดเวลายืนยัน กรุณาเข้าสู่ระบบใหม่',
+        'Verification timed out. Please sign in again.',
       )
     }
 
@@ -249,7 +249,7 @@ export class AuthController {
       throw new ApiException(
         HttpStatus.FORBIDDEN,
         AUTH_ERROR_CODES.REGISTRATION_DISABLED,
-        'ระบบนี้ไม่เปิดให้สมัครเอง กรุณาติดต่อผู้ดูแลองค์กร',
+        'Self sign-up is switched off. Ask an organisation admin to add you.',
       )
     }
 

@@ -63,7 +63,7 @@ export class PermissionService {
     resource: Resource,
   ): void {
     if (!this.can(actor, action, subject, resource)) {
-      throw ApiException.forbidden('ไม่มีสิทธิ์ดำเนินการนี้', {
+      throw ApiException.forbidden('You do not have permission to do that', {
         action,
         subject,
       })

@@ -44,18 +44,18 @@ export const ORGANIZATION_ERROR_CODES = {
  */
 export const orgSlugSchema = z
   .string()
-  .min(2, 'slug ต้องยาวอย่างน้อย 2 ตัวอักษร')
-  .max(50, 'slug ต้องไม่เกิน 50 ตัวอักษร')
+  .min(2, 'Slug must be at least 2 characters')
+  .max(50, 'Slug must be 50 characters or fewer')
   .regex(
     /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/,
-    'slug ใช้ได้เฉพาะ a-z, 0-9 และ - โดยห้ามขึ้นต้นหรือลงท้ายด้วย -',
+    'Slug may use a-z, 0-9 and -, and may not start or end with -',
   )
 
 export const orgNameSchema = z
   .string()
   .trim()
-  .min(1, 'กรุณากรอกชื่อองค์กร')
-  .max(100, 'ชื่อองค์กรต้องไม่เกิน 100 ตัวอักษร')
+  .min(1, 'Enter an organisation name')
+  .max(100, 'Organisation name must be 100 characters or fewer')
 
 export const createOrganizationSchema = z.object({
   name: orgNameSchema,
@@ -76,7 +76,7 @@ export const updateOrganizationSchema = z
   })
   .refine(
     (body) => body.name !== undefined || body.slug !== undefined,
-    'ต้องระบุอย่างน้อยหนึ่งอย่างที่จะแก้',
+    'Provide at least one field to change',
   )
 
 export type UpdateOrganizationInput = z.infer<typeof updateOrganizationSchema>
@@ -89,13 +89,13 @@ export type UpdateOrganizationInput = z.infer<typeof updateOrganizationSchema>
  * question, and answering it in the schema would put the rule in two places.
  */
 export const changeMemberRoleSchema = z.object({
-  role: z.enum(ORG_ROLES, 'role ต้องเป็น owner, admin หรือ member'),
+  role: z.enum(ORG_ROLES, 'Role must be owner, admin or member'),
 })
 
 export type ChangeMemberRoleInput = z.infer<typeof changeMemberRoleSchema>
 
 /** The path parameter, validated rather than trusted into a query. */
-export const memberUserIdSchema = idSchema('user id ไม่ถูกต้อง')
+export const memberUserIdSchema = idSchema('Invalid user id')
 
 /**
  * Adding somebody to the organisation, in the phase before invitations exist.
@@ -117,7 +117,7 @@ export const addOrgMemberSchema = z.object({
   nickname: nicknameSchema,
   password: passwordSchema,
   role: z
-    .enum(ORG_ROLES, 'role ต้องเป็น owner, admin หรือ member')
+    .enum(ORG_ROLES, 'Role must be owner, admin or member')
     .default('member'),
 })
 

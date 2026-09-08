@@ -31,7 +31,7 @@ export class ZodValidationPipe implements PipeTransform {
     throw new ApiException(
       HttpStatus.BAD_REQUEST,
       API_ERROR_CODES.VALIDATION_FAILED,
-      'ข้อมูลที่ส่งมาไม่ถูกต้อง',
+      'The submitted data is not valid',
       issuesOf(result.error),
     )
   }

@@ -22,15 +22,16 @@ const TEMPLATES: Record<string, Renderer> = {
    * in OutboxWorker, long after the request, and must not be able to mint one.
    */
   password_reset: (payload) => ({
-    subject: 'ตั้งรหัสผ่านใหม่ · Taskflow',
+    subject: 'Reset your password · Taskflow',
     text: [
-      `สวัสดีคุณ${String(payload.name ?? '')}`,
+      `Hi ${String(payload.name ?? '')}`.trimEnd() + ',',
       '',
-      'มีคนขอตั้งรหัสผ่านใหม่ให้บัญชีนี้ ถ้าใช่คุณ กดลิงก์ข้างล่างได้เลย',
+      'Somebody asked to reset the password for this account.',
+      'If that was you, use the link below.',
       String(payload.url ?? ''),
       '',
-      `ลิงก์นี้ใช้ได้ครั้งเดียว และหมดอายุใน ${String(payload.expiresInMinutes ?? '')} นาที`,
-      'ถ้าไม่ได้เป็นคนขอ ไม่ต้องทำอะไร รหัสผ่านเดิมยังใช้ได้ตามปกติ',
+      `This link works once and expires in ${String(payload.expiresInMinutes ?? '')} minutes.`,
+      'If it was not you, nothing needs doing — your current password still works.',
     ].join('\n'),
   }),
 
@@ -47,9 +48,9 @@ const TEMPLATES: Record<string, Renderer> = {
   task_assigned: (payload) => ({
     subject: `[${String(payload.taskKey ?? '')}] ${String(payload.title ?? '')}`,
     text: [
-      `สวัสดีคุณ${String(payload.recipientName ?? '')}`,
+      `Hi ${String(payload.recipientName ?? '')}`.trimEnd() + ',',
       '',
-      `${String(payload.assignedByName ?? 'มีคน')}มอบหมายงานให้คุณในโปรเจกต์ ${String(payload.projectName ?? '')}`,
+      `${String(payload.assignedByName ?? 'Somebody')} assigned you a task in ${String(payload.projectName ?? '')}`,
       '',
       `${String(payload.taskKey ?? '')} · ${String(payload.title ?? '')}`,
       String(payload.url ?? ''),

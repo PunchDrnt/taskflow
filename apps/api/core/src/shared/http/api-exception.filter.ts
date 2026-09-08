@@ -92,7 +92,7 @@ function codeFor(status: number): string {
  */
 function messageFor(payload: unknown, status: number): string {
   if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
-    return 'เกิดข้อผิดพลาดภายในระบบ'
+    return 'Something went wrong'
   }
 
   if (typeof payload === 'string') return payload
@@ -104,5 +104,5 @@ function messageFor(payload: unknown, status: number): string {
     if (Array.isArray(message)) return message.map(String).join(', ')
   }
 
-  return 'คำขอไม่ถูกต้อง'
+  return 'Bad request'
 }

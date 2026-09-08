@@ -111,7 +111,7 @@ export class ProjectMemberService {
     if (!(await this.orgMembers.findByUserId(userId))) {
       // Not "forbidden": from this organisation's side the person is simply
       // not here, and saying otherwise confirms that an account exists.
-      throw ApiException.notFound('ไม่พบผู้ใช้นี้ในองค์กร')
+      throw ApiException.notFound('No such person in this organisation')
     }
 
     return this.dataSource.transaction(async (manager) => {
@@ -157,7 +157,7 @@ export class ProjectMemberService {
     await this.projects.requireProject(projectId, 'update')
 
     const member = await this.find(projectId, userId)
-    if (!member) throw ApiException.notFound('ไม่พบสมาชิกนี้ในโปรเจกต์')
+    if (!member) throw ApiException.notFound('No such member in this project')
 
     if (member.role === next) {
       return { userId, role: next, joinedAt: member.createdAt }
@@ -194,7 +194,7 @@ export class ProjectMemberService {
     await this.projects.requireProject(projectId, 'update')
 
     const member = await this.find(projectId, userId)
-    if (!member) throw ApiException.notFound('ไม่พบสมาชิกนี้ในโปรเจกต์')
+    if (!member) throw ApiException.notFound('No such member in this project')
 
     await this.dataSource.transaction(async (manager) => {
       // Written before the delete: the audit row names the id, and reading it
@@ -307,6 +307,6 @@ function alreadyMember(error: unknown): unknown {
   return new ApiException(
     409,
     PROJECT_ERROR_CODES.ALREADY_MEMBER,
-    'ผู้ใช้นี้อยู่ในโปรเจกต์นี้อยู่แล้ว',
+    'That person is already in this project',
   )
 }

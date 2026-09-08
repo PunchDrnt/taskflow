@@ -104,7 +104,7 @@ export class MemberService {
       throw new ApiException(
         409,
         ORGANIZATION_ERROR_CODES.ACCOUNT_EXISTS,
-        'ผู้ใช้นี้อยู่ในองค์กรนี้อยู่แล้ว',
+        'That person is already in this organisation',
       )
     }
 
@@ -173,7 +173,8 @@ export class MemberService {
 
     const member = await this.findByUserId(userId)
 
-    if (!member) throw ApiException.notFound('ไม่พบสมาชิกนี้ในองค์กร')
+    if (!member)
+      throw ApiException.notFound('No such member in this organisation')
 
     // An admin may not touch an owner: `newRole` repeats the current role so
     // only that rule can fire, not the one about creating owners.
@@ -186,7 +187,8 @@ export class MemberService {
 
     const user = await this.users.findById(userId)
 
-    if (!user) throw ApiException.notFound('ไม่พบสมาชิกนี้ในองค์กร')
+    if (!user)
+      throw ApiException.notFound('No such member in this organisation')
 
     const next = active ? ACTIVE_USER_STATUS : 'deactivated'
 
@@ -232,8 +234,9 @@ export class MemberService {
     throw new ApiException(
       409,
       ORGANIZATION_ERROR_CODES.USER_IN_OTHER_ORGS,
-      'บัญชีนี้อยู่ในองค์กรอื่นด้วย การปิดบัญชีจะทำให้เขาเข้าองค์กรอื่นไม่ได้ ' +
-        'ให้เอาออกจากองค์กรนี้แทน (มาใน Phase 2)',
+      'This account also belongs to another organisation, and deactivating ' +
+        'it would lock them out of that one too. Remove them from this ' +
+        'organisation instead (Phase 2).',
       { organizations: orgs.length },
     )
   }
@@ -257,7 +260,7 @@ export class MemberService {
     throw new ApiException(
       409,
       ORGANIZATION_ERROR_CODES.LAST_OWNER,
-      'ปิดบัญชีเจ้าขององค์กรคนสุดท้ายไม่ได้ กรุณาตั้งเจ้าขององค์กรคนอื่นก่อน',
+      'The last owner cannot be deactivated. Appoint another owner first.',
     )
   }
 
@@ -289,7 +292,8 @@ export class MemberService {
 
     // Not "forbidden": from this org's side the person simply is not here, and
     // saying otherwise would confirm that an account exists.
-    if (!member) throw ApiException.notFound('ไม่พบสมาชิกนี้ในองค์กร')
+    if (!member)
+      throw ApiException.notFound('No such member in this organisation')
 
     this.permissions.assert(actorFromContext(), 'update', 'Member', {
       id: member.id,
@@ -344,7 +348,7 @@ export class MemberService {
         throw new ApiException(
           403,
           ORGANIZATION_ERROR_CODES.LAST_OWNER,
-          'องค์กรต้องมีเจ้าของอย่างน้อยหนึ่งคน กรุณาตั้งเจ้าของคนใหม่ก่อน',
+          'An organisation must keep at least one owner. Appoint another owner first.',
         )
       }
 

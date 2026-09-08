@@ -485,7 +485,7 @@ export class ProjectService {
 }
 
 function notFound(): ApiException {
-  return ApiException.notFound('ไม่พบโปรเจกต์นี้')
+  return ApiException.notFound('Project not found')
 }
 
 export function view(project: Project, role: ScopedRole | null): ProjectView {
@@ -517,6 +517,6 @@ export function nameClash(error: unknown, name: string | undefined): unknown {
   return new ApiException(
     409,
     PROJECT_ERROR_CODES.NAME_TAKEN,
-    `มีโปรเจกต์ชื่อ "${name}" อยู่แล้ว`,
+    `A project named "${name}" already exists`,
   )
 }
