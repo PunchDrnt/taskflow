@@ -170,6 +170,9 @@ describe.skipIf(!hasTestDatabase)('tasks', () => {
       new CascadeSoftDelete(dataSource),
       users,
       new EmailService(),
+      new MembershipService(
+        createOrgScopedRepository(dataSource, OrganizationMember),
+      ),
       {
         get: () => 'http://localhost:3000',
       } as unknown as ConfigService<Env, true>,

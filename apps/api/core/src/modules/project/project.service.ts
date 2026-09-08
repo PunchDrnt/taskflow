@@ -1,6 +1,11 @@
 import { Injectable } from '@nestjs/common'
 import { InjectDataSource } from '@nestjs/typeorm'
-import { DataSource, QueryFailedError, type EntityManager } from 'typeorm'
+import {
+  Brackets,
+  DataSource,
+  QueryFailedError,
+  type EntityManager,
+} from 'typeorm'
 
 import {
   PROJECT_ERROR_CODES,
@@ -22,6 +27,7 @@ import { actorForProject, actorFromContext } from '../../permission/actor'
 import { PermissionService } from '../../permission/permission.service'
 import { AuditService } from '../audit/audit.service'
 import { changesBetween } from '../audit/changes'
+import type { Membership } from '../organization/membership.service'
 import { DEFAULT_STATUSES } from './default-statuses'
 import { ProjectMember } from './project-member.entity'
 import { Project } from './project.entity'
@@ -42,6 +48,11 @@ export interface ProjectView {
    * decide whether to draw project settings.
    */
   role: ScopedRole | null
+}
+
+/** A project seen from outside any one organisation, so it names its own. */
+export interface ProjectAcrossOrgs extends ProjectView {
+  orgId: string
 }
 
 /** A project the caller may see, with the membership that made it visible. */
@@ -118,6 +129,84 @@ export class ProjectService {
     }
 
     return builder.getRawMany<ProjectView>()
+  }
+
+  /**
+   * The same visible set as `list`, but over several organisations at once.
+   *
+   * For the home screen, which is a question about a person rather than about
+   * an organisation: somebody with a day job and a company of their own has
+   * deadlines in both, and a screen showing only whichever org a cookie
+   * happened to name would hide half of them
+   * (docs/04-features/phase-1.md#organization).
+   *
+   * ⚠️ `base`, not `withOrg` — the deliberate crossing CLAUDE.md wants a
+   * stated reason for. The reason is that no single org exists to scope by:
+   * the caller is asking about all of theirs at once, and `withOrg` would need
+   * one chosen before the question could be put. What stands in for the org
+   * condition is `memberships`, resolved from `organization.members` by the
+   * guard — so the widest this reaches is exactly the organisations the caller
+   * belongs to, never one they merely named.
+   *
+   * **The role gate is per organisation, and that is the whole subtlety.**
+   * `list` asks "is the caller a member of this project?" once, because one
+   * request is one org. Here the same person may run one company and be a
+   * plain member of another, so the gate is `org_id IN (the orgs they run) OR
+   * they are in the project`. Collapsing that to a single role would either
+   * hide the projects they own or expose ones they were never added to.
+   */
+  async listAcrossOrgs(
+    userId: string,
+    memberships: Membership[],
+  ): Promise<ProjectAcrossOrgs[]> {
+    if (memberships.length === 0) return []
+
+    const orgIds = memberships.map((one) => one.orgId)
+    const runs = memberships
+      .filter((one) => one.role !== 'member')
+      .map((one) => one.orgId)
+
+    const builder = this.projects.queryBuilder
+      .base('project')
+      .leftJoin(
+        ProjectMember,
+        'membership',
+        // The org condition is redundant while project ids are UUIDs, and it
+        // is here anyway: `project_members` is composite on `(id, org_id)`,
+        // and a join written to cross orgs should say which org it means
+        // rather than lean on a primary key never colliding.
+        'membership.projectId = project.id AND membership.orgId = project.orgId ' +
+          'AND membership.userId = :userId',
+        { userId },
+      )
+      .select('project.id', 'id')
+      .addSelect('project.org_id', 'orgId')
+      .addSelect('project.name', 'name')
+      .addSelect('project.description', 'description')
+      .addSelect('project.color', 'color')
+      .addSelect('project.key_prefix', 'keyPrefix')
+      .addSelect('project.archived_at', 'archivedAt')
+      .addSelect('membership.role', 'role')
+      .where('project.orgId IN (:...orgIds)', { orgIds })
+      .andWhere('project.deletedAt IS NULL')
+      // Archived projects are out, for the reason `myTasks` gives: their work
+      // is not what anybody opens this screen to plan.
+      .andWhere('project.archivedAt IS NULL')
+      .orderBy('project.name', 'ASC')
+
+    if (runs.length === 0) {
+      builder.andWhere('membership.id IS NOT NULL')
+    } else {
+      builder.andWhere(
+        new Brackets((where) =>
+          where
+            .where('project.orgId IN (:...runs)', { runs })
+            .orWhere('membership.id IS NOT NULL'),
+        ),
+      )
+    }
+
+    return builder.getRawMany<ProjectAcrossOrgs>()
   }
 
   /**

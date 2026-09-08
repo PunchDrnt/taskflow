@@ -215,6 +215,14 @@ unique เต็ม · `views.sort_order` / `is_default`
         เก็บ role ที่เจอมาด้วยเลย ไม่ต้อง query ซ้ำใน controller
 - [ ] **หนึ่งคนอยู่ได้หลาย org** — org switcher บนสุดของ sidebar · หน้า Home เป็นปลายทางหลัง login
       ไม่ใช่ project ใด project หนึ่ง · คนที่ยังไม่อยู่ org ไหนเห็นหน้าที่บอกให้ติดต่อ admin
+      · ✅ API ลงแล้ว: `GET /v1/me/tasks` — งานของฉัน **ข้าม org** `@SkipOrgScope()`
+        · อยู่ใต้ `/me` ไม่ใช่ `/tasks` ตามเส้นแบ่งเดิม — `/org/*` ถามเรื่อง org, `/me/*` ถามเรื่องคน
+        · `sort` default เป็น `dueDate` ไม่ใช่ `order` — `order` เป็น fractional index ต่อคอลัมน์ต่อ project
+          เอามาเทียบข้าม project ได้คำตอบที่นิ่งแต่ไม่มีความหมาย
+        · 🔒 ใช้ `base()` สามที่ (project / status / assignee) สิ่งที่แทนเงื่อนไข org คือ
+          membership ที่ guard อ่านมาแล้ว + `listAcrossOrgs` + `assignedTo` · มีเคสใน `org-isolation.spec.ts`
+        · ⚠️ **ประตูสิทธิ์เป็นราย org ไม่ใช่ราย request** — คนเดียวกันเป็น owner ที่หนึ่ง เป็น member อีกที่หนึ่งได้
+          ยุบเหลือ role เดียวคือไม่เห็น project ที่ตัวเองเป็นเจ้าของ หรือเห็น project ที่ไม่เคยถูกเพิ่มเข้าไป
 - [x] **สร้าง org มี API ยังไม่มีหน้าจอ** — Phase 1-3 สร้างผ่าน API เท่านั้น
       · `POST /v1/org` · `@SkipOrgScope()` เพราะคนที่สร้าง org แรกยังไม่ได้อยู่ org ไหน
       · org + แถว owner อยู่ใน transaction เดียว — org ที่ไม่มี owner คือสิ่งที่กฎ owner คนสุดท้ายมีไว้กันพอดี

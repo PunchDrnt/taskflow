@@ -15,6 +15,7 @@ import {
   type CreateTaskInput,
   type ListTasksQuery,
   type MyTasksQuery,
+  type MyWorkQuery,
   type Page,
   type TaskPriority,
   type TaskSortField,
@@ -26,7 +27,10 @@ import { ApiException } from '#shared/http/api-exception'
 import { decodeCursor, toPage } from '#shared/http/cursor'
 import { InjectOrgRepository } from '#shared/org-scope/org-repository.provider'
 import { OrgScopedRepository } from '#shared/org-scope/org-scoped.repository'
-import { requireOrgContext } from '#shared/org-scope/request-context'
+import {
+  requireOrgContext,
+  requireRequestContext,
+} from '#shared/org-scope/request-context'
 import { between } from '#shared/sort-order'
 
 import type { Env } from '../../config/env'
@@ -38,12 +42,24 @@ import { changesBetween } from '../audit/changes'
 import type { AuditLog } from '../audit/log.entity'
 import { ACTIVE_USER_STATUS, UserService } from '../iam/user/user.service'
 import { EmailService } from '../notify/email.service'
+import { MembershipService } from '../organization/membership.service'
 import { ProjectMemberService } from '../project/project-member.service'
 import { Project } from '../project/project.entity'
-import { ProjectService } from '../project/project.service'
+import {
+  ProjectService,
+  type ProjectAcrossOrgs,
+} from '../project/project.service'
 import { StatusService } from '../project/status.service'
 import { Assignee } from './assignee.entity'
 import { Task } from './task.entity'
+
+/** Where a task lives, for a screen that shows work from several orgs at once. */
+export interface TaskHome {
+  orgId: string
+  orgName: string
+  projectName: string
+  projectColor: string
+}
 
 /** A task as a board card, a list row or a detail panel needs it. */
 export interface TaskView {
@@ -63,6 +79,9 @@ export interface TaskView {
   /** Ids only; the controller attaches names through `UserService`. */
   assigneeIds: string[]
 }
+
+/** A task on the home screen, which has to say whose organisation it is in. */
+export interface MyWorkView extends TaskView, TaskHome {}
 
 const UNIQUE_VIOLATION = '23505'
 
@@ -135,6 +154,7 @@ export class TaskService {
     private readonly cascade: CascadeSoftDelete,
     private readonly users: UserService,
     private readonly email: EmailService,
+    private readonly memberships: MembershipService,
     config: ConfigService<Env, true>,
   ) {
     this.appUrl = config.get('APP_URL', { infer: true })
@@ -205,6 +225,72 @@ export class TaskService {
 
     // Non-null: the query is filtered to exactly these project ids.
     return this.paginate(builder, query, (task) => byId.get(task.projectId)!)
+  }
+
+  /**
+   * The same question as `myTasks`, asked of **every** organisation at once.
+   *
+   * What the home screen is for. One person here may hold a day job and a
+   * company of their own from Phase 1, and the org a cookie happens to name is
+   * not the org their next deadline is in — a home screen scoped to one of
+   * them would quietly hide the other half of their week
+   * (docs/04-features/phase-1.md#organization, roadmap item 3).
+   *
+   * ⚠️ `base`, not `withOrg`, and the route is `@SkipOrgScope()` — there is no
+   * single org to scope by, which is the point rather than a shortcut. Three
+   * things stand in for the org condition, and all three are needed:
+   *
+   * - `memberships` bounds it to organisations the caller is actually in,
+   *   read from `organization.members` rather than from anything they sent.
+   * - `listAcrossOrgs` bounds it to projects they may see *within* those,
+   *   applying the owner/admin-versus-member gate per organisation.
+   * - `assignedTo` bounds it to their own work.
+   *
+   * 🔒 Project visibility gates this exactly as it gates `myTasks`, and for
+   * the same reason: assignment rows outlive removal from a project, so
+   * without it somebody taken off a project would go on reading its work from
+   * the one screen nobody thinks of as a project screen.
+   */
+  async myWork(query: MyWorkQuery): Promise<Page<MyWorkView>> {
+    const { userId } = requireRequestContext()
+
+    const memberships = await this.memberships.listForUser(userId)
+    const orgById = new Map(memberships.map((one) => [one.orgId, one]))
+
+    const projects = await this.projects.listAcrossOrgs(userId, memberships)
+
+    if (projects.length === 0) return wholeList<MyWorkView>([])
+
+    const byId = new Map(projects.map((project) => [project.id, project]))
+    const projectIds = [...byId.keys()]
+    const orgIds = memberships.map((one) => one.orgId)
+
+    const builder = this.tasks.queryBuilder
+      .base('task')
+      .where('task.projectId IN (:...projectIds)', { projectIds })
+      .andWhere(assignedTo('mine'), { mine: [userId] })
+
+    if (!query.includeClosed) {
+      const closed = await this.statuses.closedStatusIdsForProjects(projectIds)
+
+      if (closed.length > 0) {
+        builder.andWhere('task.statusId NOT IN (:...closed)', { closed })
+      }
+    }
+
+    const page = await this.paginate(
+      builder,
+      query,
+      // Non-null throughout: the query is filtered to exactly these projects,
+      // and every project came from a membership in `orgById`.
+      (task) => byId.get(task.projectId)!,
+      orgIds,
+    )
+
+    return {
+      ...page,
+      data: page.data.map((task) => atHome(task, byId, orgById)),
+    }
   }
 
   async findById(taskId: string): Promise<TaskView> {
@@ -583,6 +669,8 @@ export class TaskService {
     builder: SelectQueryBuilder<Task>,
     query: ListTasksQuery,
     projectOf: (task: Task) => Pick<Project, 'keyPrefix'>,
+    /** Set only by `myWork`, where there is no org context to scope by. */
+    crossOrgIds?: string[],
   ): Promise<Page<TaskView>> {
     const sort = TASK_SORTS[query.sort]
     const direction = query.dir === 'desc' ? 'DESC' : 'ASC'
@@ -640,7 +728,10 @@ export class TaskService {
       .limit(query.limit + 1)
       .getRawAndEntities<{ cursor_value: unknown }>()
 
-    const assignees = await this.assigneesOf(entities.map((task) => task.id))
+    const assignees = await this.assigneesOf(
+      entities.map((task) => task.id),
+      crossOrgIds,
+    )
 
     return toPage(
       entities.map((task, index) => ({ task, raw: raw[index] })),
@@ -734,15 +825,35 @@ export class TaskService {
     return { task, project, assigneeIds: assignees.get(taskId) ?? [] }
   }
 
-  /** taskId → the user ids assigned to it, for a whole page of tasks at once. */
-  private async assigneesOf(taskIds: string[]): Promise<Map<string, string[]>> {
+  /**
+   * taskId → the user ids assigned to it, for a whole page of tasks at once.
+   *
+   * `crossOrgIds` is undefined on every org-scoped path, and the query is
+   * sealed by `withOrg` there as it always was. It is a list only for
+   * `myWork`, which runs `@SkipOrgScope()` and so has no single org to scope
+   * by — the crossing CLAUDE.md wants a reason for, and the reason is the
+   * caller's: these ids belong to tasks already filtered to projects this
+   * person may see, in organisations they are a member of.
+   */
+  private async assigneesOf(
+    taskIds: string[],
+    crossOrgIds?: string[],
+  ): Promise<Map<string, string[]>> {
     const byTask = new Map<string, string[]>()
 
     if (taskIds.length === 0) return byTask
 
-    const rows = await this.assignees.queryBuilder
-      .withOrg('assignee')
-      .andWhere('assignee.taskId IN (:...taskIds)', { taskIds })
+    const scoped: SelectQueryBuilder<Assignee> =
+      crossOrgIds === undefined
+        ? this.assignees.queryBuilder
+            .withOrg('assignee')
+            .andWhere('assignee.taskId IN (:...taskIds)', { taskIds })
+        : this.assignees.queryBuilder
+            .base('assignee')
+            .where('assignee.orgId IN (:...crossOrgIds)', { crossOrgIds })
+            .andWhere('assignee.taskId IN (:...taskIds)', { taskIds })
+
+    const rows = await scoped
       .andWhere("assignee.assigneeType = 'user'")
       .orderBy('assignee.createdAt', 'ASC')
       .getMany()
@@ -870,6 +981,26 @@ function cursorValue(value: unknown): string {
   if (value instanceof Date) return value.toISOString()
 
   return String(value)
+}
+
+/** Adds the organisation and project a task belongs to, for the home screen. */
+function atHome(
+  task: TaskView,
+  projects: Map<string, ProjectAcrossOrgs>,
+  orgs: Map<string, { name: string }>,
+): MyWorkView {
+  const project = projects.get(task.projectId)!
+  const org = orgs.get(project.orgId)
+
+  return {
+    ...task,
+    orgId: project.orgId,
+    // Null-safe rather than non-null: a membership disappearing between the
+    // two reads is a race, not a reason to fail the whole page.
+    orgName: org?.name ?? '',
+    projectName: project.name,
+    projectColor: project.color,
+  }
 }
 
 function emptyPage(): Page<TaskView> {

@@ -487,6 +487,114 @@ describe.skipIf(!hasTestDatabase)('cross-org isolation', () => {
     })
   })
 
+  /**
+   * 🔒 The reads that cross orgs on purpose.
+   *
+   * `ProjectService.listAcrossOrgs` is the one gate on `GET /v1/me/tasks`:
+   * every task that endpoint can reach comes from a project this returns, so
+   * a leak here is a leak on the home screen of somebody who belongs to two
+   * companies. It runs on `base`, with the org condition replaced by the
+   * caller's memberships — which makes "a membership that was never passed
+   * cannot widen the result" the property worth pinning.
+   */
+  describe('the reads that cross orgs on purpose', () => {
+    const person = SYSTEM_USER_ID
+    let projectA: Project
+    let projectB: Project
+
+    const service = (): ProjectService =>
+      new ProjectService(
+        projects,
+        dataSource,
+        new PermissionService(),
+        new AuditService(createOrgScopedRepository(dataSource, AuditLog)),
+        new CascadeSoftDelete(dataSource),
+      )
+
+    const memberOf = (org: Organization, role: string) => ({
+      orgId: org.id,
+      name: org.name,
+      slug: org.slug,
+      role: role as 'owner' | 'admin' | 'member',
+    })
+
+    beforeAll(async () => {
+      projectA = (await asOrg(orgA, () => projects.find()))[0]!
+      projectB = (await asOrg(orgB, () => projects.find()))[0]!
+
+      // In *both* projects, so membership is never what excludes org B —
+      // only the absence of an org membership is.
+      for (const [org, project] of [
+        [orgA, projectA],
+        [orgB, projectB],
+      ] as const) {
+        await dataSource.query(
+          `INSERT INTO project.members
+             (org_id, project_id, user_id, role, created_by, updated_by)
+           VALUES ($1, $2, $3, 'member', $3, $3)`,
+          [org.id, project.id, person],
+        )
+      }
+    })
+
+    it('returns nothing for somebody in no organisation', async () => {
+      expect(await service().listAcrossOrgs(person, [])).toEqual([])
+    })
+
+    it("a membership in A does not reach B's projects", async () => {
+      const visible = await service().listAcrossOrgs(person, [
+        memberOf(orgA, 'member'),
+      ])
+
+      expect(visible.map((project) => project.name)).toEqual(["A's project"])
+      expect(visible.every((project) => project.orgId === orgA.id)).toBe(true)
+    })
+
+    it('being in the project is not enough without the org membership', async () => {
+      const visible = await service().listAcrossOrgs(person, [
+        memberOf(orgA, 'owner'),
+      ])
+
+      // The `project.members` row for B exists and is this person's. Owning
+      // org A does not reach across to it.
+      expect(visible.map((project) => project.id)).not.toContain(projectB.id)
+    })
+
+    it('both organisations, when both memberships are held', async () => {
+      const visible = await service().listAcrossOrgs(person, [
+        memberOf(orgA, 'member'),
+        memberOf(orgB, 'admin'),
+      ])
+
+      expect(visible.map((project) => project.orgId).sort()).toEqual(
+        [orgA.id, orgB.id].sort(),
+      )
+    })
+
+    it('the member gate is per organisation, not per request', async () => {
+      const other = await dataSource.query(
+        `INSERT INTO project.projects
+           (org_id, name, color, key_prefix, created_by, updated_by)
+         VALUES ($1, 'A unjoined', 'gray', 'UNJ', $2, $2) RETURNING id`,
+        [orgA.id, SYSTEM_USER_ID],
+      )
+      const unjoinedId = (other as { id: string }[])[0]!.id
+
+      // A plain member of A does not see a project of A they are not in…
+      const asMember = await service().listAcrossOrgs(person, [
+        memberOf(orgA, 'member'),
+      ])
+      expect(asMember.map((project) => project.id)).not.toContain(unjoinedId)
+
+      // …while an admin of A does, and *still* does not see B.
+      const asAdmin = await service().listAcrossOrgs(person, [
+        memberOf(orgA, 'admin'),
+      ])
+      expect(asAdmin.map((project) => project.id)).toContain(unjoinedId)
+      expect(asAdmin.map((project) => project.id)).not.toContain(projectB.id)
+    })
+  })
+
   const newStatus = async (
     org: Organization,
     project: Project,

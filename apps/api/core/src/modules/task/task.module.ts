@@ -4,8 +4,10 @@ import { provideOrgRepository } from '#shared/org-scope/org-repository.provider'
 
 import { AuditModule } from '../audit/audit.module'
 import { UserModule } from '../iam/user/user.module'
+import { OrganizationModule } from '../organization/organization.module'
 import { ProjectModule } from '../project/project.module'
 import { Assignee } from './assignee.entity'
+import { MyWorkController } from './my-work.controller'
 import { ProjectTaskController } from './project-task.controller'
 import { TaskController } from './task.controller'
 import { Task } from './task.entity'
@@ -21,10 +23,15 @@ import { TaskService } from './task.service'
  *
  * `UserModule` is for names. Ids come out of this module's tables; the people
  * behind them come from `iam` through its service, never from a join.
+ *
+ * `OrganizationModule` is for `MembershipService` alone, and only `myWork`
+ * uses it: "which organisations is this person in" is the one bound that route
+ * has, since it runs with no org scope at all. No cycle — organisation imports
+ * audit, password and user, and none of those reaches back here.
  */
 @Module({
-  imports: [AuditModule, ProjectModule, UserModule],
-  controllers: [ProjectTaskController, TaskController],
+  imports: [AuditModule, OrganizationModule, ProjectModule, UserModule],
+  controllers: [MyWorkController, ProjectTaskController, TaskController],
   providers: [
     provideOrgRepository(Task),
     provideOrgRepository(Assignee),

@@ -393,6 +393,30 @@ export class StatusService {
       .then((rows) => rows.map((row) => row.id))
   }
 
+  /**
+   * The same question as `closedStatusIds`, asked of projects in more than one
+   * organisation — what `GET /v1/me/tasks` hides unless asked not to.
+   *
+   * ⚠️ `base`, not `withOrg`: there is no single org to scope by on that
+   * route. Scoping is by `project_id` instead, which is *tighter* than an org
+   * condition rather than looser — the ids come from
+   * `ProjectService.listAcrossOrgs`, so a status can only be reached through a
+   * project the caller was already allowed to see.
+   */
+  async closedStatusIdsForProjects(projectIds: string[]): Promise<string[]> {
+    if (projectIds.length === 0) return []
+
+    const rows = await this.statuses.queryBuilder
+      .base('status')
+      .select('status.id', 'id')
+      .where('status.projectId IN (:...projectIds)', { projectIds })
+      .andWhere('status.deletedAt IS NULL')
+      .andWhere('(status.isDoneType OR status.isCancelledType)')
+      .getRawMany<{ id: string }>()
+
+    return rows.map((row) => row.id)
+  }
+
   /** Live statuses of one project, in board order. */
   private rows(projectId: string): Promise<Status[]> {
     return this.statuses.queryBuilder

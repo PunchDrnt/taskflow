@@ -244,3 +244,23 @@ export const myTasksQuerySchema = listTasksQuerySchema.extend({
 })
 
 export type MyTasksQuery = z.infer<typeof myTasksQuerySchema>
+
+/**
+ * My work, across **every** organisation the caller belongs to.
+ *
+ * The same question as `myTasksQuerySchema` asks of one organisation, and the
+ * home screen's reason to exist: somebody with a day job and a side company
+ * has two employers' worth of deadlines and one morning to plan
+ * (docs/04-features/phase-1.md#organization).
+ *
+ * `sort` defaults to `dueDate` rather than `order`, which is the one field
+ * that means nothing here — `order` is a fractional index scoped to a single
+ * column of a single project, so comparing it across projects interleaves
+ * unrelated lists in an arbitrary but stable way. It stays accepted because
+ * the cursor still pages it correctly; it is simply never the useful answer.
+ */
+export const myWorkQuerySchema = myTasksQuerySchema.extend({
+  sort: z.enum(TASK_SORT_FIELDS).default('dueDate'),
+})
+
+export type MyWorkQuery = z.infer<typeof myWorkQuerySchema>

@@ -49,10 +49,10 @@ export async function namesFor(
  * One `findByIds` for a whole board rather than one per card — the N+1 that
  * only shows itself once a project has a few hundred tasks.
  */
-export async function withAssignees(
+export async function withAssignees<T extends TaskView>(
   users: UserService,
-  tasks: TaskView[],
-): Promise<TaskResponse[]> {
+  tasks: T[],
+): Promise<(Omit<T, 'assigneeIds'> & { assignees: AssigneeView[] })[]> {
   const everyone = await namesFor(
     users,
     tasks.flatMap((task) => task.assigneeIds),
