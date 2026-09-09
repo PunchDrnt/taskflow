@@ -50,6 +50,10 @@ async function submitCredentials(
   const parsed = loginSchema.safeParse({
     login: formData.get('login'),
     password: formData.get('password'),
+    // No control on the form, so every session is a short one. `rememberMe`
+    // is still the API's own field — it sets `sessions.expires_at` and nothing
+    // downstream branches on it — so putting the choice back is a checkbox
+    // here and nothing else.
     rememberMe: formData.get('rememberMe') === 'on',
   })
 

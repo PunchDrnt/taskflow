@@ -95,20 +95,6 @@ function CredentialFields({
           <FieldError errors={[{ message: passwordError }]} />
         )}
       </Field>
-
-      <Field orientation="horizontal">
-        <input
-          id="rememberMe"
-          name="rememberMe"
-          type="checkbox"
-          className="border-default text-primary-main size-4 rounded border"
-        />
-        {/* Not a mechanism, only a number — how long `sessions.expires_at`
-            is set to. The label says what it buys rather than naming it. */}
-        <FieldLabel htmlFor="rememberMe">
-          Keep me signed in for 15 days
-        </FieldLabel>
-      </Field>
     </FieldGroup>
   )
 }
