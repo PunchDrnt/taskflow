@@ -67,10 +67,10 @@ function Pile({
 
   return (
     <section>
-      <h2 className="text-text-secondary mb-2 text-xs font-medium tracking-wide uppercase">
+      <h2 className="overlined text-text-secondary mb-2 font-medium tracking-wide">
         {title} <span className="tabular-nums">({rows.length})</span>
       </h2>
-      <ul className="bg-default border-default rounded-lg border px-2">
+      <ul className="bg-paper-elevation-0 border-divider rounded-lg border px-2">
         {rows.map((task) => (
           <WorkRow key={task.id} task={task} overdue={overdue} />
         ))}

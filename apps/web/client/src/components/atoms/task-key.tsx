@@ -8,7 +8,7 @@
  */
 export function TaskKey({ children }: { children: string }) {
   return (
-    <span className="text-text-secondary font-mono text-xs tabular-nums">
+    <span className="text-text-secondary body-3 font-mono tabular-nums">
       {children}
     </span>
   )

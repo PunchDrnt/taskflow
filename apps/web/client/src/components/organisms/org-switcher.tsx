@@ -56,14 +56,14 @@ export function OrgSwitcher({
     <DropdownMenu>
       <DropdownMenuTrigger
         disabled={pending}
-        className="border-default hover:bg-subtle flex w-full items-center justify-between gap-2 rounded-md border px-3 py-2 text-left disabled:opacity-60"
+        className="hover:bg-action-hover flex w-full items-center justify-between gap-2 px-3 py-2 text-left disabled:opacity-60"
       >
         <span className="min-w-0">
-          <span className="block truncate text-sm font-medium">
+          <span className="body-2 block truncate font-medium">
             {active?.name ?? 'Choose an organisation'}
           </span>
           {active !== undefined && (
-            <span className="text-text-secondary block text-xs capitalize">
+            <span className="text-text-secondary body-3 block capitalize">
               {active.role}
             </span>
           )}

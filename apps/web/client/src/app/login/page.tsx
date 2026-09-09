@@ -19,11 +19,11 @@ export default async function LoginPage() {
   if ((await currentUser()) !== null) redirect('/home')
 
   return (
-    <main className="bg-subtle flex min-h-screen items-center justify-center p-6">
-      <div className="bg-default border-default w-full max-w-sm rounded-xl border p-8 shadow-sm">
+    <main className="bg-default flex min-h-screen items-center justify-center p-6">
+      <div className="bg-paper-elevation-0 border-divider w-full max-w-sm rounded-xl border p-8 shadow-sm">
         <div className="mb-8 flex flex-col gap-1">
-          <h1 className="text-headline-sm font-bold">Taskflow</h1>
-          <p className="text-text-secondary text-sm">
+          <h1 className="h6">Taskflow</h1>
+          <p className="text-text-secondary body-2">
             Sign in to pick up your work.
           </p>
         </div>

@@ -37,7 +37,7 @@ export function LoginForm() {
       {state.error !== null && (
         <p
           role="alert"
-          className="border-error-main/30 bg-error-main/10 text-error-main rounded-md border px-3 py-2 text-sm"
+          className="border-error-main/30 bg-error-main/10 text-error-main body-2 rounded-md border px-3 py-2"
         >
           {state.error}
         </p>
@@ -117,7 +117,7 @@ function TwoFactorFields({ error }: { error?: string }) {
         />
         {error !== undefined && <FieldError errors={[{ message: error }]} />}
       </Field>
-      <p className="text-text-secondary text-sm">
+      <p className="text-text-secondary body-2">
         Enter the six-digit code from your authenticator app, or one of your
         recovery codes.
       </p>

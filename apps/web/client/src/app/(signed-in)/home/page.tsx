@@ -48,8 +48,8 @@ export default async function HomePage() {
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-8 p-6">
       <header>
-        <h1 className="text-headline-sm font-bold">Hello, {me.nickname}</h1>
-        <p className="text-text-secondary mt-1 text-sm">
+        <h1 className="h6">Hello, {me.nickname}</h1>
+        <p className="text-text-secondary body-2 mt-1">
           Everything on your plate, across every organisation you are in.
         </p>
       </header>

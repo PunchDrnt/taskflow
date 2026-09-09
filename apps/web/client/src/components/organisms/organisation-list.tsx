@@ -18,17 +18,17 @@ export function OrganisationList({
 }) {
   return (
     <section>
-      <h2 className="text-text-secondary mb-2 text-xs font-medium tracking-wide uppercase">
+      <h2 className="overlined text-text-secondary mb-2 font-medium tracking-wide">
         Your organisations
       </h2>
-      <ul className="bg-default border-default divide-default divide-y rounded-lg border">
+      <ul className="bg-paper-elevation-0 border-divider divide-divider divide-y rounded-lg border">
         {organizations.map((org) => (
           <li
             key={org.orgId}
             className="flex items-center justify-between px-4 py-3"
           >
-            <span className="text-sm font-medium">{org.name}</span>
-            <span className="text-text-secondary text-xs capitalize">
+            <span className="body-2 font-medium">{org.name}</span>
+            <span className="text-text-secondary body-3 capitalize">
               {org.role}
             </span>
           </li>

@@ -18,9 +18,9 @@ export function Stat({
   tone?: 'default' | 'urgent'
 }) {
   return (
-    <div className="bg-default border-default flex flex-col gap-1 rounded-lg border p-4">
+    <div className="bg-paper-elevation-0 border-divider flex flex-col gap-1 rounded-lg border p-4">
       <span
-        className={`text-headline-sm font-bold tabular-nums ${
+        className={`h6 tabular-nums ${
           tone === 'urgent' && value > 0
             ? 'text-error-main'
             : 'text-text-primary'
@@ -29,7 +29,7 @@ export function Stat({
         {value}
         {capped && '+'}
       </span>
-      <span className="text-text-secondary text-xs">{label}</span>
+      <span className="text-text-secondary body-3">{label}</span>
     </div>
   )
 }
