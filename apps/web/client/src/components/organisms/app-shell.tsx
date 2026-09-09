@@ -57,7 +57,11 @@ export function AppShell({
           <SidebarGroup>
             <SidebarGroupContent>
               <SidebarMenu>
-                <NavItem href="/" label="Home" active={pathname === '/'}>
+                <NavItem
+                  href="/home"
+                  label="Home"
+                  active={pathname === '/home'}
+                >
                   <Home className="size-4" />
                 </NavItem>
                 <NavItem

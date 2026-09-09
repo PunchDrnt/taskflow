@@ -39,6 +39,10 @@ export async function signIn(
   // Outside the `try` in `post`, and that placement is load-bearing: `redirect`
   // works by throwing, so calling it in there would be caught and reported as
   // a failed sign-in that had in fact succeeded.
+  //
+  // To `/` rather than to `/home`: which screen somebody belongs on is the
+  // front door's question, and answering it in two places is how the two
+  // answers start to differ.
   if (outcome === 'signed-in') redirect('/')
 
   return outcome

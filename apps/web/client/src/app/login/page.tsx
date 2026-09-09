@@ -16,7 +16,7 @@ export const metadata: Metadata = {
  * bookmark or a back button, not an intention to sign in twice.
  */
 export default async function LoginPage() {
-  if ((await currentUser()) !== null) redirect('/')
+  if ((await currentUser()) !== null) redirect('/home')
 
   return (
     <main className="bg-subtle flex min-h-screen items-center justify-center p-6">

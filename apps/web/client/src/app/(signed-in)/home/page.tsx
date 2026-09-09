@@ -1,14 +1,20 @@
-import { Stat } from '../../components/molecules/stat'
-import { DueWork } from '../../components/organisms/due-work'
-import { NoOrganisation } from '../../components/organisms/no-organisation'
-import { OrganisationList } from '../../components/organisms/organisation-list'
-import { currentUser } from '../../lib/api/me'
-import { dueWork } from '../../lib/api/my-work'
-import { dueBucket } from '../../lib/format/due-date'
+import { Stat } from '../../../components/molecules/stat'
+import { DueWork } from '../../../components/organisms/due-work'
+import { NoOrganisation } from '../../../components/organisms/no-organisation'
+import { OrganisationList } from '../../../components/organisms/organisation-list'
+import { currentUser } from '../../../lib/api/me'
+import { dueWork } from '../../../lib/api/my-work'
+import { dueBucket } from '../../../lib/format/due-date'
 
 /**
  * Home — where signing in lands, and the only screen about the person rather
  * than about one organisation.
+ *
+ * At `/home` and not at `/`. Every other screen has a name, so leaving this
+ * one unnamed would make `pathname === '/'` a special case in navigation
+ * forever; and `/` has a job of its own — deciding, without rendering
+ * anything, whether somebody belongs on this page or on the sign-in screen.
+ * One path doing both is what makes "where does signing in land" ambiguous.
  *
  * It crosses organisations on purpose. `GET /v1/me/tasks` is the endpoint that
  * exists for it, and docs/04-features/phase-1.md#organization is explicit that
