@@ -37,7 +37,7 @@ export default async function HarnessPage() {
   return (
     <main className="mx-auto flex max-w-4xl flex-col gap-6 p-8">
       <header>
-        <h1 className="font-[family-name:var(--font-chakra-petch)] text-2xl font-bold">
+        <h1 className="font-(family-name:--font-chakra-petch) text-2xl font-bold">
           Auth transport harness
         </h1>
         <p className="text-sm opacity-70">
@@ -188,7 +188,7 @@ function Row({
   return (
     <div className="grid grid-cols-[minmax(0,18rem)_1fr] gap-3 text-sm">
       <span className="opacity-60">{label}</span>
-      <span className="font-[family-name:var(--font-ibm-plex-mono)] break-all">
+      <span className="font-(family-name:--font-ibm-plex-mono) break-all">
         {children}
       </span>
     </div>
@@ -198,7 +198,7 @@ function Row({
 function Pre({ ok, children }: { ok: boolean; children: React.ReactNode }) {
   return (
     <pre
-      className={`overflow-x-auto rounded border p-3 font-[family-name:var(--font-ibm-plex-mono)] text-xs ${
+      className={`overflow-x-auto rounded border p-3 font-(family-name:--font-ibm-plex-mono) text-xs ${
         ok
           ? 'border-green-600/30 bg-green-600/5'
           : 'border-red-600/30 bg-red-600/5'

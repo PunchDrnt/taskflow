@@ -240,7 +240,7 @@ export function HarnessClient() {
         <h2 className="mb-3 text-sm font-semibold tracking-wide uppercase opacity-60">
           Log
         </h2>
-        <div className="flex flex-col gap-1 font-[family-name:var(--font-ibm-plex-mono)] text-xs">
+        <div className="flex flex-col gap-1 font-(family-name:--font-ibm-plex-mono) text-xs">
           {lines.length === 0 ? (
             <span className="opacity-50">Nothing has happened yet</span>
           ) : (
