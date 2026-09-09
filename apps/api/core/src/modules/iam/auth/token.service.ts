@@ -4,7 +4,6 @@ import { JwtService } from '@nestjs/jwt'
 
 /** docs/01-architecture.md#auth. Short, because the session check is what revokes. */
 export const ACCESS_TOKEN_TTL_SECONDS = 15 * 60
-/** The ceiling on `sessions.expires_at`. "Remember me" chooses a shorter one. */
 /**
  * Long enough to find the phone, short enough that a challenge left in a
  * browser is not a standing invitation.
@@ -14,6 +13,18 @@ export const TWO_FACTOR_CHALLENGE_TTL_SECONDS = 5 * 60
 /** Marks a token as the 2FA challenge and nothing else. */
 const TWO_FACTOR_PURPOSE = 'two_factor'
 
+/**
+ * The ceiling on `sessions.expires_at`, and the refresh cookie's own lifetime.
+ *
+ * ⚠️ The cookie gets this **whatever `rememberMe` said** — `ttlSecondsFor` in
+ * `auth.cookies.ts` does not consult it. Without "remember me" the session row
+ * expires after `SESSION_TTL_SECONDS` while the browser holds the cookie for
+ * the rest of the fortnight, presenting a token that can no longer work. That
+ * is correct rather than a leak: `SessionService.verify` reads the row, so the
+ * row is what ends a session and the cookie is only a ceiling. It is worth
+ * knowing before reading a `Max-Age` as a promise about how long somebody
+ * stays signed in.
+ */
 export const REFRESH_TOKEN_TTL_SECONDS = 15 * 24 * 60 * 60
 
 /**
