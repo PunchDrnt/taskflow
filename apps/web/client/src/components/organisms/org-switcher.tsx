@@ -8,6 +8,7 @@ import type { Membership } from '@repo/shared'
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -71,20 +72,28 @@ export function OrgSwitcher({
       </DropdownMenuTrigger>
 
       <DropdownMenuContent align="start" className="w-56">
-        <DropdownMenuLabel>Organisations</DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        {organizations.map((org) => (
-          <DropdownMenuItem
-            key={org.orgId}
-            onClick={() => {
-              choose(org.orgId)
-            }}
-            className="flex items-center justify-between gap-2"
-          >
-            <span className="truncate">{org.name}</span>
-            {org.orgId === activeOrgId && <Check className="size-4 shrink-0" />}
-          </DropdownMenuItem>
-        ))}
+        {/* The group is required, not decorative: `DropdownMenuLabel` is Base
+            UI's `Menu.GroupLabel`, which reads a context only `Menu.Group`
+            provides and throws at render without one. It is also what ties the
+            heading to the list for a screen reader. */}
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Organisations</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          {organizations.map((org) => (
+            <DropdownMenuItem
+              key={org.orgId}
+              onClick={() => {
+                choose(org.orgId)
+              }}
+              className="flex items-center justify-between gap-2"
+            >
+              <span className="truncate">{org.name}</span>
+              {org.orgId === activeOrgId && (
+                <Check className="size-4 shrink-0" />
+              )}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   )

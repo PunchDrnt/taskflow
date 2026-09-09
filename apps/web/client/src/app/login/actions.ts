@@ -50,11 +50,14 @@ async function submitCredentials(
   const parsed = loginSchema.safeParse({
     login: formData.get('login'),
     password: formData.get('password'),
-    // No control on the form, so every session is a short one. `rememberMe`
-    // is still the API's own field — it sets `sessions.expires_at` and nothing
-    // downstream branches on it — so putting the choice back is a checkbox
-    // here and nothing else.
-    rememberMe: formData.get('rememberMe') === 'on',
+    // Always, because the form no longer asks. `rememberMe` is not a mechanism
+    // — it only picks which number goes into `sessions.expires_at`: true is
+    // `REMEMBERED_SESSION_TTL_SECONDS` (15 days), false is
+    // `SESSION_TTL_SECONDS` (12 hours, sized so a borrowed machine forgets by
+    // itself). Everybody here works from their own machine, and being signed
+    // out twice a day is the friction that stops a task tool being opened.
+    // Restoring the choice is a checkbox on the form and this line reading it.
+    rememberMe: true,
   })
 
   if (!parsed.success) {

@@ -124,8 +124,10 @@ unique เต็ม · `views.sort_order` / `is_default`
       · ⚠️ **`notify.outbox.org_id` กลายเป็น nullable** เพราะเมลรีเซ็ตเป็นของบัญชี ไม่ใช่ของ org
       แก้ [`00-overview`](../docs/00-overview.md#binding-decisions) กับ [`schema.md`](../docs/02-database/schema.md#schema-notify) แล้วใน commit เดียวกัน
 - [x] **Remember me** — เป็นค่าของ `sessions.expires_at` ไม่ใช่กลไกใหม่
-      · ⚠️ **ไม่มีช่องให้ติ๊กบนหน้า login** (เอาออกตามที่สั่ง) — ทุก session เลยเป็นแบบสั้น
-        API ยังรับ `rememberMe` เหมือนเดิม จะเอากลับก็แค่ checkbox ตัวเดียว ไม่ต้องแตะหลังบ้าน
+      · **ไม่มีช่องให้ติ๊กบนหน้า login — ทุกคนได้ 15 วันเลย** (ตัดสินใจแล้ว)
+        · ค่าคือ `REMEMBERED_SESSION_TTL_SECONDS` (15 วัน) vs `SESSION_TTL_SECONDS` (12 ชม.)
+          ตัวหลังออกแบบไว้สำหรับเครื่องที่ยืมเขามาใช้ ซึ่งไม่ใช่สถานการณ์ของบริษัทนี้
+        · API ยังรับ `rememberMe` เหมือนเดิม จะเอาตัวเลือกกลับก็แค่ checkbox + อ่านค่าจาก form
 - [x] **ล็อกบัญชีเมื่อ login ผิดหลายครั้ง** — `iam.users.failed_login_attempts` + `locked_until`
       · เก็บใน DB ไม่ใช่ memory · ลองผิดระหว่างล็อกไม่ต่อเวลา · อีเมลที่ไม่มีในระบบไม่นับอะไรเลย
       · ✅ ครบแล้ว — `LOGIN_MAX_ATTEMPTS` / `LOGIN_LOCK_MINUTES` อยู่ใน `env.ts` · lock หมดอายุแล้วนับใหม่ (N ครั้งต่อหน้าต่าง) ไม่ใช่สะสมต่อ
