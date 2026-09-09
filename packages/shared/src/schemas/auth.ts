@@ -56,11 +56,6 @@ const loginIdentifier = z
 export const loginSchema = z.object({
   login: loginIdentifier,
   password: presentedPassword,
-  /**
-   * "Remember me" is not a mechanism, only a number: how long
-   * `sessions.expires_at` is set to. Nothing downstream branches on it.
-   */
-  rememberMe: z.boolean().default(false),
 })
 
 export type LoginInput = z.infer<typeof loginSchema>

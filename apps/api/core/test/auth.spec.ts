@@ -23,6 +23,7 @@ import { RecoveryCode } from '../src/modules/iam/auth/recovery-code.entity'
 import { Session } from '../src/modules/iam/auth/session.entity'
 import {
   ROTATION_GRACE_MS,
+  SESSION_TTL_SECONDS,
   SessionService,
 } from '../src/modules/iam/auth/session.service'
 import {
@@ -182,12 +183,8 @@ describe.skipIf(!hasTestDatabase)('auth', () => {
   const login = async (
     name: string,
     password = PASSWORD,
-    rememberMe = false,
   ): Promise<LoginResult> => {
-    const outcome = await auth.login(
-      { login: emailOf(name), password, rememberMe },
-      ORIGIN,
-    )
+    const outcome = await auth.login({ login: emailOf(name), password }, ORIGIN)
 
     if (isTwoFactorChallenge(outcome)) {
       throw new Error('did not expect a two-factor challenge here')
@@ -680,18 +677,18 @@ describe.skipIf(!hasTestDatabase)('auth', () => {
     it('records where the login came from, and how long it may last', async () => {
       await newUser('uma')
 
-      const short = await login('uma')
-      const remembered = await login('uma', PASSWORD, true)
+      const { tokens } = await login('uma')
+      const row = await sessionRow(decodeSid(tokens.accessToken))
 
-      const shortRow = await sessionRow(decodeSid(short.tokens.accessToken))
-      const longRow = await sessionRow(decodeSid(remembered.tokens.accessToken))
+      expect(row.userAgent).toBe(ORIGIN.userAgent)
+      expect(row.ipAddress).toBe(ORIGIN.ipAddress)
 
-      expect(shortRow.userAgent).toBe(ORIGIN.userAgent)
-      expect(shortRow.ipAddress).toBe(ORIGIN.ipAddress)
-      // "Remember me" is not a mechanism, only a longer expires_at.
-      expect(longRow.expiresAt.getTime()).toBeGreaterThan(
-        shortRow.expiresAt.getTime(),
-      )
+      // One TTL, chosen by the server rather than asked for on the login body
+      // — see `SESSION_TTL_SECONDS`. Pinned as a window rather than an exact
+      // instant, because the row is stamped a moment after the clock is read.
+      const expected = Date.now() + SESSION_TTL_SECONDS * 1000
+      expect(row.expiresAt.getTime()).toBeGreaterThan(expected - 60_000)
+      expect(row.expiresAt.getTime()).toBeLessThanOrEqual(expected + 1_000)
     })
 
     it('stores no refresh token in plaintext', async () => {

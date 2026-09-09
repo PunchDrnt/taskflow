@@ -14,16 +14,15 @@ export const TWO_FACTOR_CHALLENGE_TTL_SECONDS = 5 * 60
 const TWO_FACTOR_PURPOSE = 'two_factor'
 
 /**
- * The ceiling on `sessions.expires_at`, and the refresh cookie's own lifetime.
+ * The refresh cookie's lifetime, and — through `SESSION_TTL_SECONDS` — how
+ * long a session lasts.
  *
- * ⚠️ The cookie gets this **whatever `rememberMe` said** — `ttlSecondsFor` in
- * `auth.cookies.ts` does not consult it. Without "remember me" the session row
- * expires after `SESSION_TTL_SECONDS` while the browser holds the cookie for
- * the rest of the fortnight, presenting a token that can no longer work. That
- * is correct rather than a leak: `SessionService.verify` reads the row, so the
- * row is what ends a session and the cookie is only a ceiling. It is worth
- * knowing before reading a `Max-Age` as a promise about how long somebody
- * stays signed in.
+ * The two are deliberately the same number: a session that outlived the
+ * credential that renews it would end at a refresh nobody could explain, and a
+ * credential that outlived the session would sit in a browser doing nothing.
+ * `SessionService.verify` reads the row either way, so the row is what ends a
+ * session; the cookie only stops the browser presenting a token past the point
+ * it could ever work.
  */
 export const REFRESH_TOKEN_TTL_SECONDS = 15 * 24 * 60 * 60
 

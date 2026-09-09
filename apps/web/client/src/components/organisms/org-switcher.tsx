@@ -71,7 +71,7 @@ export function OrgSwitcher({
         <ChevronsUpDown className="text-text-secondary size-4 shrink-0" />
       </DropdownMenuTrigger>
 
-      <DropdownMenuContent align="start" className="w-56">
+      <DropdownMenuContent align="start">
         {/* The group is required, not decorative: `DropdownMenuLabel` is Base
             UI's `Menu.GroupLabel`, which reads a context only `Menu.Group`
             provides and throws at render without one. It is also what ties the

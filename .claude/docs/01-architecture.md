@@ -1067,7 +1067,7 @@ POST /auth/refresh
 **ล็อกอินด้วยอีเมลหรือ username ก็ได้** (ตัดสิน 2026-09-07)
 
 ```
-POST /api/v1/auth/login { login, password, rememberMe }
+POST /api/v1/auth/login { login, password }
 ```
 
 ช่องเดียว ไม่ใช่สองช่องและไม่ใช่ radio — ตัวอักษรของสองอย่างไม่ทับกัน เพราะ username ห้ามมี `@` และมี CHECK บังคับไว้ · `UserService.findByLogin` เลือก query จากรูปร่างที่พิมพ์มา · ค่าที่ไม่ตรงอะไรเลยได้ `INVALID_CREDENTIALS` เหมือนรหัสผ่านผิด ซึ่งเป็นสิ่งที่กันไม่ให้ endpoint นี้กลายเป็นเครื่องมือไล่เดาว่า username ไหนมีอยู่

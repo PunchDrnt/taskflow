@@ -6,10 +6,22 @@ import { OrgScopedRepository } from '#shared/org-scope/org-scoped.repository'
 import { Session } from './session.entity'
 import { REFRESH_TOKEN_TTL_SECONDS } from './token.service'
 
-/** "Remember me" ticked. The ceiling, and what the refresh cookie is set to. */
-export const REMEMBERED_SESSION_TTL_SECONDS = REFRESH_TOKEN_TTL_SECONDS
-/** Not ticked: a working day, so a shared or borrowed machine forgets by itself. */
-export const SESSION_TTL_SECONDS = 12 * 60 * 60
+/**
+ * How long a session lasts. One number, decided here.
+ *
+ * There used to be two, picked by a `rememberMe` flag on the login body — a
+ * twelve-hour session for an unticked box, sized for a borrowed machine that
+ * should forget by itself. It went because nobody here works from a borrowed
+ * machine, and because a caller choosing how long their own session lives puts
+ * a security policy in the hands of whoever is calling. Restoring the choice
+ * means putting the flag back on the body *and* deciding what a caller who
+ * omits it should get, which is the question that made one number the answer.
+ *
+ * Equal to the refresh token's own lifetime, and that is the relationship
+ * rather than a coincidence: a session cannot outlive the credential that
+ * renews it.
+ */
+export const SESSION_TTL_SECONDS = REFRESH_TOKEN_TTL_SECONDS
 
 /**
  * How long a rotated token stays usable, for the tab that was a moment behind.
@@ -55,11 +67,8 @@ export class SessionService {
     userId: string,
     tokenHash: string,
     origin: SessionOrigin,
-    remember: boolean,
     now = new Date(),
   ): Promise<SessionRecord> {
-    const ttl = remember ? REMEMBERED_SESSION_TTL_SECONDS : SESSION_TTL_SECONDS
-
     const inserted = await this.sessions.queryBuilder
       .base('session')
       .insert()
@@ -71,7 +80,7 @@ export class SessionService {
         userAgent: origin.userAgent,
         ipAddress: origin.ipAddress,
         lastUsedAt: now,
-        expiresAt: new Date(now.getTime() + ttl * 1000),
+        expiresAt: new Date(now.getTime() + SESSION_TTL_SECONDS * 1000),
         createdBy: userId,
         updatedBy: userId,
       })

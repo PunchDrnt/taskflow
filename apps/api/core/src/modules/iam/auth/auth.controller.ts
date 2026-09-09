@@ -99,9 +99,7 @@ export class AuthController {
    *
    * `@Public()` like the first half and for the same reason: what it checks is
    * in its own cookie and body, not in an access token the guard would look
-   * for. `rememberMe` is deliberately not repeated — it was answered in step
-   * one and asking again would let the second request quietly extend a session
-   * the first one scoped.
+   * for.
    */
   @Post('login/2fa')
   @Public()
@@ -137,11 +135,7 @@ export class AuthController {
     // guesses one code a second attempt with the same challenge.
     this.cookies.clearTwoFactorChallenge(response)
 
-    const result = await this.auth.issueSession(
-      userId,
-      originOf(request),
-      false,
-    )
+    const result = await this.auth.issueSession(userId, originOf(request))
 
     return this.completeLogin(response, result)
   }

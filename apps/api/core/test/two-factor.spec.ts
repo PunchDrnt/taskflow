@@ -329,7 +329,7 @@ describe.skipIf(!hasTestDatabase)('two-factor', () => {
         .countBy({ userId: id, revokedAt: IsNull() })
 
       const outcome = await auth.login(
-        { login: `tfa_${counter}`, password: PASSWORD, rememberMe: false },
+        { login: `tfa_${counter}`, password: PASSWORD },
         ORIGIN,
       )
 
@@ -346,7 +346,7 @@ describe.skipIf(!hasTestDatabase)('two-factor', () => {
       const { secret } = await enrolled(id)
 
       const outcome = await auth.login(
-        { login: `tfa_${counter}`, password: PASSWORD, rememberMe: false },
+        { login: `tfa_${counter}`, password: PASSWORD },
         ORIGIN,
       )
       expect(isTwoFactorChallenge(outcome)).toBe(true)
@@ -356,7 +356,7 @@ describe.skipIf(!hasTestDatabase)('two-factor', () => {
       // is built to refuse.
       const later = new Date(Date.now() + 60_000)
       await twoFactor.verify(id, codeAt(secret, later), later)
-      const result = await auth.issueSession(id, ORIGIN, false)
+      const result = await auth.issueSession(id, ORIGIN)
 
       expect(result.tokens.accessToken).toBeTruthy()
       expect(
@@ -372,10 +372,7 @@ describe.skipIf(!hasTestDatabase)('two-factor', () => {
 
       expect(
         await codeOf(
-          auth.login(
-            { login: `tfa_${counter}`, password: 'wrong', rememberMe: false },
-            ORIGIN,
-          ),
+          auth.login({ login: `tfa_${counter}`, password: 'wrong' }, ORIGIN),
         ),
       ).toBe('INVALID_CREDENTIALS')
     })
@@ -387,13 +384,12 @@ describe.skipIf(!hasTestDatabase)('two-factor', () => {
         id,
         'hash-for-the-current-session',
         ORIGIN,
-        false,
       )
 
       await twoFactor.disable(id, session.id, PASSWORD)
 
       const outcome = await auth.login(
-        { login: `tfa_${counter}`, password: PASSWORD, rememberMe: false },
+        { login: `tfa_${counter}`, password: PASSWORD },
         ORIGIN,
       )
       expect(isTwoFactorChallenge(outcome)).toBe(false)
@@ -403,8 +399,8 @@ describe.skipIf(!hasTestDatabase)('two-factor', () => {
     it('needs the password to switch off, and keeps the caller signed in', async () => {
       const id = await newUser()
       await enrolled(id)
-      const mine = await sessions.create(id, 'mine', ORIGIN, false)
-      await sessions.create(id, 'elsewhere', ORIGIN, false)
+      const mine = await sessions.create(id, 'mine', ORIGIN)
+      await sessions.create(id, 'elsewhere', ORIGIN)
 
       expect(
         await codeOf(twoFactor.disable(id, mine.id, 'not the password')),

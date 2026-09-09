@@ -33,7 +33,7 @@ export async function loginAction(
 ): Promise<ActionOutcome> {
   const started = performance.now()
 
-  const parsed = loginSchema.safeParse({ login, password, rememberMe: false })
+  const parsed = loginSchema.safeParse({ login, password })
   if (!parsed.success) {
     return {
       ok: false,

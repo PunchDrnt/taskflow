@@ -173,7 +173,7 @@ export class AuthService {
       return { challenge: this.tokens.signTwoFactorChallenge(user.id) }
     }
 
-    return this.issueSession(user.id, origin, input.rememberMe)
+    return this.issueSession(user.id, origin)
   }
 
   /**
@@ -231,14 +231,12 @@ export class AuthService {
   async issueSession(
     userId: string,
     origin: SessionOrigin,
-    rememberMe: boolean,
   ): Promise<LoginResult> {
     const refreshToken = this.tokens.createRefreshToken()
     const session = await this.sessions.create(
       userId,
       this.tokens.hashRefreshToken(refreshToken),
       origin,
-      rememberMe,
     )
 
     const memberships = await this.memberships.listForUser(userId)

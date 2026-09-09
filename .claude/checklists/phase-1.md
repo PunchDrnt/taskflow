@@ -123,11 +123,12 @@ unique เต็ม · `views.sort_order` / `is_default`
       · controller ของ `PATCH /v1/me/password` อยู่ใน `auth/` แต่ path เป็น `me/` — `UserModule` import `AuthModule` ไม่ได้ มันวนกลับ
       · ⚠️ **`notify.outbox.org_id` กลายเป็น nullable** เพราะเมลรีเซ็ตเป็นของบัญชี ไม่ใช่ของ org
       แก้ [`00-overview`](../docs/00-overview.md#binding-decisions) กับ [`schema.md`](../docs/02-database/schema.md#schema-notify) แล้วใน commit เดียวกัน
-- [x] **Remember me** — เป็นค่าของ `sessions.expires_at` ไม่ใช่กลไกใหม่
-      · **ไม่มีช่องให้ติ๊กบนหน้า login — ทุกคนได้ 15 วันเลย** (ตัดสินใจแล้ว)
-        · ค่าคือ `REMEMBERED_SESSION_TTL_SECONDS` (15 วัน) vs `SESSION_TTL_SECONDS` (12 ชม.)
-          ตัวหลังออกแบบไว้สำหรับเครื่องที่ยืมเขามาใช้ ซึ่งไม่ใช่สถานการณ์ของบริษัทนี้
-        · API ยังรับ `rememberMe` เหมือนเดิม จะเอาตัวเลือกกลับก็แค่ checkbox + อ่านค่าจาก form
+- [x] ~~**Remember me**~~ **ตัดออกทั้งฟีเจอร์** — session ยาว 15 วันเท่ากันหมด
+      · ⚠️ **เบี่ยงจาก roadmap ข้อ 18 · แก้ docs แล้วใน commit เดียวกัน** (03-roadmap + 04-features)
+      · เอาออกทั้ง `rememberMe` ใน `loginSchema`, พารามิเตอร์ใน `issueSession`/`SessionService.create`
+        และ `REMEMBERED_SESSION_TTL_SECONDS` · เหลือ `SESSION_TTL_SECONDS` ตัวเดียว = อายุ refresh token
+      · เหตุผลหลักไม่ใช่เรื่อง UX แต่คือ **ความยาว session เป็นนโยบายความปลอดภัย ผู้เรียก API ไม่ควรเลือกเอง**
+        · ทางเลือกที่เหลือหลังตัด checkbox ทิ้งคือ "client ส่ง `true` เสมอ" ซึ่งย้ายนโยบายไปไว้ผิดที่
 - [x] **ล็อกบัญชีเมื่อ login ผิดหลายครั้ง** — `iam.users.failed_login_attempts` + `locked_until`
       · เก็บใน DB ไม่ใช่ memory · ลองผิดระหว่างล็อกไม่ต่อเวลา · อีเมลที่ไม่มีในระบบไม่นับอะไรเลย
       · ✅ ครบแล้ว — `LOGIN_MAX_ATTEMPTS` / `LOGIN_LOCK_MINUTES` อยู่ใน `env.ts` · lock หมดอายุแล้วนับใหม่ (N ครั้งต่อหน้าต่าง) ไม่ใช่สะสมต่อ

@@ -131,7 +131,6 @@ describe.skipIf(!hasTestDatabase)('account', () => {
         new JwtService({ secret: 'x'.repeat(32) }),
       ).hashRefreshToken(token),
       ORIGIN,
-      false,
     )
 
     return session.id
