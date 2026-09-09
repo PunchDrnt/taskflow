@@ -1,4 +1,4 @@
-import type { OrgRole } from './constants.js'
+import type { OrgRole, TaskPriority } from './constants.js'
 
 /**
  * Response shapes both halves read.
@@ -40,4 +40,56 @@ export interface Me {
   activeOrgId: string | null
   /** The caller's role in `activeOrgId`, null when there is no active org. */
   role: OrgRole | null
+}
+
+/**
+ * A date-time **as it arrives in a browser**: an ISO 8601 string.
+ *
+ * The API's own view types say `Date`, and they are right to — a service
+ * hands back what came out of `timestamptz`. But `JSON.stringify` turns a
+ * `Date` into a string on the way out and nothing turns it back, so a client
+ * that reused the server's type would be told it has a `Date` and get a
+ * string. Calling `.getTime()` on it throws at runtime with the compiler
+ * satisfied, which is the worst shape a mistake can take.
+ *
+ * So the wire types below are declared once, here, and are deliberately *not*
+ * the API's types with the dates left alone.
+ */
+export type IsoDateTime = string
+
+/** One assignee, as a card's avatar row draws them. */
+export interface AssigneeRow {
+  userId: string
+  name: string | null
+  nickname: string | null
+  avatarUrl: string | null
+}
+
+/** A task as it reaches a browser. Mirrors the API's `TaskResponse`. */
+export interface TaskRow {
+  id: string
+  projectId: string
+  /** `DEV-120`, assembled by the API and never stored. */
+  key: string
+  number: number
+  title: string
+  description: string | null
+  statusId: string
+  priority: TaskPriority | null
+  dueDate: IsoDateTime | null
+  sortOrder: string
+  completedAt: IsoDateTime | null
+  completedBy: string | null
+  assignees: AssigneeRow[]
+}
+
+/**
+ * A row from `GET /v1/me/tasks`, which spans organisations and so has to name
+ * the one each task belongs to.
+ */
+export interface MyWorkRow extends TaskRow {
+  orgId: string
+  orgName: string
+  projectName: string
+  projectColor: string
 }

@@ -215,6 +215,16 @@ unique เต็ม · `views.sort_order` / `is_default`
         เก็บ role ที่เจอมาด้วยเลย ไม่ต้อง query ซ้ำใน controller
 - [ ] **หนึ่งคนอยู่ได้หลาย org** — org switcher บนสุดของ sidebar · หน้า Home เป็นปลายทางหลัง login
       ไม่ใช่ project ใด project หนึ่ง · คนที่ยังไม่อยู่ org ไหนเห็นหน้าที่บอกให้ติดต่อ admin
+      · ✅ **หน้า Home ลงแล้ว** — `/` เป็นเจ้าของสามสถานะที่เดียว: ไม่ได้ login → `/login` ·
+        login แล้วไม่มี org → หน้าบอกให้ติดต่อ admin · มี org → Home
+        · ตัวเลขสรุป + กอง overdue / 7 วันข้างหน้า / ทีหลัง + รายชื่อ org
+        · ⚠️ **ตัวเลขตันที่ 100** — `Page` ไม่มี total (`toPage` ใช้แถว probe ไม่ใช่ `COUNT(*)`)
+          เกินนั้นแสดง `100+` แทนที่จะเดา · ถ้าอยากได้เลขจริงต้องมี count endpoint ซึ่งยังไม่ทำ
+        · ⚠️ **วันที่ตรึงโซน `Asia/Bangkok` ไม่ใช่โซนผู้ใช้** — Server Component ฟอร์แมตบน server (UTC)
+          แล้วต้องตรงกับที่ browser จะเรนเดอร์ ถ้าใช้ "local time" สองฝั่งจะไม่ตรงกัน
+          และแสดงผิดวันตลอด 7 ชม.ที่กรุงเทพเป็นพรุ่งนี้ไปแล้วแต่ UTC ยังไม่ · `iam.users` ยังไม่มี `timezone`
+      · ⏳ **org switcher ยังไม่ได้ทำ** — มันอยู่บน sidebar ของ layout ที่ผูก org ซึ่งยังไม่มี
+        และ Home เป็นหน้าข้าม org จะใส่ switcher ตรงนั้นก็ผิดที่
       · ✅ API ลงแล้ว: `GET /v1/me/tasks` — งานของฉัน **ข้าม org** `@SkipOrgScope()`
         · อยู่ใต้ `/me` ไม่ใช่ `/tasks` ตามเส้นแบ่งเดิม — `/org/*` ถามเรื่อง org, `/me/*` ถามเรื่องคน
         · `sort` default เป็น `dueDate` ไม่ใช่ `order` — `order` เป็น fractional index ต่อคอลัมน์ต่อ project
