@@ -56,7 +56,7 @@ export function OrgSwitcher({
     <DropdownMenu>
       <DropdownMenuTrigger
         disabled={pending}
-        className="hover:bg-action-hover flex w-full items-center justify-between gap-2 px-3 py-2 text-left disabled:opacity-60"
+        className="hover:bg-action-hover flex w-full items-center justify-between gap-2 rounded-xs px-3 py-2 text-left disabled:opacity-60"
       >
         <span className="min-w-0">
           <span className="body-2 block truncate font-medium">
