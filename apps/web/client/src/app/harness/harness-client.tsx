@@ -62,7 +62,7 @@ export function HarnessClient() {
         ok: false,
         status: 401,
         elapsedMs: 0,
-        body: 'refresh ไม่ผ่าน — ของจริงตรงนี้จะ window.location.assign("/login")',
+        body: 'Refresh failed — in the real app this is where window.location.assign("/login") goes',
       })
     })
   }, [append])
@@ -166,12 +166,15 @@ export function HarnessClient() {
         </Button>
         <Button
           onClick={() =>
-            void fromBrowser('browser · GET /me ×6 พร้อมกัน', async () => {
+            void fromBrowser('browser · GET /me ×6 at once', async () => {
               const replies = await Promise.all(
                 Array.from({ length: 6 }, () => api.get('/me')),
               )
 
-              return { requests: replies.length, refreshes: 'ดู Network tab' }
+              return {
+                requests: replies.length,
+                refreshes: 'see the Network tab',
+              }
             })
           }
         >
@@ -179,7 +182,7 @@ export function HarnessClient() {
         </Button>
         <Button
           onClick={() =>
-            void fromBrowser('browser · refresh ตรงๆ', async () => {
+            void fromBrowser('browser · refresh directly', async () => {
               await refreshSession()
 
               return { refreshed: true }
@@ -220,7 +223,7 @@ export function HarnessClient() {
           disabled={pending}
           onClick={() => runAction(() => meParallelAction(true))}
         >
-          GET /me ×6 หลังทิ้ง token
+          GET /me ×6 after dropping the token
         </Button>
         <Button disabled={pending} onClick={() => runAction(logoutAction)}>
           logout
@@ -229,7 +232,7 @@ export function HarnessClient() {
           disabled={pending}
           onClick={() => runAction(dropAccessTokenAction)}
         >
-          ทิ้ง access_token
+          Drop access_token
         </Button>
       </Group>
 
@@ -239,7 +242,7 @@ export function HarnessClient() {
         </h2>
         <div className="flex flex-col gap-1 font-[family-name:var(--font-ibm-plex-mono)] text-xs">
           {lines.length === 0 ? (
-            <span className="opacity-50">ยังไม่มีอะไรเกิดขึ้น</span>
+            <span className="opacity-50">Nothing has happened yet</span>
           ) : (
             lines.map((line, index) => (
               <div

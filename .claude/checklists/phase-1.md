@@ -223,8 +223,16 @@ unique เต็ม · `views.sort_order` / `is_default`
         · ⚠️ **วันที่ตรึงโซน `Asia/Bangkok` ไม่ใช่โซนผู้ใช้** — Server Component ฟอร์แมตบน server (UTC)
           แล้วต้องตรงกับที่ browser จะเรนเดอร์ ถ้าใช้ "local time" สองฝั่งจะไม่ตรงกัน
           และแสดงผิดวันตลอด 7 ชม.ที่กรุงเทพเป็นพรุ่งนี้ไปแล้วแต่ UTC ยังไม่ · `iam.users` ยังไม่มี `timezone`
-      · ⏳ **org switcher ยังไม่ได้ทำ** — มันอยู่บน sidebar ของ layout ที่ผูก org ซึ่งยังไม่มี
-        และ Home เป็นหน้าข้าม org จะใส่ switcher ตรงนั้นก็ผิดที่
+      · ✅ **org switcher ลงแล้ว** — บนสุดของ sidebar ใน `AppShell` · route group `(signed-in)`
+        คือที่เดียวที่เช็ค session ส่วน `/login` อยู่นอกกลุ่มจะได้ไม่วาด sidebar จาก session ที่ยังไม่มี
+        · `POST /v1/me/active-org` ผ่าน Server Action + `revalidatePath('/', 'layout')` + `router.refresh()`
+          — สองอย่างหลังคนละหน้าที่: revalidate ล้างของที่ render ด้วย org เก่า, refresh คือสิ่งที่ทำให้แท็บนี้วาดใหม่
+        · ⚠️ **switcher ไม่กรอง Home** — หน้าอื่นในกรอบนี้อยู่ org เดียว Home อยู่ทุก org
+          วางไว้ในกรอบเดียวกันเพื่อให้ "เห็นว่ามันไม่กรอง" ดีกว่าปล่อย Home ลอยไม่มีบริบท
+        · คนที่ยังไม่อยู่ org ไหน **ไม่ได้ shell** — sidebar ที่ปุ่มแรกเป็น switcher ที่ว่างเปล่า
+          เหนือเมนูที่กดแล้วได้ `NO_ORGANIZATION` แย่กว่าหน้าที่อธิบายสถานการณ์
+      · ⚠️ **guard cache session + membership 30 วิ** — สร้าง org ใหม่แล้วยิงต่อทันทีได้ 403
+        เป็นดีไซน์ (ถอดคนออกจาก org มีผลใน 30 วิ) แต่ไม่รู้ก่อนจะไล่ผีอยู่นาน
       · ✅ API ลงแล้ว: `GET /v1/me/tasks` — งานของฉัน **ข้าม org** `@SkipOrgScope()`
         · อยู่ใต้ `/me` ไม่ใช่ `/tasks` ตามเส้นแบ่งเดิม — `/org/*` ถามเรื่อง org, `/me/*` ถามเรื่องคน
         · `sort` default เป็น `dueDate` ไม่ใช่ `order` — `order` เป็น fractional index ต่อคอลัมน์ต่อ project

@@ -82,7 +82,7 @@ export async function meParallelAction(
 ): Promise<ActionOutcome> {
   const started = performance.now()
 
-  return run('server action · GET /me ×6 พร้อมกัน', started, async () => {
+  return run('server action · GET /me ×6 at once', started, async () => {
     // The proxy runs on a Server Action's POST too — it goes to the page's own
     // URL, which the matcher covers — so by the time an action body runs, an
     // expired token has usually already been renewed. That makes `apiForAction`

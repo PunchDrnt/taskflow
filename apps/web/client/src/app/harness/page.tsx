@@ -41,32 +41,33 @@ export default async function HarnessPage() {
           Auth transport harness
         </h1>
         <p className="text-sm opacity-70">
-          ยิงเส้นเดียวกันจากสี่ที่ แล้วดูว่าใครหมุน token ได้บ้าง
+          The same endpoint from four places, and which of them can rotate a
+          token.
         </p>
       </header>
 
       <Panel title="Server Component · what this request is holding">
-        <Row label="cookies ที่ browser ส่งมากับหน้านี้">
-          {present.length === 0 ? '(ไม่มี)' : present.join(', ')}
+        <Row label="Cookies the browser sent with this page">
+          {present.length === 0 ? '(none)' : present.join(', ')}
         </Row>
-        <Row label={`${REFRESH_TOKEN_COOKIE} ถึง server หรือเปล่า`}>
+        <Row label={`Did ${REFRESH_TOKEN_COOKIE} reach the server?`}>
           {present.includes(REFRESH_TOKEN_COOKIE)
-            ? 'ถึง — proxy กับ server action ต่ออายุ session เองได้'
-            : 'ไม่ถึง — ถ้าล็อกอินอยู่แล้วยังขึ้นแบบนี้ แปลว่ามีใครหด path ของ cookie กลับไป'}
+            ? 'Yes — the proxy and server actions can renew the session themselves'
+            : 'No — seeing this while signed in means somebody narrowed the cookie path again'}
         </Row>
         <Row label={`${ACCESS_TOKEN_COOKIE} exp`}>
           {describeExpiry(expiresAt)}
         </Row>
         <Row label={ACTIVE_ORG_COOKIE}>
-          {jar.get(ACTIVE_ORG_COOKIE)?.value ?? '(ไม่มี)'}
+          {jar.get(ACTIVE_ORG_COOKIE)?.value ?? '(none)'}
         </Row>
       </Panel>
 
-      <Panel title="Server Component · GET /v1/me ระหว่าง render">
+      <Panel title="Server Component · GET /v1/me during render">
         <RenderedMe />
       </Panel>
 
-      <Panel title="Server Component · ลองเขียน cookie ระหว่าง render">
+      <Panel title="Server Component · writing a cookie during render">
         <CookieWriteProbe />
       </Panel>
 
@@ -124,8 +125,8 @@ async function CookieWriteProbe() {
   return (
     <Pre ok={!probe.ok}>
       {probe.ok
-        ? `⚠️ เขียนสำเร็จ — ${probe.detail}`
-        : `เขียนไม่ได้ ตามคาด:\n${probe.detail}`}
+        ? `⚠️ The write succeeded — ${probe.detail}`
+        : `Refused, as it should be:\n${probe.detail}`}
     </Pre>
   )
 }
@@ -136,7 +137,11 @@ async function probeCookieWrite(): Promise<Probe> {
   try {
     jar.set('harness_render_write', 'nope')
 
-    return { label: 'render write', ok: true, detail: 'cookie ถูกตั้งจริง' }
+    return {
+      label: 'render write',
+      ok: true,
+      detail: 'the cookie really was set',
+    }
   } catch (error) {
     return {
       label: 'render write',
@@ -147,13 +152,13 @@ async function probeCookieWrite(): Promise<Probe> {
 }
 
 function describeExpiry(expiresAt: number | null): string {
-  if (expiresAt === null) return '(ไม่มี access token หรืออ่านไม่ออก)'
+  if (expiresAt === null) return '(no access token, or it could not be read)'
 
   const seconds = Math.round((expiresAt - Date.now()) / 1000)
 
   return seconds > 0
-    ? `อีก ${seconds} วินาที (${new Date(expiresAt).toISOString()})`
-    : `หมดอายุไปแล้ว ${-seconds} วินาที`
+    ? `in ${seconds}s (${new Date(expiresAt).toISOString()})`
+    : `expired ${-seconds}s ago`
 }
 
 function Panel({

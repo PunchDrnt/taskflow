@@ -59,14 +59,14 @@ export function toApiError(error: unknown): ApiError {
       return new ApiError({
         status: error.response.status,
         code: `HTTP_${error.response.status}`,
-        message: 'เกิดข้อผิดพลาดในการติดต่อเซิร์ฟเวอร์',
+        message: 'The server responded with an error',
       })
     }
 
     return new ApiError({
       status: 0,
       code: API_ERROR_CODES.INTERNAL_ERROR,
-      message: 'ติดต่อเซิร์ฟเวอร์ไม่ได้',
+      message: 'Could not reach the server',
       isNetworkFailure: true,
     })
   }
@@ -74,8 +74,7 @@ export function toApiError(error: unknown): ApiError {
   return new ApiError({
     status: 0,
     code: API_ERROR_CODES.INTERNAL_ERROR,
-    message:
-      error instanceof Error ? error.message : 'เกิดข้อผิดพลาดที่ไม่รู้จัก',
+    message: error instanceof Error ? error.message : 'Something went wrong',
   })
 }
 
