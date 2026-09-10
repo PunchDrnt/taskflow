@@ -441,18 +441,40 @@ unique เต็ม · `views.sort_order` / `is_default`
 
 ## 9. List view + My Tasks
 
-- [ ] **List view รับ config คอลัมน์เป็น array จากที่เดียว** (hard-code ไว้ก่อนได้) ⏳ งาน web
+- [x] **List view รับ config คอลัมน์เป็น array จากที่เดียว** (hard-code ไว้ก่อนได้)
       · ห้ามเขียน `<th>` ตายตัวใน JSX — Phase 4 ต่อ `view.columns` จะได้แก้จุดเดียว
+      · ✅ `components/organisms/task-list/columns.tsx` — `TASK_COLUMNS` เป็น registry
+        ตารางวาดตาม array ของ **id** ที่รับมา · `DEFAULT_TASK_COLUMNS` คือของ hard-code ตอนนี้
+      · ที่ข้ามฝั่งได้คือ id (string) ไม่ใช่ตัว column — `cell` เป็น function
+        ส่งข้าม server/client boundary ไม่ได้ และเก็บลง DB ก็ไม่ได้
+      · `className` ลงทั้ง `<th>` และ `<td>` ของคอลัมน์นั้น ไม่งั้น responsive column
+        จะกลายเป็นหัวตารางที่ไม่มีเซลล์อยู่ข้างล่าง
+- [x] **โหลดเพิ่ม (load more) แทน pagination แบบมีเลขหน้า**
+      · 🔒 cursor ตอบ "อะไรอยู่ถัดจากแถวนี้" ไม่ตอบ "หน้า 7" — เลขหน้าบน keyset cursor
+        จะซ้ำแถวหรือข้ามแถว เพราะ `sort_order` เป็น fractional index ที่แทรกกลางได้
+      · ต่อท้ายไม่ทับของเดิม — ซึ่งจำเป็นกับ group by ฝั่ง client ด้วย
+      · นับ "n loaded" ไม่ใช่ยอดรวม — `Page<T>` ไม่มี total โดยตั้งใจ
+      · ⚠️ `<TaskList key={search}>` — แถวที่โหลดมาเป็น state ซึ่งอยู่ข้ามการ re-render
+        ของ server ถ้าไม่ remount filter ใหม่จะเอาผลไปต่อท้ายผลเก่า
+- [x] **group by ฝั่ง client** — status · priority · project · due date
+      · ⚠️ จัดกลุ่มเฉพาะแถวที่โหลดมาแล้ว จำนวนในวงเล็บคือ "โหลดมาเท่านี้" ไม่ใช่ยอดจริง
+        กด "โหลดเพิ่ม" แล้วกลุ่มโตได้ — เป็นผลตรงๆ ของการ group ฝั่ง client ตามสเปก
+      · ลำดับกลุ่มตามความหมาย ไม่ใช่ตามจำนวน — urgent เหนือ low, overdue เหนือ later
 - [x] Filter · sort · group · search — **เก็บสถานะใน URL ไม่ save เป็น view** (view ที่ตั้งชื่อได้อยู่ Phase 4)
       · API: `GET /v1/projects/:id/tasks?statusId=&assigneeId=&priority=&dueAfter=&dueBefore=&q=&sort=&dir=&limit=&cursor=`
       · **AND ทุกข้อ · หลายค่าในข้อเดียว = "is in"** — ไม่มี OR ข้ามฟิลด์ นั่นคือ query builder ของ Phase 4
       · sort: `order` `dueDate` `priority` `created` `title` — `priority` เรียงตาม rank ไม่ใช่ตัวอักษร
         (ตัวอักษรจะได้ `high` อยู่ระหว่าง `low` กับ `urgent` ซึ่งผิดพอดีกับคำถามที่ถาม)
-      · group by ทำฝั่ง client จากผลลัพธ์ — ไม่ต้องมี endpoint (⏳ งาน web)
+      · group by ทำฝั่ง client จากผลลัพธ์ — ไม่ต้องมี endpoint · ✅ ทำแล้ว
       · filter ตาม: คน · status · priority · วันที่
+        · **หน้า My Tasks มีแค่ q + priority + includeClosed** และตั้งใจไม่ครบ:
+          assignee = ตัวเองเสมอ · statusId เป็น id ราย project ที่ข้าม project ไม่ได้
+          (สอง project มี "In progress" คนละ id) · date range รอ date picker
+        · ⏳ ชุดเต็มไปอยู่หน้า task list ของ project ซึ่งอยู่ใน project เดียวจริงๆ
       · filter "งานของคนที่ inactive" **ตัดออกแล้ว** — ถามด้วย filter assignee ธรรมดาได้อยู่แล้ว
         และงานของคนที่ถูก deactivate คาไว้ที่เดิม ไม่ได้หายไปไหน
 - [x] **My Tasks** — Phase 1 มีแค่งานที่ assign ให้ตัวเองโดยตรง · **default ซ่อน done/cancelled**
+      · ✅ หน้าจอ `/my-tasks` — org เดียว (ตาม switcher) ต่างจาก Home ที่ข้าม org
       · `GET /v1/tasks` · `includeClosed=true` ถึงจะเห็นของที่ปิดแล้ว
       · 🔒 **กั้นด้วย project visibility ด้วย** — ถูกเอาออกจาก project แล้วแถว assignee ยังอยู่
         ถ้าไม่กั้นจะยังอ่านงานของ project นั้นได้ต่อจากหน้าจอที่ไม่มีใครคิดว่าเป็นหน้า project

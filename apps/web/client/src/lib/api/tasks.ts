@@ -25,7 +25,7 @@ export interface TaskLookups {
   statuses: Record<string, StatusRow>
 }
 
-export const EMPTY_LOOKUPS: TaskLookups = { projects: {}, statuses: {} }
+const EMPTY_LOOKUPS: TaskLookups = { projects: {}, statuses: {} }
 
 /** One page of the caller's own work, inside the active organisation. */
 export async function fetchMyTasks(
