@@ -1,4 +1,10 @@
-import type { OrgRole, StatusColor, TaskPriority } from './constants.js'
+import type {
+  OrgRole,
+  ScopedRole,
+  StatusColor,
+  TaskPriority,
+} from './constants.js'
+import type { StatusKind } from './schemas/status.js'
 
 /**
  * Response shapes both halves read.
@@ -93,4 +99,44 @@ export interface MyWorkRow extends TaskRow {
   projectName: string
   /** One of the eight palette tokens, never a hex value. */
   projectColor: StatusColor
+}
+
+/**
+ * A project as a sidebar, a picker or a list row draws it.
+ *
+ * `archivedAt` is a string here and a `Date` on the API's `ProjectView`, for
+ * the reason `IsoDateTime` exists at all.
+ */
+export interface ProjectRow {
+  id: string
+  name: string
+  description: string | null
+  color: StatusColor
+  /** `DEV` — the first half of every task key in this project. */
+  keyPrefix: string
+  /** Non-null means hidden from sidebars and pickers, not deleted. */
+  archivedAt: IsoDateTime | null
+  /**
+   * What the caller is *in this project*, or null when they are not in it and
+   * are seeing it because they run the organisation.
+   */
+  role: ScopedRole | null
+}
+
+/**
+ * One column of one project's board.
+ *
+ * Statuses are per project, which is why anything listing tasks from several
+ * projects at once has to hold a map keyed by `id` rather than a single list:
+ * two projects' "In progress" are two rows with two ids.
+ */
+export interface StatusRow {
+  id: string
+  name: string
+  color: StatusColor
+  /** `done` and `cancelled` are what `includeClosed=false` hides. */
+  kind: StatusKind
+  /** Where a new task lands. Exactly one per project. */
+  isDefault: boolean
+  sortOrder: string
 }
