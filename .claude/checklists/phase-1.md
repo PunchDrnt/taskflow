@@ -178,13 +178,33 @@ unique เต็ม · `views.sort_order` / `is_default`
       · ไฟล์ไม่ผ่าน Node เลย — upload ที่ทิ้งกลางคันเหลือแค่ object ที่ไม่มีใครอ้างถึง
         และ API ไม่กลายเป็น proxy ที่ memory limit คือ file size limit จริง
       · **เก็บ key ไม่ใช่ URL** เพราะ bucket เป็น private · `GET /v1/users/:userId/avatar` เป็นที่เดียวที่แปลงกลับเป็นรูป
-- [ ] **ย่อ + บีบรูปที่ browser ก่อน PUT** — ด้านยาว 512px · WebP ~0.85 · ปกติเหลือ 30-60KB
+- [x] **ย่อ + บีบรูปที่ browser ก่อน PUT** — ด้านยาว 512px · WebP ~0.85 · ปกติเหลือ 30-60KB
+      · ✅ `lib/image/compress.ts` + `AvatarField` บนหน้า `/settings/profile`
+      · บีบ**ก่อน**ขอ URL — ไฟล์ที่อ่านไม่ออกจะได้ไม่มีใบเซ็นค้างไว้
+      · ชื่อไฟล์เปลี่ยนนามสกุลตามที่ encode จริง (`.webp`) — มันป้อน `keyFor` อย่างเดียว ไม่มีใครตรวจ
+        object ชื่อ `.jpg` ที่ข้างในเป็น WebP หลอกคนที่มาเปิด bucket ทีหลังฟรีๆ
+      · `toBlob` คืน null เวลา encode ไม่ได้ ไม่ throw · บาง browser แอบให้ PNG มาแทน
+        เลยอ่านนามสกุลจาก `blob.type` ที่ได้จริง ไม่ใช่จากที่ขอไป
       · ⚠️ **ไม่ใช่แค่ optimisation — เป็นด่านเดียวที่มี** `presignedUpload` เซ็น `PutObjectCommand` เปล่า
         ไม่มี `ContentLength` ไม่มีเงื่อนไข content-type · URL ใบเดียวรับ 200MB ได้พอๆ กับรับ 30KB
       · EXIF orientation — canvas ทิ้ง EXIF ทั้งก้อน ไม่อ่านก่อนรูปตะแคง
         · `createImageBitmap(blob, { imageOrientation: 'from-image' })`
       · re-encode ทิ้ง EXIF = ทิ้ง GPS ของรูปจากมือถือไปด้วย ซึ่งเป็นเรื่องที่ต้องการอยู่แล้ว
       · ส่ง `fileName` ให้ลงท้ายตรงกับที่ encode จริง — มันป้อน `keyFor` อย่างเดียว ไม่มีใครตรวจ
+- [ ] 🔴 **browser PUT เข้า storage ตรงๆ ยังไม่ได้จริง — รอตัดสิน** (เจอตอนทำข้อบน · วัดแล้ว ไม่ได้เดา)
+      · **dev**: presigned URL ชี้ `http://localhost:4900/...` ซึ่งคนละ origin กับ `localhost:3000`
+        preflight ตอบ `403 Forbidden: This CORS request is not allowed.` — bucket ไม่มี CORS rule
+        ทั้ง `deploy/init/garage.sh` และ `docker-compose.yml` ไม่ได้ตั้งไว้เลย
+      · **production หนักกว่า**: `S3_HOST: garage` เป็นชื่อใน docker network เฉยๆ
+        และ `deploy/config/Caddyfile` ไม่มี route ไป garage · Caddy เป็นตัวเดียวที่ publish port
+        → browser resolve host ไม่ได้ตั้งแต่แรก ไม่ใช่แค่ CORS
+      · เท่ากับ flow "PUT ตรง" ที่ §2 เขียนไว้ **ยังไม่เคยทำงานเลย** — ฝั่ง client ครบแล้ว รอทางเข้า
+      · ทางเลือก (ไม่ตัดสินเอง เพราะเป็นเรื่อง deploy + เปิด object storage ออกสู่ public):
+        1. `handle_path /s3/*` → `garage:3900` ใน Caddyfile + `S3_HOST` เป็น public host
+           → **ได้ same-origin ฟรี ไม่ต้องมี CORS เลย** ตรงกับเหตุผลที่ Caddyfile เขียนไว้ว่าทำไมไม่แยก api.domain.com
+        2. เปิด garage เป็น subdomain แยก + ตั้ง CORS rule ต่อ bucket
+        3. ให้ API เป็น proxy รับ multipart — **ขัดกับเหตุผลที่เลือก presigned ตั้งแต่แรก**
+           (memory limit กลายเป็น file size limit จริง)
 - [x] Deactivate / Reactivate (admin/owner กด) — assign งานใหม่ให้ไม่ได้ งานเก่ายังอยู่
       · `POST|DELETE /v1/org/members/:userId/deactivate` · ยังอยู่ในลิสต์สมาชิก (`status` บอกว่า deactivated)
       · assign งานใหม่ → 409 `USER_INACTIVE` · assignee picker ไม่เสนอชื่อ · **งานที่ถืออยู่ไม่ขยับ**

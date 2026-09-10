@@ -1,6 +1,6 @@
 'use client'
 
-import { FolderKanban, Home, ListTodo } from 'lucide-react'
+import { FolderKanban, Home, ListTodo, UserRound } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
@@ -77,6 +77,13 @@ export function AppShell({
                   active={pathname.startsWith('/my-tasks')}
                 >
                   <ListTodo className="size-4" />
+                </NavItem>
+                <NavItem
+                  href="/settings/profile"
+                  label="Profile"
+                  active={pathname.startsWith('/settings/profile')}
+                >
+                  <UserRound className="size-4" />
                 </NavItem>
               </SidebarMenu>
             </SidebarGroupContent>
