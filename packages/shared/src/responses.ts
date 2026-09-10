@@ -1,4 +1,4 @@
-import type { OrgRole, TaskPriority } from './constants.js'
+import type { OrgRole, StatusColor, TaskPriority } from './constants.js'
 
 /**
  * Response shapes both halves read.
@@ -91,5 +91,6 @@ export interface MyWorkRow extends TaskRow {
   orgId: string
   orgName: string
   projectName: string
-  projectColor: string
+  /** One of the eight palette tokens, never a hex value. */
+  projectColor: StatusColor
 }

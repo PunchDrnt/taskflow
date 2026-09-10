@@ -3,7 +3,7 @@ import Link from 'next/link'
 import type { MyWorkRow } from '@repo/shared'
 
 import { formatDueDate } from '../../lib/format/due-date'
-import { OrgDot } from '../atoms/org-dot'
+import { ProjectDot } from '../atoms/project-dot'
 import { TaskKey } from '../atoms/task-key'
 
 /**
@@ -34,7 +34,7 @@ export function WorkRow({
         </span>
 
         <span className="text-text-secondary body-3 hidden items-center gap-1.5 sm:flex">
-          <OrgDot color={task.projectColor} />
+          <ProjectDot color={task.projectColor} />
           {task.orgName} · {task.projectName}
         </span>
 
