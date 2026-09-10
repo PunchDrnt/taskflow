@@ -238,7 +238,7 @@ unique เต็ม · `views.sort_order` / `is_default`
         และลำดับ global guard ตัดสินโดยลำดับ provider ของ module = ความปลอดภัยทุก route ไปขึ้นกับลำดับ import ใน `app.module.ts`
       · `orgRole` เข้าไปอยู่ใน `RequestContext` แล้ว — guard อ่าน `organization.members` ไปแล้วตอนตัดสินว่า request นี้ของ org ไหน
         เก็บ role ที่เจอมาด้วยเลย ไม่ต้อง query ซ้ำใน controller
-- [ ] **หนึ่งคนอยู่ได้หลาย org** — org switcher บนสุดของ sidebar · หน้า Home เป็นปลายทางหลัง login
+- [x] **หนึ่งคนอยู่ได้หลาย org** — org switcher บนสุดของ sidebar · หน้า Home เป็นปลายทางหลัง login
       ไม่ใช่ project ใด project หนึ่ง · คนที่ยังไม่อยู่ org ไหนเห็นหน้าที่บอกให้ติดต่อ admin
       · ✅ **หน้า Home ลงแล้ว ที่ `/home`** — `/` เป็นประตูหน้าอย่างเดียว ไม่เรนเดอร์อะไร
         · ไม่ได้ login → `/login` · login แล้ว → `/home` · เข้า `/login` ทั้งที่ login อยู่ → `/home`
