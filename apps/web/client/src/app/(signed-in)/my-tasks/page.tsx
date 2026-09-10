@@ -12,14 +12,15 @@ import { TaskToolbar } from '../../../components/organisms/task-toolbar'
 import { ApiError } from '../../../lib/api/errors'
 import { apiForRender } from '../../../lib/api/server'
 import {
-  fetchMyTasks,
+  fetchTasks,
   lookupsFor,
   type TaskLookups,
 } from '../../../lib/api/tasks'
 import {
-  parseMyTasksQuery,
+  parseTaskQuery,
   toURLSearchParams,
-  type MyTasksQueryState,
+  type TaskListQueryState,
+  type TaskScope,
 } from '../../../lib/tasks/query'
 
 /**
@@ -41,7 +42,7 @@ export default async function MyTasksPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
   const search = toURLSearchParams(await searchParams)
-  const query = parseMyTasksQuery(search)
+  const query = parseTaskQuery(search, MINE)
   const result = await firstPage(query)
 
   return (
@@ -56,7 +57,7 @@ export default async function MyTasksPage({
 
       {result.ok ? (
         <>
-          <TaskToolbar query={query} />
+          <TaskToolbar query={query} scope={MINE} />
 
           {/* ⚠️ `key` remounts the list when the query changes. The rows it has
               loaded are state, and state outlives a server re-render — without
@@ -66,6 +67,7 @@ export default async function MyTasksPage({
             initialRows={result.rows}
             initialCursor={result.nextCursor}
             initialLookups={result.lookups}
+            scope={MINE}
             columns={DEFAULT_TASK_COLUMNS}
             grouping={query.group}
             search={search.toString()}
@@ -82,6 +84,9 @@ export default async function MyTasksPage({
     </div>
   )
 }
+
+/** This screen is always the same scope; naming it keeps it out of six calls. */
+const MINE: TaskScope = { kind: 'mine' }
 
 type FirstPage =
   | {
@@ -105,10 +110,10 @@ type FirstPage =
  * `proxy.ts` already tried — so an unexpected failure belongs to the error
  * boundary, not to a friendly box that hides it.
  */
-async function firstPage(query: MyTasksQueryState): Promise<FirstPage> {
+async function firstPage(query: TaskListQueryState): Promise<FirstPage> {
   try {
     const api = await apiForRender()
-    const page = await fetchMyTasks(api, query)
+    const page = await fetchTasks(api, MINE, query)
 
     return {
       ok: true,

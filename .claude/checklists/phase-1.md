@@ -368,7 +368,9 @@ unique เต็ม · `views.sort_order` / `is_default`
       · `due_date` บังคับมี offset (`z.iso.datetime({ offset: true })`) — ไม่มี offset = เที่ยงคืน UTC
         ซึ่งเร็วกว่ากรุงเทพ 7 ชม. งานเลยกำหนดตั้งแต่เย็นวันก่อน
       · **project ที่ archive แล้วเขียนไม่ได้** 409 `PROJECT_ARCHIVED` — ตัดสินตอนทำ §6
-- [x] **Quick add — เฉพาะในหน้า project** พิมพ์ชื่อ + Enter จบ ไม่บังคับ field อื่น ⏳ หน้าจอยังไม่มี
+- [x] **Quick add — เฉพาะในหน้า project** พิมพ์ชื่อ + Enter จบ ไม่บังคับ field อื่น
+      · ✅ **หน้าจอลงแล้ว** — `QuickAdd` บน `/projects/[projectId]` · ล้างช่องแล้วคาโฟกัสไว้
+        เพราะสิ่งที่คนทำจริงคือพิมพ์ติดกันสี่อัน · `router.refresh()` ไม่เดาว่าแถวลงคอลัมน์ไหน
       · API พร้อมแล้ว: `POST /v1/projects/:id/tasks` รับแค่ `{ title }` · status มาจาก `is_default` ของ project
       · My Tasks ไม่มี quick add · ถ้าเพิ่มทีหลังใช้ `localStorage` จำ project ล่าสุด **ไม่ต้องมีตาราง user preference**
       · 🟡 ใน roadmap แต่**ตัดไม่ได้** — quick add คือสิ่งที่ทำให้คนกลับมาใช้
@@ -392,8 +394,15 @@ unique เต็ม · `views.sort_order` / `is_default`
         · แตะเฉพาะแถวที่ค่าไม่ตรงจริงๆ — งานที่เสร็จอยู่แล้วเก็บวันเดิมไว้ และรันซ้ำไม่เปลี่ยนอะไร
         · `completed_by` ลงชื่อคนที่แก้ status เพราะเขาคือคนที่ทำให้มันเกิด · สองคอลัมน์ขยับพร้อมกันตาม `tasks_completed_pair_check`
   - [x] `CHECK` ทำแทนไม่ได้ เงื่อนไขข้ามตาราง (`tasks` ↔ `statuses`) — ยืนยันแล้วตอนทำทาง B
-- [ ] **Assignee picker** — type-ahead ค้นได้ทั้งชื่อจริง / ชื่อเล่น / อีเมล ไม่ใช่ dropdown รายชื่อยาว
-      ⏳ หน้าจอยังไม่มี · API ลงแล้ว: `GET /v1/projects/:id/assignable?scope=project|org&q=`
+- [x] **Assignee picker** — type-ahead ค้นได้ทั้งชื่อจริง / ชื่อเล่น / อีเมล ไม่ใช่ dropdown รายชื่อยาว
+      · ✅ **หน้าจอลงแล้ว** — popover บนคอลัมน์ Assignees ของหน้า project
+      · **ไม่ debounce ด้วย timer** ใช้เลขลำดับกัน response เก่าทับใหม่แทน
+        · timer = `setState` ใน effect ซึ่ง lint ห้าม และของที่ต้องการจริงไม่ใช่ยิงน้อยลง
+          (ลิสต์ cap 20 แถว บริษัท 100 คน) แต่คือไม่วาดคำตอบเก่าทับคำตอบใหม่
+        · เลขลำดับครอบเคสที่ timer ครอบไม่ได้ด้วย: สอง request ที่ค้างอยู่กลับมาสลับกัน
+      · คอลัมน์ Assignees แก้ได้เฉพาะ scope `project` — My Tasks ข้าม project เลยไม่มี project
+        ให้เช็ค membership · ใช้ registry ตัวเดียวกัน แยกด้วย `TaskCellContext` ไม่ได้ fork ตาราง
+      · API ลงมาก่อนแล้ว: `GET /v1/projects/:id/assignable?scope=project|org&q=`
         ค้นชื่อจริง/ชื่อเล่น/อีเมล/username · แต่ละแถวบอก `inProject` ให้ client รู้ว่าต้องถามยืนยันไหม
       · เรียงสองชั้นพอ: **คนใน project → ที่เหลือทั้ง org** · ชั้น "คนที่เพิ่ง assign ล่าสุด"
         ที่สเปกเดิมมี **ตัดออกแล้ว** — เป็น query ที่แพงที่สุดในหน้าจอที่เปิดบ่อยที่สุด

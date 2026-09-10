@@ -18,12 +18,16 @@ import {
   TableRow,
 } from '@repo/ui/components/table'
 
-import { loadMoreMyTasks } from '../../../app/(signed-in)/my-tasks/actions'
+import { loadMoreTasks } from '../../../app/(signed-in)/task-actions'
 import type { TaskLookups } from '../../../lib/api/tasks'
 import type { MoreTasks } from '../../../lib/tasks/more-tasks'
-import type { TaskGrouping } from '../../../lib/tasks/query'
+import type { TaskGrouping, TaskScope } from '../../../lib/tasks/query'
 import { LoadMore } from '../../molecules/load-more'
-import { TASK_COLUMNS, type TaskColumnId } from './columns'
+import {
+  TASK_COLUMNS,
+  type TaskCellContext,
+  type TaskColumnId,
+} from './columns'
 import { groupTasks } from './grouping'
 
 /**
@@ -44,6 +48,7 @@ export function TaskList({
   initialRows,
   initialCursor,
   initialLookups,
+  scope,
   columns,
   grouping,
   search,
@@ -51,6 +56,8 @@ export function TaskList({
   initialRows: TaskRow[]
   initialCursor: string | null
   initialLookups: TaskLookups
+  /** Which list this is — it decides where the next page comes from. */
+  scope: TaskScope
   /** Ids into `TASK_COLUMNS`. Phase 4 hands these down from a saved view. */
   columns: TaskColumnId[]
   grouping: TaskGrouping
@@ -65,12 +72,20 @@ export function TaskList({
 
   const drawn = columns.map((id) => TASK_COLUMNS[id])
 
+  const context: TaskCellContext = {
+    scope,
+    onTaskChanged: (changed) =>
+      setRows((held) =>
+        held.map((task) => (task.id === changed.id ? changed : task)),
+      ),
+  }
+
   function loadMore() {
     if (cursor === null) return
 
     setFailure(null)
     startTransition(async () => {
-      apply(await loadMoreMyTasks(search, cursor))
+      apply(await loadMoreTasks(scope, search, cursor))
     })
   }
 
@@ -141,7 +156,7 @@ export function TaskList({
                 <TableRow key={task.id}>
                   {drawn.map((column) => (
                     <TableCell key={column.id} className={column.className}>
-                      {column.cell(task, lookups)}
+                      {column.cell(task, lookups, context)}
                     </TableCell>
                   ))}
                 </TableRow>

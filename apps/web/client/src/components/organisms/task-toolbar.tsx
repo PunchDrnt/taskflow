@@ -26,11 +26,12 @@ import { Switch } from '@repo/ui/components/switch'
 
 import {
   GROUPING_LABELS,
-  MY_TASKS_SORTS,
+  groupingsFor,
   SORT_LABELS,
-  TASK_GROUPINGS,
+  sortsFor,
   toSearchParams,
-  type MyTasksQueryState,
+  type TaskListQueryState,
+  type TaskScope,
 } from '../../lib/tasks/query'
 
 /**
@@ -49,14 +50,20 @@ import {
  * `Menu.Group` — hence the `DropdownMenuGroup` around the priorities rather
  * than a bare label with items after it.
  */
-export function TaskToolbar({ query }: { query: MyTasksQueryState }) {
+export function TaskToolbar({
+  query,
+  scope,
+}: {
+  query: TaskListQueryState
+  scope: TaskScope
+}) {
   const router = useRouter()
   const pathname = usePathname()
   const [pending, startTransition] = useTransition()
   const [draft, setDraft] = useState(query.q)
 
-  function go(patch: Partial<MyTasksQueryState>) {
-    const next = toSearchParams({ ...query, ...patch }).toString()
+  function go(patch: Partial<TaskListQueryState>) {
+    const next = toSearchParams({ ...query, ...patch }, scope).toString()
 
     startTransition(() => {
       router.push(next === '' ? pathname : `${pathname}?${next}`)
@@ -125,7 +132,7 @@ export function TaskToolbar({ query }: { query: MyTasksQueryState }) {
         id="task-sort"
         label="Sort by"
         value={query.sort}
-        options={MY_TASKS_SORTS.map((sort) => [sort, SORT_LABELS[sort]])}
+        options={sortsFor(scope).map((sort) => [sort, SORT_LABELS[sort]])}
         onChange={(sort) => go({ sort })}
       />
 
@@ -143,17 +150,24 @@ export function TaskToolbar({ query }: { query: MyTasksQueryState }) {
         id="task-group"
         label="Group by"
         value={query.group}
-        options={TASK_GROUPINGS.map((group) => [group, GROUPING_LABELS[group]])}
+        options={groupingsFor(scope).map((group) => [
+          group,
+          GROUPING_LABELS[group],
+        ])}
         onChange={(group) => go({ group })}
       />
 
-      <label className="text-text-secondary body-3 flex items-center gap-2">
-        <Switch
-          checked={query.includeClosed}
-          onCheckedChange={(includeClosed) => go({ includeClosed })}
-        />
-        Show closed
-      </label>
+      {/* Only My Tasks hides closed work. A project's Done column is part of
+          its board — hiding it there would hide a status somebody made. */}
+      {scope.kind === 'mine' && (
+        <label className="text-text-secondary body-3 flex items-center gap-2">
+          <Switch
+            checked={query.includeClosed}
+            onCheckedChange={(includeClosed) => go({ includeClosed })}
+          />
+          Show closed
+        </label>
+      )}
     </div>
   )
 }
@@ -169,7 +183,7 @@ function Picker<T extends string>({
   id: string
   label: string
   value: T
-  options: [T, string][]
+  options: readonly (readonly [T, string])[]
   onChange: (value: T) => void
 }) {
   return (

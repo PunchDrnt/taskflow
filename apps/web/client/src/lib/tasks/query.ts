@@ -1,7 +1,9 @@
 import {
   DEFAULT_PAGE_SIZE,
   TASK_PRIORITIES,
+  TASK_SORT_FIELDS,
   type TaskPriority,
+  type TaskSortField,
 } from '@repo/shared'
 
 /**
@@ -13,19 +15,29 @@ import {
  * views a table to live in. It also means the back button works on a filter
  * change, which no amount of component state gets right for free.
  *
- * `group` is the one field the API never sees — see `toApiParams`.
+ * One shape serves both lists, and `TaskScope` is what they differ by — the
+ * alternative was two near-identical modules whose drift nobody would notice
+ * until a control worked on one screen and not the other.
  */
 
 /**
- * How My Tasks may be ordered.
+ * Which list this is: everything assigned to me, or everything in one project.
  *
- * `order` is deliberately missing, and it is the only one of the API's five
- * that is. A task's `sort_order` is a fractional index scoped to one column of
- * one project, so comparing it across projects interleaves unrelated lists in
- * an order that is stable, arbitrary and meaningless. It stays *accepted* by
- * the API — the cursor pages it correctly — it is simply never the answer to
- * "what should I do next", which is the only question this screen asks.
+ * They are different endpoints with different defaults and different sensible
+ * controls, and three of the differences below are not cosmetic:
+ *
+ * - **`order` means nothing across projects.** A task's `sort_order` is a
+ *   fractional index scoped to one column of one project, so comparing it
+ *   between projects interleaves unrelated lists in an order that is stable,
+ *   arbitrary and meaningless. It stays *accepted* by the API — the cursor
+ *   pages it correctly — it is simply never an answer.
+ * - **`includeClosed` belongs only to My Tasks.** A project's Done column is
+ *   part of the board; hiding it there would hide a status the person made.
+ * - **Grouping by project inside one project** is one heading over everything.
  */
+export type TaskScope =
+  { kind: 'mine' } | { kind: 'project'; projectId: string }
+
 /**
  * How many rows one request brings back, and therefore what Load more loads.
  *
@@ -34,20 +46,18 @@ import {
  */
 export const TASK_PAGE_SIZE = DEFAULT_PAGE_SIZE
 
-export const MY_TASKS_SORTS = [
-  'dueDate',
-  'priority',
-  'created',
-  'title',
-] as const
-
-export type MyTasksSort = (typeof MY_TASKS_SORTS)[number]
-
-export const SORT_LABELS: Record<MyTasksSort, string> = {
+export const SORT_LABELS: Record<TaskSortField, string> = {
+  order: 'Board order',
   dueDate: 'Due date',
   priority: 'Priority',
   created: 'Created',
   title: 'Title',
+}
+
+export function sortsFor(scope: TaskScope): readonly TaskSortField[] {
+  return scope.kind === 'project'
+    ? TASK_SORT_FIELDS
+    : TASK_SORT_FIELDS.filter((sort) => sort !== 'order')
 }
 
 /**
@@ -78,32 +88,41 @@ export const GROUPING_LABELS: Record<TaskGrouping, string> = {
   due: 'Due date',
 }
 
-export interface MyTasksQueryState {
+export function groupingsFor(scope: TaskScope): readonly TaskGrouping[] {
+  return scope.kind === 'project'
+    ? TASK_GROUPINGS.filter((grouping) => grouping !== 'project')
+    : TASK_GROUPINGS
+}
+
+export interface TaskListQueryState {
   /** Matched against the title, case-insensitively. Empty means no search. */
   q: string
   /** Several values is "is in", never "and" — the API's only disjunction. */
   priority: TaskPriority[]
-  sort: MyTasksSort
+  sort: TaskSortField
   dir: 'asc' | 'desc'
-  /** False hides every status whose kind is `done` or `cancelled`. */
+  /** My Tasks only. False hides every status whose kind is done or cancelled. */
   includeClosed: boolean
   group: TaskGrouping
 }
 
 /**
- * What the screen shows before anybody touches a control.
+ * What a list shows before anybody touches a control.
  *
- * Soonest first, closed work hidden. Opening My Tasks should answer "what is
- * there to do", and a list that opens on a pile of finished work is one people
- * stop opening.
+ * My Tasks opens on the soonest deadline with closed work hidden — it should
+ * answer "what is there to do", and a list that opens on a pile of finished
+ * work is one people stop opening. A project opens in board order, because
+ * that is the order somebody dragged it into.
  */
-export const DEFAULT_MY_TASKS_QUERY: MyTasksQueryState = {
-  q: '',
-  priority: [],
-  sort: 'dueDate',
-  dir: 'asc',
-  includeClosed: false,
-  group: 'none',
+export function defaultQueryFor(scope: TaskScope): TaskListQueryState {
+  return {
+    q: '',
+    priority: [],
+    sort: scope.kind === 'project' ? 'order' : 'dueDate',
+    dir: 'asc',
+    includeClosed: false,
+    group: 'none',
+  }
 }
 
 /** Next hands `searchParams` as an object; everything here wants the real thing. */
@@ -130,24 +149,27 @@ export function toURLSearchParams(
  * API validates its own input regardless, so being generous here never widens
  * what can actually be asked for.
  */
-export function parseMyTasksQuery(search: URLSearchParams): MyTasksQueryState {
+export function parseTaskQuery(
+  search: URLSearchParams,
+  scope: TaskScope,
+): TaskListQueryState {
+  const fallback = defaultQueryFor(scope)
   const sort = search.get('sort')
   const dir = search.get('dir')
   const group = search.get('group')
 
   return {
-    q: search.get('q')?.trim() ?? DEFAULT_MY_TASKS_QUERY.q,
+    q: search.get('q')?.trim() ?? fallback.q,
     priority: search
       .getAll('priority')
       .filter((value): value is TaskPriority =>
         (TASK_PRIORITIES as readonly string[]).includes(value),
       ),
-    sort: isOneOf(sort, MY_TASKS_SORTS) ? sort : DEFAULT_MY_TASKS_QUERY.sort,
+    sort: isOneOf(sort, sortsFor(scope)) ? sort : fallback.sort,
     dir: dir === 'desc' ? 'desc' : 'asc',
-    includeClosed: search.get('includeClosed') === 'true',
-    group: isOneOf(group, TASK_GROUPINGS)
-      ? group
-      : DEFAULT_MY_TASKS_QUERY.group,
+    includeClosed:
+      scope.kind === 'project' ? false : search.get('includeClosed') === 'true',
+    group: isOneOf(group, groupingsFor(scope)) ? group : fallback.group,
   }
 }
 
@@ -159,17 +181,21 @@ export function parseMyTasksQuery(search: URLSearchParams): MyTasksQueryState {
  * mean those values after the defaults change, which is not what the person
  * who copied it intended.
  */
-export function toSearchParams(state: MyTasksQueryState): URLSearchParams {
+export function toSearchParams(
+  state: TaskListQueryState,
+  scope: TaskScope,
+): URLSearchParams {
+  const fallback = defaultQueryFor(scope)
   const search = new URLSearchParams()
 
   if (state.q !== '') search.set('q', state.q)
   for (const priority of state.priority) search.append('priority', priority)
-  if (state.sort !== DEFAULT_MY_TASKS_QUERY.sort) search.set('sort', state.sort)
-  if (state.dir !== DEFAULT_MY_TASKS_QUERY.dir) search.set('dir', state.dir)
-  if (state.includeClosed) search.set('includeClosed', 'true')
-  if (state.group !== DEFAULT_MY_TASKS_QUERY.group) {
-    search.set('group', state.group)
+  if (state.sort !== fallback.sort) search.set('sort', state.sort)
+  if (state.dir !== fallback.dir) search.set('dir', state.dir)
+  if (state.includeClosed && scope.kind === 'mine') {
+    search.set('includeClosed', 'true')
   }
+  if (state.group !== fallback.group) search.set('group', state.group)
 
   return search
 }
@@ -188,18 +214,23 @@ export function toSearchParams(state: MyTasksQueryState): URLSearchParams {
  *
  * `group` is absent because grouping is a client-side rearrangement of rows
  * the server already sent — sending it would invite an endpoint that groups,
- * which is the thing the spec decided against.
+ * which is the thing the spec decided against. `includeClosed` is absent for a
+ * project, whose endpoint has no such parameter.
  */
 export function toApiParams(
-  state: MyTasksQueryState,
+  state: TaskListQueryState,
+  scope: TaskScope,
   cursor: string | null,
 ): URLSearchParams {
   const params = new URLSearchParams({
     sort: state.sort,
     dir: state.dir,
-    includeClosed: String(state.includeClosed),
     limit: String(TASK_PAGE_SIZE),
   })
+
+  if (scope.kind === 'mine') {
+    params.set('includeClosed', String(state.includeClosed))
+  }
 
   if (state.q !== '') params.set('q', state.q)
   for (const priority of state.priority) params.append('priority', priority)

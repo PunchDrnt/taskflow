@@ -140,3 +140,21 @@ export interface StatusRow {
   isDefault: boolean
   sortOrder: string
 }
+
+/**
+ * Somebody a project can hand work to, as the assignee picker draws them.
+ *
+ * Both names on every row, never one. A hundred-person company has repeated
+ * first names and repeated nicknames, and the picker's failure mode is
+ * assigning work to the wrong Pim — so the row carries the formal name, the
+ * nickname colleagues actually use, and the email that settles it.
+ */
+export interface AssignableRow {
+  userId: string
+  name: string
+  nickname: string
+  email: string
+  avatarUrl: string | null
+  /** False means picking them asks to add them to the project first. */
+  inProject: boolean
+}

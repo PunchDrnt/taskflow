@@ -4,11 +4,13 @@ import type { TaskRow } from '@repo/shared'
 
 import type { TaskLookups } from '../../../lib/api/tasks'
 import { formatDueDate } from '../../../lib/format/due-date'
+import type { TaskScope } from '../../../lib/tasks/query'
 import { PriorityTag } from '../../atoms/priority-tag'
 import { ProjectDot } from '../../atoms/project-dot'
 import { StatusBadge } from '../../atoms/status-badge'
 import { TaskKey } from '../../atoms/task-key'
 import { AssigneeStack } from '../../molecules/assignee-stack'
+import { AssigneePicker } from '../assignee-picker'
 
 /**
  * Every column a task list can draw, declared once.
@@ -28,6 +30,20 @@ import { AssigneeStack } from '../../molecules/assignee-stack'
 export type TaskColumnId =
   'key' | 'title' | 'project' | 'status' | 'priority' | 'assignees' | 'dueDate'
 
+/**
+ * What a cell knows besides the row it is drawing.
+ *
+ * The assignee column is why this exists: it is read-only on My Tasks, which
+ * spans projects and has no single project to add anybody to, and editable on
+ * a project screen, which does. Passing the scope keeps that one registry
+ * rather than forking it per screen — and `onTaskChanged` is how an edit shows
+ * up immediately in a list whose rows are client state.
+ */
+export interface TaskCellContext {
+  scope: TaskScope
+  onTaskChanged: (task: TaskRow) => void
+}
+
 export interface TaskColumn {
   id: TaskColumnId
   header: string
@@ -36,7 +52,11 @@ export interface TaskColumn {
    * a responsive column from becoming a header with no cells under it.
    */
   className?: string
-  cell: (task: TaskRow, lookups: TaskLookups) => React.ReactNode
+  cell: (
+    task: TaskRow,
+    lookups: TaskLookups,
+    context: TaskCellContext,
+  ) => React.ReactNode
 }
 
 export const TASK_COLUMNS: Record<TaskColumnId, TaskColumn> = {
@@ -117,7 +137,22 @@ export const TASK_COLUMNS: Record<TaskColumnId, TaskColumn> = {
     id: 'assignees',
     header: 'Assignees',
     className: 'hidden sm:table-cell',
-    cell: (task) => <AssigneeStack assignees={task.assignees} />,
+    cell: (task, _lookups, context) =>
+      // Read-only across projects: assigning needs a project to check
+      // membership against, and My Tasks spans several. The picker on a
+      // project screen is the same faces with somewhere to put the question.
+      context.scope.kind === 'project' ? (
+        <AssigneePicker
+          projectId={context.scope.projectId}
+          taskId={task.id}
+          assignees={task.assignees}
+          onAssigneesChanged={(assignees) =>
+            context.onTaskChanged({ ...task, assignees })
+          }
+        />
+      ) : (
+        <AssigneeStack assignees={task.assignees} />
+      ),
   },
 
   dueDate: {
@@ -153,3 +188,13 @@ export const DEFAULT_TASK_COLUMNS: TaskColumnId[] = [
   'assignees',
   'dueDate',
 ]
+
+/**
+ * Inside one project, the project column is the same value on every row.
+ *
+ * Which is the registry earning its keep: the difference between the two
+ * screens is one entry missing from an array, not a second table component.
+ */
+export const PROJECT_TASK_COLUMNS: TaskColumnId[] = DEFAULT_TASK_COLUMNS.filter(
+  (id) => id !== 'project',
+)

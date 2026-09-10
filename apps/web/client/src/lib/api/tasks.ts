@@ -2,7 +2,11 @@ import type { AxiosInstance } from 'axios'
 
 import type { Page, ProjectRow, StatusRow, TaskRow } from '@repo/shared'
 
-import { toApiParams, type MyTasksQueryState } from '../tasks/query'
+import {
+  toApiParams,
+  type TaskListQueryState,
+  type TaskScope,
+} from '../tasks/query'
 import { fetchProjects } from './projects'
 import { fetchStatuses } from './statuses'
 
@@ -27,14 +31,27 @@ export interface TaskLookups {
 
 const EMPTY_LOOKUPS: TaskLookups = { projects: {}, statuses: {} }
 
-/** One page of the caller's own work, inside the active organisation. */
-export async function fetchMyTasks(
+/**
+ * One page of a task list — the caller's own work, or one project's.
+ *
+ * Two endpoints behind one function because the difference is genuinely the
+ * path: `/tasks` is "assigned to me in this organisation" and
+ * `/projects/:id/tasks` is "everything on this board". Both answer the same
+ * `Page<TaskRow>` with the same cursor, and the query is built from the same
+ * state, so a caller that had to pick between two functions would be picking
+ * on the one axis that is already a parameter.
+ */
+export async function fetchTasks(
   api: AxiosInstance,
-  query: MyTasksQueryState,
+  scope: TaskScope,
+  query: TaskListQueryState,
   cursor: string | null = null,
 ): Promise<Page<TaskRow>> {
+  const path =
+    scope.kind === 'project' ? `/projects/${scope.projectId}/tasks` : '/tasks'
+
   const { data } = await api.get<Page<TaskRow>>(
-    `/tasks?${toApiParams(query, cursor)}`,
+    `${path}?${toApiParams(query, scope, cursor)}`,
   )
 
   return data
