@@ -351,6 +351,36 @@ describe.skipIf(!hasTestDatabase)('project statuses', () => {
       expect(thrown?.details).toEqual({ tasks: 2 })
     })
 
+    it('is counted on the list, so the screen can say so before the click', async () => {
+      const inProgress = await named('In progress')
+      const task = await newTask(inProgress, 1)
+      await newTask(inProgress, 2)
+
+      const counted = async (): Promise<Record<string, number>> =>
+        Object.fromEntries(
+          (await asOwner(() => statuses.list(apollo))).map((one) => [
+            one.name,
+            one.taskCount,
+          ]),
+        )
+
+      // A status with nothing in it is absent from the GROUP BY, not zero —
+      // the map's missing keys have to read as zero rather than undefined.
+      expect(await counted()).toMatchObject({
+        'To do': 0,
+        'In progress': 2,
+        Done: 0,
+      })
+
+      await dataSource.query(
+        `UPDATE task.tasks SET deleted_at = now(), deleted_by = $1 WHERE id = $2`,
+        [owner, task],
+      )
+
+      // The same rule the delete check uses: a deleted task is not work.
+      expect((await counted())['In progress']).toBe(1)
+    })
+
     it('can be removed once the tasks have moved on', async () => {
       const inProgress = await named('In progress')
       const task = await newTask(inProgress, 1)

@@ -37,6 +37,33 @@ export class TasksInStatusService {
   }
 
   /**
+   * The same count for every status of one project, in one statement.
+   *
+   * The settings screen needs it *before* anybody presses Delete: the rule is
+   * "a status holding work cannot be removed", and a button that looks
+   * available until it fails is a worse way to say so than a disabled one
+   * carrying the number. Asking `countInStatus` per row would be a query per
+   * column of the board to draw one screen.
+   *
+   * A status with no tasks is simply absent from the result — `GROUP BY`
+   * cannot invent a row for it — so callers read a missing key as zero.
+   */
+  async countsByStatus(projectId: string): Promise<Map<string, number>> {
+    const rows = await this.tasks.queryBuilder
+      .withOrg('task')
+      .select('task.statusId', 'status_id')
+      .addSelect('COUNT(*)', 'total')
+      .andWhere('task.projectId = :projectId', { projectId })
+      .andWhere('task.deletedAt IS NULL')
+      .groupBy('task.statusId')
+      .getRawMany<{ status_id: string; total: string }>()
+
+    // `COUNT(*)` arrives as a string: node-postgres does not narrow bigint to
+    // a JavaScript number, because it cannot do so safely in general.
+    return new Map(rows.map((row) => [row.status_id, Number(row.total)]))
+  }
+
+  /**
    * Brings `completed_at` / `completed_by` back into agreement with what a
    * status now counts as, for every live task in it. Returns the rows changed.
    *

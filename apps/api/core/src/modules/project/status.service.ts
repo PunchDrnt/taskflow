@@ -32,6 +32,11 @@ export interface StatusView {
   sortOrder: string
 }
 
+/** A status as the settings screen needs it: the row, plus what is in it. */
+export interface StatusWithTaskCount extends StatusView {
+  taskCount: number
+}
+
 const UNIQUE_VIOLATION = '23505'
 
 /**
@@ -66,11 +71,27 @@ export class StatusService {
     private readonly audit: AuditService,
   ) {}
 
-  /** Ordered as the board draws them. Seeing the project is the requirement. */
-  async list(projectId: string): Promise<StatusView[]> {
+  /**
+   * Ordered as the board draws them. Seeing the project is the requirement.
+   *
+   * Each one carries how many live tasks are in it, because two of the rules
+   * this table enforces are things a screen has to show *before* somebody acts
+   * on them rather than after: a status holding work cannot be deleted, and
+   * changing what one counts as rewrites the completion of everything in it.
+   * A number beside the row is what makes a disabled button explain itself.
+   */
+  async list(projectId: string): Promise<StatusWithTaskCount[]> {
     await this.projects.findVisible(projectId)
 
-    return (await this.rows(projectId)).map(view)
+    const [rows, counts] = await Promise.all([
+      this.rows(projectId),
+      this.tasks.countsByStatus(projectId),
+    ])
+
+    return rows.map((status) => ({
+      ...view(status),
+      taskCount: counts.get(status.id) ?? 0,
+    }))
   }
 
   async create(
@@ -284,7 +305,9 @@ export class StatusService {
       throw new ApiException(
         409,
         STATUS_ERROR_CODES.STATUS_IN_USE,
-        `There are still ${inUse} tasks in this status. Move them out first.`,
+        inUse === 1
+          ? `There is still 1 task in this status. Move it out first.`
+          : `There are still ${inUse} tasks in this status. Move them out first.`,
         { tasks: inUse },
       )
     }

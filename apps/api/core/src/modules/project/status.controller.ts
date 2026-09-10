@@ -25,7 +25,11 @@ import {
 import { ApiZodBody } from '#shared/http/api-zod'
 import { ZodValidationPipe } from '#shared/http/zod-validation.pipe'
 
-import { StatusService, type StatusView } from './status.service'
+import {
+  StatusService,
+  type StatusView,
+  type StatusWithTaskCount,
+} from './status.service'
 
 /**
  * The columns on one project's board.
@@ -48,7 +52,7 @@ export class StatusController {
   list(
     @Param('projectId', new ZodValidationPipe(projectIdSchema))
     projectId: string,
-  ): Promise<Page<StatusView>> {
+  ): Promise<Page<StatusWithTaskCount>> {
     return this.statuses.list(projectId).then(wholeList)
   }
 

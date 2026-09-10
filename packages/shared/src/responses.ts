@@ -139,6 +139,15 @@ export interface StatusRow {
   /** Where a new task lands. Exactly one per project. */
   isDefault: boolean
   sortOrder: string
+  /**
+   * Live tasks in this status.
+   *
+   * On the wire because the settings screen has to show two rules before
+   * somebody acts on them, not after: a status holding work cannot be
+   * deleted, and changing what one counts as rewrites the completion of
+   * everything in it.
+   */
+  taskCount: number
 }
 
 /**
