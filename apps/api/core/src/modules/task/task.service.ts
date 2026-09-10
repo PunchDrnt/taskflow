@@ -722,7 +722,20 @@ export class TaskService {
     }
 
     const { entities, raw } = await builder
-      .addSelect(sort.sql, 'cursor_value')
+      // ⚠️ Parenthesised, and it is not cosmetic. `addSelect('task.title', …)`
+      // hands TypeORM something it recognises as an entity property path, so
+      // it *renames that column's own alias* instead of adding a computed one:
+      // the row comes back carrying `cursor_value` and no `task_title`, and
+      // `getRawAndEntities` then hydrates a Task whose `title` is undefined.
+      // Every row of `?sort=title` arrived at the browser without a title,
+      // with nothing failing anywhere to say so. `title` is the only one of
+      // the five sorts spelled as a property path — `task.sort_order` and
+      // `task.created_at` are column names, and the other two are
+      // expressions — which is exactly why it was the only one that broke.
+      // The parentheses make it unrecognisable as a path, so it stays a
+      // computed select. `orderBy` and the cursor comparison are untouched:
+      // translating a path is the right thing to do in both.
+      .addSelect(`(${sort.sql})`, 'cursor_value')
       .orderBy(sort.sql, direction)
       .addOrderBy('task.id', direction)
       .limit(query.limit + 1)

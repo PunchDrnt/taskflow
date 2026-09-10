@@ -2,7 +2,12 @@ import type { ConfigService } from '@nestjs/config'
 import type { DataSource } from 'typeorm'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
-import type { ListTasksQuery, MyTasksQuery, OrgRole } from '@repo/shared'
+import {
+  TASK_SORT_FIELDS,
+  type ListTasksQuery,
+  type MyTasksQuery,
+  type OrgRole,
+} from '@repo/shared'
 
 import { CascadeSoftDelete } from '#shared/entity/cascade-soft-delete'
 import { ApiException } from '#shared/http/api-exception'
@@ -832,6 +837,29 @@ describe.skipIf(!hasTestDatabase)('tasks', () => {
       expect(seen).toHaveLength(12)
       expect(new Set(seen).size).toBe(12)
       expect(seen).toEqual([...seen].sort())
+    })
+
+    it('🔒 hands back whole rows whatever it is sorted by', async () => {
+      await asOwner(() =>
+        tasks.create(apollo, { title: 'ตรวจแถวให้ครบ', priority: 'high' }),
+      )
+
+      for (const sort of TASK_SORT_FIELDS) {
+        const [row] = (
+          await asOwner(() => tasks.list(apollo, { ...LIST, sort }))
+        ).data
+
+        // The ordering expression is selected beside the entity so the cursor
+        // can be built from it. Spelled as a property path it renames that
+        // column instead of adding one, and the field disappears from every
+        // row in the response — a whole page of untitled tasks, with no error
+        // anywhere. Every sort field is walked because which of them is a path
+        // is a property of how it happens to be written.
+        expect(row, sort).toBeDefined()
+        expect(row!.title, sort).toBe('ตรวจแถวให้ครบ')
+        expect(row!.priority, sort).toBe('high')
+        expect(row!.sortOrder, sort).toEqual(expect.any(String))
+      }
     })
 
     it('reports hasMore only while there is more', async () => {
