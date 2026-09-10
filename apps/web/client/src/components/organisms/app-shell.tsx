@@ -1,6 +1,6 @@
 'use client'
 
-import { Home, ListTodo } from 'lucide-react'
+import { FolderKanban, Home, ListTodo } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
@@ -63,6 +63,13 @@ export function AppShell({
                   active={pathname === '/home'}
                 >
                   <Home className="size-4" />
+                </NavItem>
+                <NavItem
+                  href="/projects"
+                  label="Projects"
+                  active={pathname.startsWith('/projects')}
+                >
+                  <FolderKanban className="size-4" />
                 </NavItem>
                 <NavItem
                   href="/my-tasks"
