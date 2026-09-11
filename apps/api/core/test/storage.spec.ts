@@ -16,9 +16,22 @@ const storage = new StorageService({
     const raw = process.env[key]
     if (key === 'S3_PORT') return Number(raw ?? 4900)
     if (key === 'S3_USE_SSL') return raw === 'true'
+    // Mirrors what `env.ts` hands the service: a parsed list, or undefined so
+    // the service falls back to APP_URL's origin.
+    if (key === 'S3_CORS_ORIGINS') {
+      return raw === undefined || raw.trim() === ''
+        ? undefined
+        : raw.split(',').map((origin) => origin.trim())
+    }
+    if (key === 'APP_URL') return raw ?? 'http://localhost:3000'
     return raw
   },
 } as never)
+
+/** The origin the service will have allowed, by the same rule it uses. */
+const allowedOrigin =
+  process.env.S3_CORS_ORIGINS?.split(',')[0]?.trim() ||
+  new URL(process.env.APP_URL ?? 'http://localhost:3000').origin
 
 const configured = Boolean(process.env.S3_HOST)
 
@@ -66,22 +79,14 @@ describe.skipIf(!configured)('storage', () => {
   })
 
   /**
-   * The browser sends its avatar straight here, which makes it cross-origin.
+   * The browser sends an avatar straight here, which makes it cross-origin.
    *
-   * Nothing in the application can check this: the rule lives on the bucket,
-   * is put there by `deploy/init/garage.sh`, and the only way to know it took
-   * is to send the preflight a browser would send. A missing rule fails in the
-   * browser before the PUT leaves it, with no request to find in any log —
-   * which is exactly the kind of thing a suite should catch instead.
-   *
-   * Not skipped when the variable is absent. The default matches the init
-   * script's own default, so "nobody set it" tests what a default install
-   * actually does rather than quietly asserting nothing.
+   * Nothing in the application can check this by reading itself: the rule
+   * lives on the bucket, `onModuleInit` puts it there, and the only way to
+   * know it took is to send the preflight a browser sends. A missing rule
+   * fails inside the browser before the PUT leaves it — no request reaches
+   * any server, so there is nothing in a log to find.
    */
-  const allowed = (process.env.S3_CORS_ORIGINS ?? 'http://localhost:3000')
-    .split(',')[0]!
-    .trim()
-
   const preflight = (origin: string, method = 'PUT'): Promise<Response> =>
     storage.presignedUpload(key).then((url) =>
       fetch(url, {
@@ -94,23 +99,25 @@ describe.skipIf(!configured)('storage', () => {
       }),
     )
 
-  it('lets the configured origin preflight an upload', async () => {
-    const response = await preflight(allowed)
+  it("lets the app's own origin preflight an upload", async () => {
+    const response = await preflight(allowedOrigin)
 
     expect(response.status).toBe(200)
-    expect(response.headers.get('access-control-allow-origin')).toBe(allowed)
+    expect(response.headers.get('access-control-allow-origin')).toBe(
+      allowedOrigin,
+    )
     expect(response.headers.get('access-control-allow-methods')).toContain(
       'PUT',
     )
   })
 
-  it('🔒 does not allow any other origin, or any other method', async () => {
-    // A rule of `*` would work just as well for the app and hand every page
-    // on the internet a signed-URL-shaped hole to aim at. And PUT is all the
-    // browser does here — the download side is an `<img>` following a
-    // redirect, which is not a cross-origin fetch at all.
+  it('🔒 allows no other origin, and no other method', async () => {
+    // `*` would serve the app just as well and hand every page on the
+    // internet somewhere to aim a stolen presigned URL from. GET is absent
+    // because the download side is an `<img>` following a redirect, which is
+    // not a cross-origin fetch at all.
     expect((await preflight('https://not-the-app.example')).status).toBe(403)
-    expect((await preflight(allowed, 'DELETE')).status).toBe(403)
+    expect((await preflight(allowedOrigin, 'DELETE')).status).toBe(403)
   })
 })
 

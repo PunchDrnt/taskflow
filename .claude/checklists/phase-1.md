@@ -193,16 +193,23 @@ unique เต็ม · `views.sort_order` / `is_default`
       · ส่ง `fileName` ให้ลงท้ายตรงกับที่ encode จริง — มันป้อน `keyFor` อย่างเดียว ไม่มีใครตรวจ
 - [x] **CORS rule บน bucket** — browser PUT ตรงเข้า storage ได้แล้วใน dev
       · เดิม preflight ตอบ `403 Forbidden: This CORS request is not allowed.` เพราะไม่มี rule เลย
-      · ⚠️ **admin API ของ Garage ไม่มี CORS** (ลองแล้ว: `/v2/PutBucketCors` ตอบ `Unknown API endpoint`
-        และ `GetBucketInfo` ไม่มี field CORS) · เป็น S3 call `PutBucketCors` → **ต้องเซ็น SigV4 เอง**
-        · `garage` image ไม่มี shell · `alpine/curl` ไม่มี `openssl` → `apk add --no-cache openssl` ในสคริปต์
-        · signing key เป็น HMAC ต่อกันสี่ชั้น · ชั้นแรกรับ key เป็น string ชั้นถัดไปต้อง `hexkey:`
-          (ส่ง hex เป็น *string* จะได้ signature ผิดแบบเงียบๆ)
-      · `S3_CORS_ORIGINS` คั่นด้วยจุลภาค — back-office อยู่คนละ registrable domain และอัปโหลดเหมือนกัน
-      · **PUT อย่างเดียว** ฝั่งดาวน์โหลดเป็น `<img>` ตาม 302 ไปหา presigned GET ซึ่ง browser ไม่ถือเป็น
-        cross-origin fetch · เปิด GET ด้วยจะเป็นการให้สิทธิ์ที่ไม่มีใครขอ
-      · 🔒 **ไม่ใช้ `*`** — origin อื่นตอบ 403, method อื่นตอบ 403 (ยิงจริงทั้งคู่) · มี test ใน `storage.spec.ts`
-        ที่ยิง preflight แบบเดียวกับ browser · **ยืนยันแล้วว่าแดงถ้า rule หาย** (ลองชี้ origin ไปที่อื่นแล้วเทสต์ตก)
+      · ✅ **`StorageService.onModuleInit` ตั้งเองตอน boot** ด้วย `PutBucketCorsCommand` จาก AWS SDK
+        · **ที่นี่ไม่ใช่ `garage.sh`** เพราะ CORS เป็น S3 operation ไม่ใช่ admin API
+          (ลองแล้ว: `/v2/PutBucketCors` ตอบ `Unknown API endpoint` · `GetBucketInfo` ไม่มี field CORS)
+          init image เป็น shell + curl → จะต้องเขียน SigV4 มือ ซึ่งไม่ใช่ท่ามาตรฐาน
+          · ⚠️ **ลองท่า SigV4 มือไปแล้วรอบนึงและ revert ทิ้ง** — ใช้ได้จริงแต่เป็น crypto ในเชลล์
+            ที่ไม่มีใครอยาก debug · service ตัวนี้มี S3 client ที่ config ครบอยู่แล้ว
+            **และสร้าง bucket ตอน boot อยู่แล้ว** ซึ่งเป็นการกระทำที่ใหญ่กว่าการตั้ง CORS
+      · `S3_CORS_ORIGINS` **ปกติไม่ต้องตั้ง** — ว่างไว้ = origin ของ `APP_URL`
+        ซึ่งคือคำตอบของทุก deployment โดเมนเดียว · มีไว้เผื่อ back-office คนละ registrable domain
+      · **PUT อย่างเดียว** ฝั่งดาวน์โหลดเป็น `<img>` ตาม 302 ไป presigned GET ซึ่ง browser
+        ไม่ถือเป็น cross-origin fetch · เปิด GET ด้วยคือให้สิทธิ์ที่ไม่มีใครขอ
+      · 🔒 **ไม่ใช้ `*`** — origin อื่น 403, method อื่น 403 (ยิงจริงทั้งคู่)
+      · ล้มแล้ว **warn ไม่ throw** — API ที่ boot ไม่ขึ้นเพราะตั้ง CORS ไม่ได้ คือ outage
+        ที่ใหญ่กว่าเรื่องที่มันกำลังรายงาน · ทุกอย่างยกเว้นอัปรูปยังใช้ได้
+      · test ใน `storage.spec.ts` ยิง preflight แบบเดียวกับ browser
+        · **พิสูจน์ว่า service เป็นคนเขียนจริง ไม่ใช่อ่าน rule เก่าที่ค้าง** — รันด้วย origin อื่น
+          แล้ว localhost:3000 พลิกเป็น 403 / origin ใหม่เป็น 200 แล้วรันกลับ พลิกกลับทั้งคู่
 - [ ] 🔴 **production ยังต้องเปิดทางให้ browser ถึง garage — รอตัดสิน**
       · rule อนุญาต origin **แต่ไม่ได้เปิด port ให้** — คนละเรื่องกัน
       · `S3_HOST: garage` เป็นชื่อใน docker network เฉยๆ และ `deploy/config/Caddyfile` ไม่มี route ไป garage
@@ -211,7 +218,7 @@ unique เต็ม · `views.sort_order` / `is_default`
         1. `handle_path /s3/*` → `garage:3900` ใน Caddyfile + `S3_HOST` เป็น public host
            → **ได้ same-origin ฟรี CORS rule ข้างบนกลายเป็นไม่จำเป็น** (แต่ไม่เสียหาย)
            ตรงกับเหตุผลที่ Caddyfile เขียนไว้เองว่าทำไมไม่แยก api.domain.com
-        2. เปิด garage เป็น subdomain แยก → ใช้ CORS rule ข้างบน ตั้ง `S3_CORS_ORIGINS` เป็น origin ของเว็บ
+        2. เปิด garage เป็น subdomain แยก → ตั้ง `S3_CORS_ORIGINS` เป็น origin ของเว็บ
         3. ให้ API เป็น proxy รับ multipart — **ขัดกับเหตุผลที่เลือก presigned ตั้งแต่แรก**
            (memory limit กลายเป็น file size limit จริง)
 - [x] Deactivate / Reactivate (admin/owner กด) — assign งานใหม่ให้ไม่ได้ งานเก่ายังอยู่

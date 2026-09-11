@@ -3,6 +3,7 @@ import {
   DeleteObjectCommand,
   GetObjectCommand,
   HeadBucketCommand,
+  PutBucketCorsCommand,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3'
@@ -34,9 +35,17 @@ export class StorageService implements OnModuleInit {
   private readonly logger = new Logger(StorageService.name)
   private readonly client: S3Client
   private readonly bucket: string
+  private readonly browserOrigins: string[]
 
   constructor(config: ConfigService<Env, true>) {
     this.bucket = config.get('S3_BUCKET', { infer: true })
+
+    // Absent means the app's own origin, which is the answer in every
+    // single-domain deployment: the page doing the uploading is served from
+    // `APP_URL`, so that is where the PUT comes from.
+    this.browserOrigins = config.get('S3_CORS_ORIGINS', { infer: true }) ?? [
+      new URL(config.get('APP_URL', { infer: true })).origin,
+    ]
 
     const useSsl = config.get('S3_USE_SSL', { infer: true })
     const host = config.get('S3_HOST', { infer: true })
@@ -65,9 +74,12 @@ export class StorageService implements OnModuleInit {
   }
 
   /**
-   * Creates the bucket if it is missing, and warns rather than throwing if the
-   * store cannot be reached: an outage should show up as a failing readiness
-   * check, not as an API that will not start.
+   * Brings the bucket to the state the application needs: it exists, and a
+   * browser on our own origin may upload to it.
+   *
+   * Warns rather than throwing if the store cannot be reached — an outage
+   * should show up as a failing readiness check, not as an API that will not
+   * start. Both steps are idempotent, so every boot re-asserts them.
    */
   async onModuleInit(): Promise<void> {
     try {
@@ -81,7 +93,62 @@ export class StorageService implements OnModuleInit {
           { err: error, bucket: this.bucket },
           'Could not reach object storage at startup; /health/ready reports it',
         )
+
+        return
       }
+    }
+
+    await this.allowBrowserUploads()
+  }
+
+  /**
+   * The CORS rule that lets an avatar go from the browser to the bucket.
+   *
+   * A profile picture is PUT straight here, so the request is cross-origin —
+   * the page comes from `APP_URL` and the upload goes to object storage. With
+   * no rule the browser's preflight is refused outright (Garage answers
+   * "403 Forbidden: This CORS request is not allowed") and the PUT is never
+   * sent, so there is no failed request in any log to explain it.
+   *
+   * Here rather than in `deploy/init/garage.sh` because this is the standard
+   * way to make the call and that script has no standard way to make it:
+   * bucket CORS is an S3 operation, Garage's admin API has no endpoint for it
+   * (`/v2/PutBucketCors` answers "Unknown API endpoint"), and the init image
+   * is a shell with curl — which would mean hand-writing SigV4. This service
+   * already holds a configured, credentialled S3 client and already creates
+   * the bucket at boot, and creating a bucket is the larger act of the two.
+   *
+   * 🔒 **Named origins, never `*`.** A wildcard would work identically for the
+   * app and hand every page on the internet something to aim a stolen
+   * presigned URL from. PUT alone, too: the download side is an `<img>`
+   * following a redirect to a presigned GET, which is not a cross-origin
+   * fetch, so allowing GET would grant what nothing asks for.
+   */
+  private async allowBrowserUploads(): Promise<void> {
+    try {
+      await this.client.send(
+        new PutBucketCorsCommand({
+          Bucket: this.bucket,
+          CORSConfiguration: {
+            CORSRules: [
+              {
+                AllowedOrigins: this.browserOrigins,
+                AllowedMethods: ['PUT'],
+                AllowedHeaders: ['content-type'],
+                MaxAgeSeconds: 3000,
+              },
+            ],
+          },
+        }),
+      )
+    } catch (error) {
+      // Not fatal: everything except uploading a picture still works, and an
+      // API that refuses to start over it would be a worse outage than the
+      // one it is reporting.
+      this.logger.warn(
+        { err: error, bucket: this.bucket, origins: this.browserOrigins },
+        'Could not set the storage CORS rule; browser uploads will be refused',
+      )
     }
   }
 
