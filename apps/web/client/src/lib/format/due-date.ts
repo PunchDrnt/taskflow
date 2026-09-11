@@ -81,3 +81,57 @@ export function formatDueDate(iso: IsoDateTime, now = new Date()): string {
 
   return labelFormatter.format(new Date(iso))
 }
+
+/**
+ * A calendar day in the company's zone, as the instant it begins.
+ *
+ * 🔒 The API takes `dueAfter` / `dueBefore` as ISO date-times **with an
+ * offset**, and `dueDateSchema` refuses anything else for a reason this
+ * function exists to honour: a bare `2026-09-07` is parsed as midnight UTC,
+ * which is seven hours before the day starts in Bangkok. Sent that way, a
+ * filter for "due from the 7th" silently includes the evening of the 6th.
+ *
+ * The offset is read from the zone rather than written as `+07:00`, so the one
+ * place that names the zone stays the only place that knows it.
+ */
+function offsetOf(at: Date): string {
+  const name = new Intl.DateTimeFormat('en-US', {
+    timeZone: APP_TIME_ZONE,
+    timeZoneName: 'longOffset',
+  })
+    .formatToParts(at)
+    .find((part) => part.type === 'timeZoneName')?.value
+
+  // `longOffset` gives "GMT+07:00", and plain "GMT" for a zone sitting at UTC.
+  const offset = name?.replace('GMT', '') ?? ''
+
+  return offset === '' ? '+00:00' : offset
+}
+
+/** True for a `YYYY-MM-DD` that is a real date, not merely well-shaped. */
+export function isCalendarDay(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+
+  // `2026-02-31` parses — Date rolls it into March — so the check is that it
+  // formats back to what was given.
+  const parsed = new Date(`${value}T00:00:00Z`)
+
+  return !Number.isNaN(parsed.getTime()) && calendarDay(parsed) === value
+}
+
+/**
+ * The first instant of a day, in the company's zone.
+ *
+ * The offset is looked up from a noon instant on that day rather than from
+ * midnight: a zone that shifts does so at midnight far more often than at
+ * noon, and reading it from the boundary is how an hour goes missing. Bangkok
+ * has no such shift, which is exactly why this would go unnoticed here.
+ */
+export function startOfDay(day: string): string {
+  return `${day}T00:00:00${offsetOf(new Date(`${day}T12:00:00Z`))}`
+}
+
+/** The last instant of a day, in the company's zone. Inclusive, like the API. */
+export function endOfDay(day: string): string {
+  return `${day}T23:59:59.999${offsetOf(new Date(`${day}T12:00:00Z`))}`
+}

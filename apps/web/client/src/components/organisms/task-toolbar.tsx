@@ -1,19 +1,11 @@
 'use client'
 
-import { ArrowDown, ArrowUp, ListFilter } from 'lucide-react'
+import { ArrowDown, ArrowUp } from 'lucide-react'
 import { usePathname, useRouter } from 'next/navigation'
 import { useState, useTransition } from 'react'
 
-import { TASK_PRIORITIES, type TaskPriority } from '@repo/shared'
+import type { AssignableRow, StatusRow } from '@repo/shared'
 import { Button } from '@repo/ui/components/button'
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuLabel,
-  DropdownMenuTrigger,
-} from '@repo/ui/components/dropdown-menu'
 import { Input } from '@repo/ui/components/input'
 import {
   Select,
@@ -33,6 +25,7 @@ import {
   type TaskListQueryState,
   type TaskScope,
 } from '../../lib/tasks/query'
+import { TaskFilters } from './task-filters'
 
 /**
  * The controls above a task list, every one of which writes to the URL.
@@ -46,16 +39,22 @@ import {
  * keystroke would put a history entry behind every letter and ask the API for
  * a page nobody waited to see.
  *
- * ⚠️ `DropdownMenuLabel` is Base UI's `Menu.GroupLabel` and throws outside a
- * `Menu.Group` — hence the `DropdownMenuGroup` around the priorities rather
- * than a bare label with items after it.
+ * The filters live behind one button rather than in this row, because they are
+ * a different kind of control: sorting and grouping rearrange what is already
+ * on screen, a filter decides what is on it at all. See `TaskFilters`.
  */
 export function TaskToolbar({
   query,
   scope,
+  statuses = [],
+  people = [],
 }: {
   query: TaskListQueryState
   scope: TaskScope
+  /** The project's columns, for the status filter. Absent on My Tasks. */
+  statuses?: StatusRow[]
+  /** Who the project can assign to, for the assignee filter. Absent on My Tasks. */
+  people?: AssignableRow[]
 }) {
   const router = useRouter()
   const pathname = usePathname()
@@ -67,14 +66,6 @@ export function TaskToolbar({
 
     startTransition(() => {
       router.push(next === '' ? pathname : `${pathname}?${next}`)
-    })
-  }
-
-  function togglePriority(priority: TaskPriority, wanted: boolean) {
-    go({
-      priority: wanted
-        ? [...query.priority, priority]
-        : query.priority.filter((held) => held !== priority),
     })
   }
 
@@ -99,34 +90,13 @@ export function TaskToolbar({
         />
       </form>
 
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button variant="outline" color="primary" size="sm">
-              <ListFilter />
-              Priority
-              {query.priority.length > 0 && (
-                <span className="tabular-nums">({query.priority.length})</span>
-              )}
-            </Button>
-          }
-        />
-        <DropdownMenuContent align="start">
-          <DropdownMenuGroup>
-            <DropdownMenuLabel>Priority</DropdownMenuLabel>
-            {TASK_PRIORITIES.map((priority) => (
-              <DropdownMenuCheckboxItem
-                key={priority}
-                closeOnClick={false}
-                checked={query.priority.includes(priority)}
-                onCheckedChange={(wanted) => togglePriority(priority, wanted)}
-              >
-                {priority}
-              </DropdownMenuCheckboxItem>
-            ))}
-          </DropdownMenuGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <TaskFilters
+        query={query}
+        scope={scope}
+        statuses={statuses}
+        people={people}
+        onChange={go}
+      />
 
       <Picker
         id="task-sort"

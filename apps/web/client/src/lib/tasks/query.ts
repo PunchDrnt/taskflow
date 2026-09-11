@@ -6,6 +6,8 @@ import {
   type TaskSortField,
 } from '@repo/shared'
 
+import { endOfDay, isCalendarDay, startOfDay } from '../format/due-date'
+
 /**
  * The whole state of a task list, as it lives in the URL.
  *
@@ -34,6 +36,11 @@ import {
  * - **`includeClosed` belongs only to My Tasks.** A project's Done column is
  *   part of the board; hiding it there would hide a status the person made.
  * - **Grouping by project inside one project** is one heading over everything.
+ *
+ * Two filters are in the same position. `statusId` is an id belonging to one
+ * project — two boards' "In progress" are two different rows — so it cannot
+ * mean anything on a list that spans projects; and `assigneeId` on My Tasks is
+ * always the caller. Both are offered on a project and nowhere else.
  */
 export type TaskScope =
   { kind: 'mine' } | { kind: 'project'; projectId: string }
@@ -99,6 +106,19 @@ export interface TaskListQueryState {
   q: string
   /** Several values is "is in", never "and" — the API's only disjunction. */
   priority: TaskPriority[]
+  /** Project lists only: statuses belong to one board. */
+  statusId: string[]
+  /** Project lists only: on My Tasks the assignee is always the caller. */
+  assigneeId: string[]
+  /**
+   * `YYYY-MM-DD` in the company's zone, or empty. Both ends inclusive.
+   *
+   * A calendar day in the URL rather than an instant, because that is what the
+   * person picked and what makes a shared link readable. The conversion to an
+   * offset-bearing instant happens once, in `toApiParams`.
+   */
+  dueFrom: string
+  dueTo: string
   sort: TaskSortField
   dir: 'asc' | 'desc'
   /** My Tasks only. False hides every status whose kind is done or cancelled. */
@@ -118,6 +138,10 @@ export function defaultQueryFor(scope: TaskScope): TaskListQueryState {
   return {
     q: '',
     priority: [],
+    statusId: [],
+    assigneeId: [],
+    dueFrom: '',
+    dueTo: '',
     sort: scope.kind === 'project' ? 'order' : 'dueDate',
     dir: 'asc',
     includeClosed: false,
@@ -165,6 +189,15 @@ export function parseTaskQuery(
       .filter((value): value is TaskPriority =>
         (TASK_PRIORITIES as readonly string[]).includes(value),
       ),
+    // Dropped outright on My Tasks rather than passed through: a status id
+    // from one project would filter a cross-project list down to that
+    // project's rows, which is not what anybody pasting the link meant.
+    statusId:
+      scope.kind === 'project' ? search.getAll('statusId').filter(isId) : [],
+    assigneeId:
+      scope.kind === 'project' ? search.getAll('assigneeId').filter(isId) : [],
+    dueFrom: day(search.get('dueFrom')),
+    dueTo: day(search.get('dueTo')),
     sort: isOneOf(sort, sortsFor(scope)) ? sort : fallback.sort,
     dir: dir === 'desc' ? 'desc' : 'asc',
     includeClosed:
@@ -190,6 +223,10 @@ export function toSearchParams(
 
   if (state.q !== '') search.set('q', state.q)
   for (const priority of state.priority) search.append('priority', priority)
+  for (const statusId of state.statusId) search.append('statusId', statusId)
+  for (const userId of state.assigneeId) search.append('assigneeId', userId)
+  if (state.dueFrom !== '') search.set('dueFrom', state.dueFrom)
+  if (state.dueTo !== '') search.set('dueTo', state.dueTo)
   if (state.sort !== fallback.sort) search.set('sort', state.sort)
   if (state.dir !== fallback.dir) search.set('dir', state.dir)
   if (state.includeClosed && scope.kind === 'mine') {
@@ -234,9 +271,50 @@ export function toApiParams(
 
   if (state.q !== '') params.set('q', state.q)
   for (const priority of state.priority) params.append('priority', priority)
+  for (const statusId of state.statusId) params.append('statusId', statusId)
+  for (const userId of state.assigneeId) params.append('assigneeId', userId)
+
+  // 🔒 The day becomes an instant here and only here. `dueDateSchema` refuses
+  // a date without an offset, because `2026-09-07` alone means midnight UTC —
+  // seven hours before that day starts in Bangkok, so "due from the 7th" would
+  // quietly include the evening of the 6th.
+  if (state.dueFrom !== '') params.set('dueAfter', startOfDay(state.dueFrom))
+  if (state.dueTo !== '') params.set('dueBefore', endOfDay(state.dueTo))
+
   if (cursor !== null) params.set('cursor', cursor)
 
   return params
+}
+
+/** A uuid, checked before it is put back in a URL or sent as a filter. */
+function isId(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+    value,
+  )
+}
+
+/** A real calendar day, or empty. `2026-02-31` is well-shaped and not a day. */
+function day(value: string | null): string {
+  return value !== null && isCalendarDay(value) ? value : ''
+}
+
+/** How many filters are on, for the button that opens them. */
+export function activeFilterCount(state: TaskListQueryState): number {
+  return (
+    state.priority.length +
+    state.statusId.length +
+    state.assigneeId.length +
+    (state.dueFrom === '' ? 0 : 1) +
+    (state.dueTo === '' ? 0 : 1)
+  )
+}
+
+/** Everything a filter control touches, cleared. Search and sort are not filters. */
+export function clearedFilters(): Pick<
+  TaskListQueryState,
+  'priority' | 'statusId' | 'assigneeId' | 'dueFrom' | 'dueTo'
+> {
+  return { priority: [], statusId: [], assigneeId: [], dueFrom: '', dueTo: '' }
 }
 
 function isOneOf<T extends string>(

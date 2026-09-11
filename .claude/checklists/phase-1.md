@@ -527,10 +527,21 @@ unique เต็ม · `views.sort_order` / `is_default`
         (ตัวอักษรจะได้ `high` อยู่ระหว่าง `low` กับ `urgent` ซึ่งผิดพอดีกับคำถามที่ถาม)
       · group by ทำฝั่ง client จากผลลัพธ์ — ไม่ต้องมี endpoint · ✅ ทำแล้ว
       · filter ตาม: คน · status · priority · วันที่
-        · **หน้า My Tasks มีแค่ q + priority + includeClosed** และตั้งใจไม่ครบ:
-          assignee = ตัวเองเสมอ · statusId เป็น id ราย project ที่ข้าม project ไม่ได้
-          (สอง project มี "In progress" คนละ id) · date range รอ date picker
-        · ⏳ ชุดเต็มไปอยู่หน้า task list ของ project ซึ่งอยู่ใน project เดียวจริงๆ
+        · ✅ **ครบแล้วทั้งสองหน้า** — filter ทั้งหมดอยู่หลังปุ่ม `Filters` ปุ่มเดียวพร้อมตัวนับ
+          เพราะมันคนละชนิดกับ sort/group: sort กับ group จัดเรียงของที่อยู่บนจอแล้ว
+          ส่วน filter ตัดสินว่ามีอะไรอยู่บนจอบ้าง · ตัวนับคือสิ่งที่ทำให้ยังเห็นว่ากรองอยู่ตอนปิด popover
+        · **status + assignee มีเฉพาะหน้า project** — statusId เป็น id ของบอร์ดเดียว
+          (สอง project มี "In progress" คนละ id) · ที่ My Tasks assignee คือตัวเองเสมอ
+          · `parseTaskQuery` **ทิ้งทั้งสองตัวทิ้งที่ My Tasks** ไม่ส่งต่อ — ยัดมาใน URL ก็ไม่มีผล
+            (ยิงจริง: ตัวนับยังเป็น 1 ไม่ใช่ 2)
+        · 🔒 **date range เก็บใน URL เป็น `YYYY-MM-DD` แปลงเป็น instant ที่เดียวใน `toApiParams`**
+          · `dueDateSchema` ปฏิเสธวันที่ไม่มี offset อยู่แล้ว (ยิงเปล่าๆ ได้ 400)
+            แต่ที่อันตรายกว่าคือส่ง `Z` ซึ่ง**ผ่าน** — `2026-09-12T00:00:00Z` คือ 07:00 เช้าที่กรุงเทพ
+          · ยิงเทียบแล้ว: งานครบ 02:00 เช้าวันที่ 12 เวลาไทย → ท่าถูกเจอ · ท่า `Z` ได้ `none`
+            งานครบ 23:30 คืนวันที่ 11 → ท่าถูกเจอ · ท่า `Z` ได้ `none`
+          · offset อ่านจากโซนด้วย `Intl` `longOffset` ไม่ได้ hard-code `+07:00`
+            ที่เดียวที่รู้จักชื่อโซนยังเป็นที่เดียวเหมือนเดิม · อ่านจากเที่ยงวันไม่ใช่เที่ยงคืน
+            เพราะโซนที่ขยับมักขยับตอนเที่ยงคืน
       · filter "งานของคนที่ inactive" **ตัดออกแล้ว** — ถามด้วย filter assignee ธรรมดาได้อยู่แล้ว
         และงานของคนที่ถูก deactivate คาไว้ที่เดิม ไม่ได้หายไปไหน
 - [x] **My Tasks** — Phase 1 มีแค่งานที่ assign ให้ตัวเองโดยตรง · **default ซ่อน done/cancelled**

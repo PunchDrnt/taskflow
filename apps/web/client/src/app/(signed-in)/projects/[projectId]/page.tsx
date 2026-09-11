@@ -10,8 +10,10 @@ import { QuickAdd } from '../../../../components/organisms/quick-add'
 import { TaskList } from '../../../../components/organisms/task-list'
 import { PROJECT_TASK_COLUMNS } from '../../../../components/organisms/task-list/columns'
 import { TaskToolbar } from '../../../../components/organisms/task-toolbar'
+import { fetchAssignable } from '../../../../lib/api/assignable'
 import { ApiError } from '../../../../lib/api/errors'
 import { apiForRender } from '../../../../lib/api/server'
+import { fetchStatuses } from '../../../../lib/api/statuses'
 import { fetchTasks, lookupsFor } from '../../../../lib/api/tasks'
 import {
   parseTaskQuery,
@@ -47,7 +49,15 @@ export default async function ProjectPage({
   const api = await apiForRender()
   const project = await loadProject(api, projectId)
   const page = await fetchTasks(api, scope, query)
-  const lookups = await lookupsFor(api, page.data)
+
+  // The filters need the project's own columns and people, which the page's
+  // rows cannot supply: `lookupsFor` only knows the statuses a loaded task
+  // sits in, and an empty board would leave the status filter empty too.
+  const [lookups, statuses, people] = await Promise.all([
+    lookupsFor(api, page.data),
+    fetchStatuses(api, projectId),
+    fetchAssignable(api, projectId),
+  ])
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-6">
@@ -80,7 +90,12 @@ export default async function ProjectPage({
 
       <QuickAdd projectId={projectId} />
 
-      <TaskToolbar query={query} scope={scope} />
+      <TaskToolbar
+        query={query}
+        scope={scope}
+        statuses={statuses}
+        people={people}
+      />
 
       {/* `key` remounts on a query change — the loaded rows are state and would
           otherwise have the new filter's results appended to them. */}
