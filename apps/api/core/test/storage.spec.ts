@@ -64,6 +64,54 @@ describe.skipIf(!configured)('storage', () => {
     expect(response.ok).toBe(false)
     expect(response.status).toBeGreaterThanOrEqual(400)
   })
+
+  /**
+   * The browser sends its avatar straight here, which makes it cross-origin.
+   *
+   * Nothing in the application can check this: the rule lives on the bucket,
+   * is put there by `deploy/init/garage.sh`, and the only way to know it took
+   * is to send the preflight a browser would send. A missing rule fails in the
+   * browser before the PUT leaves it, with no request to find in any log —
+   * which is exactly the kind of thing a suite should catch instead.
+   *
+   * Not skipped when the variable is absent. The default matches the init
+   * script's own default, so "nobody set it" tests what a default install
+   * actually does rather than quietly asserting nothing.
+   */
+  const allowed = (process.env.S3_CORS_ORIGINS ?? 'http://localhost:3000')
+    .split(',')[0]!
+    .trim()
+
+  const preflight = (origin: string, method = 'PUT'): Promise<Response> =>
+    storage.presignedUpload(key).then((url) =>
+      fetch(url, {
+        method: 'OPTIONS',
+        headers: {
+          origin,
+          'access-control-request-method': method,
+          'access-control-request-headers': 'content-type',
+        },
+      }),
+    )
+
+  it('lets the configured origin preflight an upload', async () => {
+    const response = await preflight(allowed)
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('access-control-allow-origin')).toBe(allowed)
+    expect(response.headers.get('access-control-allow-methods')).toContain(
+      'PUT',
+    )
+  })
+
+  it('🔒 does not allow any other origin, or any other method', async () => {
+    // A rule of `*` would work just as well for the app and hand every page
+    // on the internet a signed-URL-shaped hole to aim at. And PUT is all the
+    // browser does here — the download side is an `<img>` following a
+    // redirect, which is not a cross-origin fetch at all.
+    expect((await preflight('https://not-the-app.example')).status).toBe(403)
+    expect((await preflight(allowed, 'DELETE')).status).toBe(403)
+  })
 })
 
 describe('storage keys', () => {

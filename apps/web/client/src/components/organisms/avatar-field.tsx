@@ -85,10 +85,13 @@ export function AvatarField({
           return
         }
       } catch {
-        // A cross-origin PUT that the bucket has no CORS rule for fails here
-        // with no status to report — the browser blocks it before it is sent.
+        // Nothing to report a status for: a cross-origin PUT the bucket has no
+        // CORS rule for is blocked by the browser before it is sent, so there
+        // is no response and no server-side log either. The rule is set by
+        // `deploy/init/garage.sh` from `S3_CORS_ORIGINS`, and a bucket that is
+        // not reachable from a browser at all fails here the same way.
         setFailure(
-          'The picture could not be sent to storage. This needs the object store to accept uploads from the browser.',
+          'The picture could not be sent to storage. Check that it accepts uploads from this address.',
         )
 
         return

@@ -191,18 +191,27 @@ unique เต็ม · `views.sort_order` / `is_default`
         · `createImageBitmap(blob, { imageOrientation: 'from-image' })`
       · re-encode ทิ้ง EXIF = ทิ้ง GPS ของรูปจากมือถือไปด้วย ซึ่งเป็นเรื่องที่ต้องการอยู่แล้ว
       · ส่ง `fileName` ให้ลงท้ายตรงกับที่ encode จริง — มันป้อน `keyFor` อย่างเดียว ไม่มีใครตรวจ
-- [ ] 🔴 **browser PUT เข้า storage ตรงๆ ยังไม่ได้จริง — รอตัดสิน** (เจอตอนทำข้อบน · วัดแล้ว ไม่ได้เดา)
-      · **dev**: presigned URL ชี้ `http://localhost:4900/...` ซึ่งคนละ origin กับ `localhost:3000`
-        preflight ตอบ `403 Forbidden: This CORS request is not allowed.` — bucket ไม่มี CORS rule
-        ทั้ง `deploy/init/garage.sh` และ `docker-compose.yml` ไม่ได้ตั้งไว้เลย
-      · **production หนักกว่า**: `S3_HOST: garage` เป็นชื่อใน docker network เฉยๆ
-        และ `deploy/config/Caddyfile` ไม่มี route ไป garage · Caddy เป็นตัวเดียวที่ publish port
-        → browser resolve host ไม่ได้ตั้งแต่แรก ไม่ใช่แค่ CORS
-      · เท่ากับ flow "PUT ตรง" ที่ §2 เขียนไว้ **ยังไม่เคยทำงานเลย** — ฝั่ง client ครบแล้ว รอทางเข้า
-      · ทางเลือก (ไม่ตัดสินเอง เพราะเป็นเรื่อง deploy + เปิด object storage ออกสู่ public):
+- [x] **CORS rule บน bucket** — browser PUT ตรงเข้า storage ได้แล้วใน dev
+      · เดิม preflight ตอบ `403 Forbidden: This CORS request is not allowed.` เพราะไม่มี rule เลย
+      · ⚠️ **admin API ของ Garage ไม่มี CORS** (ลองแล้ว: `/v2/PutBucketCors` ตอบ `Unknown API endpoint`
+        และ `GetBucketInfo` ไม่มี field CORS) · เป็น S3 call `PutBucketCors` → **ต้องเซ็น SigV4 เอง**
+        · `garage` image ไม่มี shell · `alpine/curl` ไม่มี `openssl` → `apk add --no-cache openssl` ในสคริปต์
+        · signing key เป็น HMAC ต่อกันสี่ชั้น · ชั้นแรกรับ key เป็น string ชั้นถัดไปต้อง `hexkey:`
+          (ส่ง hex เป็น *string* จะได้ signature ผิดแบบเงียบๆ)
+      · `S3_CORS_ORIGINS` คั่นด้วยจุลภาค — back-office อยู่คนละ registrable domain และอัปโหลดเหมือนกัน
+      · **PUT อย่างเดียว** ฝั่งดาวน์โหลดเป็น `<img>` ตาม 302 ไปหา presigned GET ซึ่ง browser ไม่ถือเป็น
+        cross-origin fetch · เปิด GET ด้วยจะเป็นการให้สิทธิ์ที่ไม่มีใครขอ
+      · 🔒 **ไม่ใช้ `*`** — origin อื่นตอบ 403, method อื่นตอบ 403 (ยิงจริงทั้งคู่) · มี test ใน `storage.spec.ts`
+        ที่ยิง preflight แบบเดียวกับ browser · **ยืนยันแล้วว่าแดงถ้า rule หาย** (ลองชี้ origin ไปที่อื่นแล้วเทสต์ตก)
+- [ ] 🔴 **production ยังต้องเปิดทางให้ browser ถึง garage — รอตัดสิน**
+      · rule อนุญาต origin **แต่ไม่ได้เปิด port ให้** — คนละเรื่องกัน
+      · `S3_HOST: garage` เป็นชื่อใน docker network เฉยๆ และ `deploy/config/Caddyfile` ไม่มี route ไป garage
+        · Caddy เป็นตัวเดียวที่ publish port → browser resolve host ไม่ได้ตั้งแต่แรก
+      · ทางเลือก (ไม่ตัดสินเอง เพราะเป็นการเปิด object storage ออกสู่ public):
         1. `handle_path /s3/*` → `garage:3900` ใน Caddyfile + `S3_HOST` เป็น public host
-           → **ได้ same-origin ฟรี ไม่ต้องมี CORS เลย** ตรงกับเหตุผลที่ Caddyfile เขียนไว้ว่าทำไมไม่แยก api.domain.com
-        2. เปิด garage เป็น subdomain แยก + ตั้ง CORS rule ต่อ bucket
+           → **ได้ same-origin ฟรี CORS rule ข้างบนกลายเป็นไม่จำเป็น** (แต่ไม่เสียหาย)
+           ตรงกับเหตุผลที่ Caddyfile เขียนไว้เองว่าทำไมไม่แยก api.domain.com
+        2. เปิด garage เป็น subdomain แยก → ใช้ CORS rule ข้างบน ตั้ง `S3_CORS_ORIGINS` เป็น origin ของเว็บ
         3. ให้ API เป็น proxy รับ multipart — **ขัดกับเหตุผลที่เลือก presigned ตั้งแต่แรก**
            (memory limit กลายเป็น file size limit จริง)
 - [x] Deactivate / Reactivate (admin/owner กด) — assign งานใหม่ให้ไม่ได้ งานเก่ายังอยู่

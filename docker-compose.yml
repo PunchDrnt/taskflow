@@ -95,6 +95,10 @@ services:
       S3_ACCESS_KEY: ${S3_ACCESS_KEY}
       S3_SECRET_KEY: ${S3_SECRET_KEY}
       S3_BUCKET: ${S3_BUCKET}
+      # Both are for the CORS rule: the region because the S3 call is signed,
+      # and the origins because that is what the rule permits.
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_CORS_ORIGINS: ${S3_CORS_ORIGINS:-http://localhost:3000}
     volumes:
       - ./deploy/init/garage.sh:/init.sh:ro
     entrypoint: ['sh', '/init.sh']
