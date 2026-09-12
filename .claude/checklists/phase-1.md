@@ -28,10 +28,10 @@ unique เต็ม · `views.sort_order` / `is_default`
 
 ของที่รู้ตัวแล้วว่าค้าง ไม่ใช่ของที่เพิ่งคิดได้
 
-- [ ] **Branch protection บน `main`** — บังคับ PR + CI เขียว ห้าม push ตรง
+- [x] **Branch protection บน `main`** — บังคับ PR + CI เขียว ห้าม push ตรง
       · ไม่ใช่เรื่องความเรียบร้อย: `deploy.yml` ไม่รัน test เลย มันเชื่อว่า gate รันบน `main` ไปแล้ว
       · push ตรงเข้า main ได้ = ของที่ไม่เคยผ่านอะไรขึ้น production ได้ ([ผัง](../docs/01-architecture.md#branching))
-- [ ] **CI trigger `push: [main]`** — comment ไว้ใน `ci.yml` พร้อมเงื่อนไขปลดล็อกว่า _"Put this back once work arrives through pull requests"_ · **เงื่อนไขนั้นสำเร็จไปแล้ว** (Phase 0 จบ งานเข้าทาง PR ตั้งแต่ #2) เหลือแค่กด
+- [x] **CI trigger `push: [main]`** — comment ไว้ใน `ci.yml` พร้อมเงื่อนไขปลดล็อกว่า _"Put this back once work arrives through pull requests"_ · **เงื่อนไขนั้นสำเร็จไปแล้ว** (Phase 0 จบ งานเข้าทาง PR ตั้งแต่ #2) เหลือแค่กด
       ช่องที่มันปิดคือ merge commit ที่ต่างจาก PR head · เปิด branch protection แบบ require up-to-date แทนก็ได้ เลือกอย่างใดอย่างหนึ่ง ไม่ต้องทำทั้งคู่
 - [x] 🔒 **Test invariant ที่ DB บังคับเองไม่ได้** — Phase 0 เลื่อนมาเพราะยังไม่มี service ให้บังคับ **Phase 1 มีแล้ว หมดข้ออ้าง**
   - [x] org ต้องมี `role='owner'` ≥1 แถวเสมอ (ห้ามลบ/ลดสิทธิ์คนสุดท้าย) — `test/organization.spec.ts` รวมเคสถอดพร้อมกันสองอัน

@@ -8,7 +8,7 @@ Stack, การแบ่ง module, และ convention ที่ทุก mod
 
 1. [Tech Stack](#1-tech-stack)
 2. [Modular Monolith](#2-modular-monolith)
-3. [Conventions](#conventions) — [API](#api) · [Naming](#naming) · [Permission Hierarchy](#permission-hierarchy) · [Data Types](#data-types) 🔒 · [Implementation Notes](#implementation-notes) · [Auth](#auth) · [CSRF](#csrf) · [Web transport](#web-transport--ยิง-api-จากฝั่งไหนก็ได้-แต่ไม่เท่ากัน)
+3. [Conventions](#conventions) — [API](#api) · [Naming](#naming) · [Permission Hierarchy](#permission-hierarchy) · [Data Types](#data-types) 🔒 · [Implementation Notes](#implementation-notes) · [Auth](#auth) · [CSRF](#csrf) · [Web transport](#web-transport--ยิง-api-จากฝั่งไหนก็ได้-แต่ไม่เท่ากัน) · [Client state](#client-state)
 
 ดูเพิ่ม: [docker-compose](#docker-compose) · [Deploy](#deploy)
 
@@ -21,7 +21,7 @@ Stack, การแบ่ง module, และ convention ที่ทุก mod
 | Architecture   | Modular Monolith                                                  |
 | Repo           | Monorepo (Yarn 4 Berry workspace + Turborepo)                     |
 | Backend        | NestJS + TypeORM                                                  |
-| Frontend       | Next.js 16 + TanStack Query + `@repo/ui` (`@base-ui/react` + CVA) |
+| Frontend       | Next.js 16 (App Router) + `@repo/ui` (`@base-ui/react` + CVA) — [state อยู่ไหน](#client-state) |
 | Validation     | Zod (`packages/shared` ใช้ร่วมสองฝั่ง)                                |
 | Auth           | JWT + refresh token                                               |
 | Database       | PostgreSQL (แยก schema ตาม module)                                |
@@ -1258,3 +1258,32 @@ promise ที่แชร์กัน แล้ว latch ไว้ว่า ses
 **Server Action ต้องส่ง `user-agent` / `x-forwarded-for` ต่อ** ไม่งั้น login ที่ขับด้วย
 action จะเขียน container ของ Next ลง `iam.sessions.user_agent` — หน้าจอ "อุปกรณ์ที่
 ล็อกอินอยู่" จะขึ้น `axios/1.x` ที่ address เดียวกันหมดทุกแถว
+
+### Client state
+
+**ของที่ไม่ใช่ state ฝั่ง client มีมากกว่าที่คิด** — และนี่คือเหตุผลที่ Phase 1 ทั้งเฟส
+ไม่มี store สักตัว ไม่ใช่เพราะยังไม่ได้เลือกไลบรารี
+
+| อะไร | อยู่ที่ไหน | ทำไมที่นั่น |
+| --- | --- | --- |
+| filter · sort · group · หน้า search | **URL** (`lib/tasks/query.ts`) | ลิสต์ที่กรองแล้วต้องส่งลิงก์ให้คนอื่นได้ และปุ่ม back ต้องย้อนการกรอง · server อ่าน `searchParams` แล้ว render ใหม่ |
+| แถวของลิสต์ · project · status · คน | **props จาก Server Component** | ยิง API ที่ server ไม่ต้องมีชั้น cache ฝั่ง client ให้ผิดจากฐานข้อมูล |
+| ผลของการเขียน | **`revalidatePath` ใน Server Action** | server เป็นคนตัดสินว่า task ใหม่ไปอยู่คอลัมน์ไหน ลำดับที่เท่าไหร่ · เดาฝั่ง client = แถวผิดที่จนกว่าจะ reload |
+| draft ในช่อง · popover เปิด/ปิด · คำค้นใน picker | `useState` ในคอมโพเนนต์นั้น | ไม่มีใครนอกคอมโพเนนต์ถาม |
+| ลำดับ status ระหว่างลากแล้วยังไม่ตอบ | `useOptimistic` | มันคือ "ค่าจาก server + การเปลี่ยนที่ยังไม่ยืนยัน" ตรงตัว ไม่ใช่ state ที่ต้องดูแลเอง |
+| แถวที่ **Load more** สะสมไว้ | `useState` ใน `TaskList` | เป็นของลิสต์นั้นตัวเดียว · หน้าแรกจาก server เป็นเจ้าของ ถ้าเปลี่ยนเมื่อไหร่ที่สะสมไว้ทิ้ง (sync ตอน render ไม่ใช่ effect) |
+
+**ถ้าเมื่อไหร่มี state ที่แชร์ข้าม tree จริง ๆ ให้ใช้ `zustand`** — ไม่ใช่ Context +
+reducer ไม่ใช่ Redux และไม่ใช่ store เขียนเอง · หนึ่งคำตอบต่อหนึ่งคำถาม จะได้ไม่มีสามแบบ
+ในโค้ดเดียวกัน · ตอนเพิ่มต้องใช้ **store factory + provider** ตามที่ zustand เขียนไว้สำหรับ
+Next: store ที่ประกาศระดับ module รั่วข้าม request บน server เพราะ process เดียวเสิร์ฟ
+หลายคน
+
+แต่ **ห้ามย้ายของในตารางข้างบนเข้า store** · ย้าย filter เข้า store = ลิงก์ส่งไม่ได้ + back
+ไม่ทำงาน · ย้ายแถวเข้า store = cache ฝั่ง client อีกชั้นที่ต้อง invalidate เอง ซึ่งเป็นสิ่งที่
+`revalidatePath` ทำให้แล้ว
+
+**TanStack Query ถูกถอดออกจากตาราง stack** — เคยเขียนไว้ตอนวางแผน แล้วไม่เคยถูกติดตั้ง
+เลยสักครั้ง · App Router + Server Action ตอบคำถามที่มันมีไว้ตอบ (fetch, cache,
+invalidate) ไปแล้วทั้งหมด · จะกลับมาคุยใหม่ตอนมีหน้าจอที่ poll หรือ refetch เป็นรอบจริง ๆ
+ซึ่ง Phase 1 ไม่มี
