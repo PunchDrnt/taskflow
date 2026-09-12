@@ -39,10 +39,11 @@ import { groupTasks } from './grouping'
  * server-rendered first page as the starting state instead of fetching it
  * again on mount.
  *
- * ⚠️ **Remount it when the query changes.** The accumulated rows are state,
- * and state survives a server re-render, so a new filter would otherwise
- * append its results to the old ones. The page gives it `key={search}`; that
- * is load-bearing, not decoration.
+ * ⚠️ **When the server sends a different first page, what Load more
+ * accumulated is dropped.** State outlives a server re-render, so without this
+ * a new filter would have its results appended to the old ones — and a task
+ * added by the box above this list would not appear at all, which is the case
+ * that is easy to miss because nothing looks broken, it just does nothing.
  */
 export function TaskList({
   initialRows,
@@ -69,6 +70,19 @@ export function TaskList({
   const [lookups, setLookups] = useState(initialLookups)
   const [failure, setFailure] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
+
+  // The server's page is the authority, and this is React's own answer to
+  // "reset state when a prop changes" — an assignment during render rather
+  // than an effect, so the new rows are drawn in this pass instead of in a
+  // second one that flashes the old ones first.
+  const [rendered, setRendered] = useState(initialRows)
+
+  if (rendered !== initialRows) {
+    setRendered(initialRows)
+    setRows(initialRows)
+    setCursor(initialCursor)
+    setLookups(initialLookups)
+  }
 
   const drawn = columns.map((id) => TASK_COLUMNS[id])
 

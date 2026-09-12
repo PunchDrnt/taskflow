@@ -66,7 +66,7 @@ export function NewProjectDialog() {
     const formData = new FormData(event.currentTarget)
 
     startTransition(async () => {
-      const result = await createProject(state, formData)
+      const result = await createProject(formData)
 
       if (
         result.error === null &&

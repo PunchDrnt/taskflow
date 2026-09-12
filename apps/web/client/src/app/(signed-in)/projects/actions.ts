@@ -34,7 +34,6 @@ export type NewProjectField = 'name' | 'keyPrefix' | 'color' | 'description'
  * the revalidated list is already behind it.
  */
 export async function createProject(
-  _previous: FormState<NewProjectField>,
   formData: FormData,
 ): Promise<FormState<NewProjectField>> {
   const parsed = createProjectSchema.safeParse({

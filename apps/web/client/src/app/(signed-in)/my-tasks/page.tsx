@@ -59,11 +59,7 @@ export default async function MyTasksPage({
         <>
           <TaskToolbar query={query} scope={MINE} />
 
-          {/* ⚠️ `key` remounts the list when the query changes. The rows it has
-              loaded are state, and state outlives a server re-render — without
-              this, a new filter appends its results to the old ones. */}
           <TaskList
-            key={search.toString()}
             initialRows={result.rows}
             initialCursor={result.nextCursor}
             initialLookups={result.lookups}

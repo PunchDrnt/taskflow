@@ -22,7 +22,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { GripVertical, Plus, Trash2 } from 'lucide-react'
-import { useState, useTransition } from 'react'
+import { useOptimistic, useState, useTransition } from 'react'
 
 import {
   STATUS_KINDS,
@@ -89,10 +89,16 @@ export function StatusSettings({
   projectId: string
   statuses: StatusRow[]
 }) {
-  // Ordering is optimistic — the row follows the pointer and settles when the
-  // server agrees. Everything else re-reads, because everything else can move
-  // a row the person did not touch.
-  const [order, setOrder] = useState(statuses)
+  // ⚠️ `useOptimistic`, not `useState`. A dragged row has to follow the
+  // pointer before the server has agreed, but every other write here re-reads
+  // the page — and state seeded from a prop ignores the prop ever after, so a
+  // rename or a new status would have come back from the server and not shown
+  // up. This holds the reordering for exactly as long as the transition that
+  // caused it, then defers to `statuses` again.
+  const [order, reorder] = useOptimistic(
+    statuses,
+    (_current, next: StatusRow[]) => next,
+  )
   const [failure, setFailure] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
 
@@ -127,14 +133,24 @@ export function StatusSettings({
     if (from === -1 || to === -1) return
 
     const moved = arrayMove(order, from, to)
-    setOrder(moved)
 
     // ⚠️ `afterId`, never a sort key. The key is fractional-index arithmetic
     // that is only correct against the current neighbours; naming the
     // neighbour is the part this side actually knows. Null means first.
     const afterId = to === 0 ? null : (moved[to - 1]?.id ?? null)
 
-    run(() => changeStatus(projectId, String(active.id), { afterId }))
+    setFailure(null)
+    startTransition(async () => {
+      // Inside the transition, which is what an optimistic update is scoped
+      // to: called outside one it would be applied and never taken back.
+      reorder(moved)
+
+      const result = await changeStatus(projectId, String(active.id), {
+        afterId,
+      })
+
+      if (!result.ok) setFailure(result.message)
+    })
   }
 
   return (

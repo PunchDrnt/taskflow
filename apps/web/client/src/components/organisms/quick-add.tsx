@@ -1,7 +1,6 @@
 'use client'
 
 import { Plus } from 'lucide-react'
-import { useRouter } from 'next/navigation'
 import { useState, useTransition } from 'react'
 
 import { Button } from '@repo/ui/components/button'
@@ -27,7 +26,6 @@ export function QuickAdd({ projectId }: { projectId: string }) {
   const [title, setTitle] = useState('')
   const [failure, setFailure] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
-  const router = useRouter()
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -45,11 +43,13 @@ export function QuickAdd({ projectId }: { projectId: string }) {
         return
       }
 
+      // Nothing else to do: the action revalidated this path, so the reply to
+      // it carries the re-rendered page and the list below adopts it. A
+      // `router.refresh()` here as well was a second round trip for the same
+      // answer — and the server is the one that decides which column the task
+      // lands in and where in that column, so guessing on this side would put
+      // the row in the wrong place until the next load.
       setTitle('')
-      // The server decides which column it lands in and where in that column,
-      // so the list is re-read rather than guessed at. `revalidatePath` in the
-      // action has already made that read cheap.
-      router.refresh()
     })
   }
 

@@ -14,7 +14,7 @@ import { fetchAssignable } from '../../../../lib/api/assignable'
 import { ApiError } from '../../../../lib/api/errors'
 import { apiForRender } from '../../../../lib/api/server'
 import { fetchStatuses } from '../../../../lib/api/statuses'
-import { fetchTasks, lookupsFor } from '../../../../lib/api/tasks'
+import { fetchTasks, lookupsOf } from '../../../../lib/api/tasks'
 import {
   parseTaskQuery,
   toURLSearchParams,
@@ -50,14 +50,16 @@ export default async function ProjectPage({
   const project = await loadProject(api, projectId)
   const page = await fetchTasks(api, scope, query)
 
-  // The filters need the project's own columns and people, which the page's
-  // rows cannot supply: `lookupsFor` only knows the statuses a loaded task
-  // sits in, and an empty board would leave the status filter empty too.
-  const [lookups, statuses, people] = await Promise.all([
-    lookupsFor(api, page.data),
+  // The project's own columns, not the ones its loaded tasks happen to sit
+  // in: an empty board still has statuses, and the filter has to offer them.
+  const [statuses, people] = await Promise.all([
     fetchStatuses(api, projectId),
     fetchAssignable(api, projectId),
   ])
+
+  // Built from what is already here rather than fetched again. `lookupsFor`
+  // is for a list that spans projects; inside one, both halves are in hand.
+  const lookups = lookupsOf([project], statuses)
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-6">
@@ -97,10 +99,7 @@ export default async function ProjectPage({
         people={people}
       />
 
-      {/* `key` remounts on a query change — the loaded rows are state and would
-          otherwise have the new filter's results appended to them. */}
       <TaskList
-        key={search.toString()}
         initialRows={page.data}
         initialCursor={page.meta.nextCursor}
         initialLookups={lookups}

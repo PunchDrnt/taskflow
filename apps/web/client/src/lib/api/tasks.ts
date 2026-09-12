@@ -84,10 +84,22 @@ export async function lookupsFor(
     Promise.all(projectIds.map((id) => fetchStatuses(api, id))),
   ])
 
-  return {
-    projects: byId(projects),
-    statuses: byId(statuses.flat()),
-  }
+  return lookupsOf(projects, statuses.flat())
+}
+
+/**
+ * The same map, out of rows the caller already has.
+ *
+ * A screen inside one project has fetched that project and its statuses to
+ * draw its own header and filters, and `lookupsFor` would fetch both a second
+ * time — plus the whole project list, for a column that screen does not show.
+ * Indexing is the part worth sharing; fetching is not.
+ */
+export function lookupsOf(
+  projects: ProjectRow[],
+  statuses: StatusRow[],
+): TaskLookups {
+  return { projects: byId(projects), statuses: byId(statuses) }
 }
 
 function byId<T extends { id: string }>(rows: T[]): Record<string, T> {
