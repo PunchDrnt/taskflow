@@ -30,16 +30,31 @@ import {
  * The hidden input is what carries the key into the surrounding form, so the
  * picture and the rest of the profile are saved by one submission and a failed
  * save does not leave a new avatar half-applied.
+ *
+ * ⚠️ **It is always rendered, and carries the stored value when nothing new
+ * was chosen.** `PATCH /v1/me` takes the whole profile, so an absent field is
+ * not "leave it alone" — it is `null`, which clears the picture. Rendering the
+ * input only after an upload meant that editing a nickname deleted the avatar.
+ *
+ * The existing picture is drawn through `GET /v1/users/:id/avatar` rather than
+ * from the stored value, which is a **storage key** and not a URL: the bucket
+ * is private, so that endpoint presigning and redirecting is the only thing
+ * that turns a key back into an image.
  */
 export function AvatarField({
-  currentUrl,
+  userId,
+  storedValue,
   fallback,
 }: {
-  currentUrl: string | null
+  userId: string
+  /** What `iam.users.avatar_url` holds: a storage key, a URL, or nothing. */
+  storedValue: string | null
   fallback: string
 }) {
   const input = useRef<HTMLInputElement>(null)
-  const [preview, setPreview] = useState<string | null>(currentUrl)
+  const [preview, setPreview] = useState<string | null>(
+    storedValue === null ? null : `/api/v1/users/${userId}/avatar`,
+  )
   const [key, setKey] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
   const [failure, setFailure] = useState<string | null>(null)
@@ -129,10 +144,14 @@ export function AvatarField({
           }}
         />
 
-        {/* The key, not a URL — see the action. Absent until a picture is
-            actually in the bucket, so submitting without choosing one leaves
-            whatever was there alone. */}
-        {key !== null && <input type="hidden" name="avatarUrl" value={key} />}
+        {/* The new key if one was uploaded, otherwise whatever is stored —
+            never absent. An absent field means null to `PATCH /v1/me`, which
+            is "remove the picture" and not "leave it alone". */}
+        <input
+          type="hidden"
+          name="avatarUrl"
+          value={key ?? storedValue ?? ''}
+        />
 
         <Button
           type="button"

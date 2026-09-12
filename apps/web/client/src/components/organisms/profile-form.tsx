@@ -44,7 +44,7 @@ export function ProfileForm({ me }: { me: Me }) {
 
     setSaved(false)
     startTransition(async () => {
-      const result = await saveProfile(state, formData)
+      const result = await saveProfile(formData)
 
       setState(result)
       setSaved(
@@ -65,7 +65,8 @@ export function ProfileForm({ me }: { me: Me }) {
       )}
 
       <AvatarField
-        currentUrl={me.avatarUrl}
+        userId={me.id}
+        storedValue={me.avatarUrl}
         fallback={[...me.nickname][0]?.toUpperCase() ?? '?'}
       />
 

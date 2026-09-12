@@ -71,7 +71,6 @@ export async function avatarUploadTarget(
  * would be worse than no field.
  */
 export async function saveProfile(
-  _previous: FormState<ProfileField>,
   formData: FormData,
 ): Promise<FormState<ProfileField>> {
   const parsed = updateProfileSchema.safeParse({
