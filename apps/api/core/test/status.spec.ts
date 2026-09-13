@@ -21,7 +21,7 @@ import { PermissionService } from '../src/permission/permission.service'
 import { createMigratedTestDataSource, hasTestDatabase } from './database'
 
 /**
- * The statuses of a project, and the four rules holding the table together —
+ * The statuses of a project, and the five rules holding the table together —
  * none of which a database constraint can express, because each is about a set
  * of rows rather than one.
  *
@@ -252,6 +252,69 @@ describe.skipIf(!hasTestDatabase)('project statuses', () => {
     })
   })
 
+  describe('the project keeps somewhere to put abandoned work', () => {
+    // Not in the original specification — decided while building §5 and
+    // written into docs/04-features/phase-1.md#status. A project with no
+    // cancelled column gets work that was dropped marked Done instead, which
+    // silently inflates every progress and velocity figure from then on.
+    it('refuses to re-type the last cancelled status', async () => {
+      const cancelled = await named('Cancelled')
+
+      expect(
+        await codeOf(
+          asOwner(() => statuses.update(apollo, cancelled, { kind: 'normal' })),
+        ),
+      ).toBe('LAST_CANCELLED_STATUS')
+    })
+
+    it('refuses to delete the last cancelled status', async () => {
+      const cancelled = await named('Cancelled')
+
+      expect(
+        await codeOf(asOwner(() => statuses.remove(apollo, cancelled))),
+      ).toBe('LAST_CANCELLED_STATUS')
+    })
+
+    it('allows both once a second one exists', async () => {
+      await asOwner(() =>
+        statuses.create(apollo, {
+          name: 'Dropped',
+          color: 'pink',
+          kind: 'cancelled',
+        }),
+      )
+
+      const cancelled = await named('Cancelled')
+
+      await expect(
+        asOwner(() => statuses.remove(apollo, cancelled)),
+      ).resolves.toBeUndefined()
+    })
+
+    it('cannot be got down to none by deleting the replacement too', async () => {
+      // The floor is a ratchet, exactly as the done floor is: every project is
+      // seeded with a cancelled column, so "at least one" holds for its whole
+      // life and there is no sequence of legal deletes that reaches zero.
+      await asOwner(() =>
+        statuses.create(apollo, {
+          name: 'Dropped',
+          color: 'pink',
+          kind: 'cancelled',
+        }),
+      )
+
+      const cancelled = await named('Cancelled')
+
+      await asOwner(() => statuses.remove(apollo, cancelled))
+
+      const dropped = await named('Dropped')
+
+      expect(
+        await codeOf(asOwner(() => statuses.remove(apollo, dropped))),
+      ).toBe('LAST_CANCELLED_STATUS')
+    })
+  })
+
   describe('🔒 the project always keeps at least one status', () => {
     it('refuses to delete the last one', async () => {
       // Reached by emptying the board: each delete is legal until the one that
@@ -262,18 +325,20 @@ describe.skipIf(!hasTestDatabase)('project statuses', () => {
       const todo = await named('To do')
 
       await asOwner(() => statuses.remove(apollo, inProgress))
-      await asOwner(() => statuses.remove(apollo, cancelled))
 
-      // 'To do' is the default and 'Done' is the only done status, so both are
-      // refused for their own reasons before the count ever matters.
+      // Three of the four remaining are refused for a reason of their own,
+      // before the count ever gets a chance to matter.
       expect(await codeOf(asOwner(() => statuses.remove(apollo, done)))).toBe(
         'LAST_DONE_STATUS',
       )
+      expect(
+        await codeOf(asOwner(() => statuses.remove(apollo, cancelled))),
+      ).toBe('LAST_CANCELLED_STATUS')
       expect(await codeOf(asOwner(() => statuses.remove(apollo, todo)))).toBe(
         'LAST_DEFAULT_STATUS',
       )
 
-      expect(await asOwner(() => statuses.list(apollo))).toHaveLength(2)
+      expect(await asOwner(() => statuses.list(apollo))).toHaveLength(3)
     })
   })
 

@@ -42,13 +42,15 @@ const UNIQUE_VIOLATION = '23505'
 /**
  * The statuses of one project — the columns on its board.
  *
- * Four rules hold this table together, and none of them is a constraint the
+ * Five rules hold this table together, and none of them is a constraint the
  * database can express on its own, because each is about a *set* of rows
  * rather than one:
  *
  * - a project always has at least one status;
  * - at least one of them counts as finished (`is_done_type`), or nothing can
  *   ever be completed and every progress figure reads zero forever;
+ * - a project that has somewhere to put abandoned work keeps it — see
+ *   `lastOfItsKind`, and `docs/04-features/phase-1.md#status` for the decision;
  * - exactly one is the default, or a new task has nowhere to start;
  * - a status holding tasks cannot be removed out from under them.
  *
@@ -151,8 +153,9 @@ export class StatusService {
    *
    * The interesting part is `kind`. Changing it has to reach the tasks already
    * sitting in this status — see `TasksInStatusService.reconcileCompletion`
-   * for why that direction is the one that gets forgotten — and it cannot take away
-   * the project's last finished status.
+   * for why that direction is the one that gets forgotten — and it cannot take
+   * away the project's last finished or last cancelled column, which retyping
+   * a row does just as thoroughly as deleting it.
    */
   async update(
     projectId: string,
@@ -169,19 +172,9 @@ export class StatusService {
     if (!status) throw ApiException.notFound('Status not found')
 
     const nextKind = patch.kind ?? kindOf(status)
+    const refusal = lastOfItsKind(all, status, nextKind)
 
-    if (
-      status.isDoneType &&
-      nextKind !== 'done' &&
-      countDone(all, statusId) === 0
-    ) {
-      throw new ApiException(
-        409,
-        STATUS_ERROR_CODES.LAST_DONE_STATUS,
-        'A project must keep at least one status that counts as done. ' +
-          'Mark another status as done first.',
-      )
-    }
+    if (refusal !== null) throw refusal
 
     const sortOrder =
       patch.afterId === undefined
@@ -254,12 +247,13 @@ export class StatusService {
   /**
    * Removes a status, if the project can spare it.
    *
-   * Three refusals, in the order somebody hits them. The third —
-   * "it is the default" — is not in the original specification, which named
-   * only "the last one" and "one still in use"; the gap it leaves is a project
-   * with no default, where the next quick-add has nowhere to file the task.
-   * Refusing rather than silently promoting a neighbour, because which column
-   * work starts in is the project's decision and not one to make on their
+   * Four refusals, in the order somebody hits them. Two of them are not in the
+   * original specification, which named only "the last one" and "one still in
+   * use": "it is the default" leaves a project where the next quick-add has
+   * nowhere to file its task, and "it is the last of its kind" leaves one where
+   * abandoned work has nowhere to go but Done (`lastOfItsKind`). Both refuse
+   * rather than quietly promoting a neighbour, because which column work starts
+   * in — or ends in — is the project's decision, and not one to make on their
    * behalf while they are deleting something else.
    */
   async remove(projectId: string, statusId: string): Promise<void> {
@@ -278,14 +272,12 @@ export class StatusService {
       )
     }
 
-    if (status.isDoneType && countDone(all, statusId) === 0) {
-      throw new ApiException(
-        409,
-        STATUS_ERROR_CODES.LAST_DONE_STATUS,
-        'A project must keep at least one status that counts as done. ' +
-          'Mark another status as done first.',
-      )
-    }
+    // Removing it is `nextKind: null` — the meaning goes away as completely as
+    // it does when somebody retypes the row, which is why both paths ask the
+    // same function rather than each carrying its own copy of the rule.
+    const refusal = lastOfItsKind(all, status, null)
+
+    if (refusal !== null) throw refusal
 
     if (status.isDefault) {
       throw new ApiException(
@@ -511,9 +503,67 @@ export class StatusService {
   }
 }
 
-/** How many *other* live statuses count as finished. */
-function countDone(all: Status[], excludingId: string): number {
-  return all.filter((one) => one.isDoneType && one.id !== excludingId).length
+/**
+ * The kinds a project may not run out of, and what to say when it would.
+ *
+ * `normal` is deliberately absent: a board of nothing but finished and
+ * abandoned columns is strange, but it is not *wrong* the way the other two
+ * are — nothing silently computes a false number from it.
+ */
+const KIND_FLOORS = [
+  {
+    kind: 'done',
+    code: STATUS_ERROR_CODES.LAST_DONE_STATUS,
+    message:
+      'A project must keep at least one status that counts as done. ' +
+      'Mark another status as done first.',
+  },
+  {
+    kind: 'cancelled',
+    code: STATUS_ERROR_CODES.LAST_CANCELLED_STATUS,
+    message:
+      'A project must keep at least one status that counts as cancelled. ' +
+      'Mark another status as cancelled first.',
+  },
+] as const satisfies { kind: StatusKind; code: string; message: string }[]
+
+/**
+ * Why this project cannot let `status` stop being what it is, or null.
+ *
+ * `nextKind` is what the row will count as afterwards — `null` when it is
+ * being removed, which is the same loss by another route.
+ *
+ * The cancelled floor is **not in the original specification**, which asked
+ * only for one `is_done_type`; `.claude/docs/04-features/phase-1.md#status`
+ * records it. Cancelled work leaves the denominator of a progress bar and done
+ * work stays in it, so a project with nowhere to put abandoned work gets it
+ * filed under Done instead and every figure computed from that point on is
+ * wrong — a seeded Cancelled column that anybody can delete is that bug with
+ * an extra step.
+ *
+ * Written as "keep one" rather than "have one", so it can only ever hold a
+ * kind that is already there. In practice that is a distinction without a
+ * difference, because `DEFAULT_STATUSES` gives every project both kinds on the
+ * day it is created — so both floors are ratchets from the first row, which is
+ * the same deal the done floor has always been.
+ */
+function lastOfItsKind(
+  all: Status[],
+  status: Status,
+  nextKind: StatusKind | null,
+): ApiException | null {
+  for (const floor of KIND_FLOORS) {
+    const losing = kindOf(status) === floor.kind && nextKind !== floor.kind
+    const others = all.filter(
+      (one) => one.id !== status.id && kindOf(one) === floor.kind,
+    )
+
+    if (losing && others.length === 0) {
+      return new ApiException(409, floor.code, floor.message)
+    }
+  }
+
+  return null
 }
 
 function kindOf(status: Status): StatusKind {

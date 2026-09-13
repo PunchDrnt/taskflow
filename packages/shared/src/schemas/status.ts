@@ -11,6 +11,11 @@ export const STATUS_ERROR_CODES = {
   LAST_STATUS: 'LAST_STATUS',
   /** The project would be left with nothing that counts as finished. */
   LAST_DONE_STATUS: 'LAST_DONE_STATUS',
+  /**
+   * The project would be left with nowhere to put abandoned work — see
+   * `STATUS_KINDS` for why that is a correctness problem and not a taste one.
+   */
+  LAST_CANCELLED_STATUS: 'LAST_CANCELLED_STATUS',
   /** The project would be left with no status for new tasks to start in. */
   LAST_DEFAULT_STATUS: 'LAST_DEFAULT_STATUS',
   /** Tasks are still in it. */
