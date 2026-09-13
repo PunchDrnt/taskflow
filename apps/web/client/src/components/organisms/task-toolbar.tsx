@@ -102,8 +102,14 @@ export function TaskToolbar({
           }
         />
 
-        <PopoverContent align="start" className="w-52 p-2">
-          <p className="text-text-disabled overlined px-2 pt-1 pb-1.5">
+        {/* ⚠️ `gap-0`, because `PopoverContent` is a flex column with
+            `gap-2.5` by default — sensible for a panel of sections, and it was
+            putting ten pixels between five one-word choices, which read as
+            five separate controls rather than as one list. The rows then take
+            `DropdownMenuItem`'s own metrics (`px-1.5 py-1`, `gap-1.5`), which
+            is what every other menu in the app is spaced at. */}
+        <PopoverContent align="start" className="w-46 gap-0 p-1.5">
+          <p className="text-text-disabled overlined px-1.5 pt-0.5 pb-1">
             Group by
           </p>
           {groupingsFor(scope).map((group) => (
@@ -111,15 +117,15 @@ export function TaskToolbar({
               key={group}
               type="button"
               onClick={() => go({ group })}
-              className="hover:bg-action-hover body-2 flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left"
+              className="hover:bg-action-hover text-body-md flex w-full items-center gap-1.5 rounded-sm px-1.5 py-1 text-left"
             >
               <span className="flex-1">{GROUPING_LABELS[group]}</span>
               {query.group === group && (
-                <Check className="text-primary-main size-3.5" />
+                <Check className="text-primary-main size-3.5 shrink-0" />
               )}
             </button>
           ))}
-          <p className="text-text-disabled body-3 px-2 pt-2 pb-1">
+          <p className="text-text-disabled body-3 border-divider-soft mt-1.5 border-t px-1.5 pt-1.5">
             Groups cover the tasks loaded so far. Empty groups are hidden.
           </p>
         </PopoverContent>
