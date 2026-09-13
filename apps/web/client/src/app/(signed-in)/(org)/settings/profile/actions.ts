@@ -2,16 +2,22 @@
 
 import { revalidatePath } from 'next/cache'
 
-import { avatarUploadSchema, updateProfileSchema, type Me } from '@repo/shared'
+import {
+  AUTH_ERROR_CODES,
+  avatarUploadSchema,
+  changePasswordSchema,
+  updateProfileSchema,
+  type Me,
+} from '@repo/shared'
 
-import { toApiError } from '../../../../lib/api/errors'
-import { apiForAction } from '../../../../lib/api/server'
+import { toApiError } from '../../../../../lib/api/errors'
+import { apiForAction } from '../../../../../lib/api/server'
 import {
   failureOf,
   fieldErrorsOf,
   type FormState,
-} from '../../../../lib/forms/form-state'
-import type { UploadTarget } from '../../../../lib/image/upload-target'
+} from '../../../../../lib/forms/form-state'
+import type { UploadTarget } from '../../../../../lib/image/upload-target'
 
 export type ProfileField =
   'username' | 'name' | 'nickname' | 'phone' | 'avatarUrl'
@@ -107,4 +113,65 @@ function blankToNull(value: FormDataEntryValue | null): string | null {
   const text = typeof value === 'string' ? value.trim() : ''
 
   return text === '' ? null : text
+}
+
+export type PasswordField =
+  'currentPassword' | 'newPassword' | 'confirmNewPassword'
+
+const PASSWORD_FIELDS: PasswordField[] = [
+  'currentPassword',
+  'newPassword',
+  'confirmNewPassword',
+]
+
+/**
+ * Changes the password, and signs the other devices out.
+ *
+ * The second half is the API's doing and is the reason this is worth a screen
+ * of its own: somebody changing a password usually suspects it is known, and a
+ * change that left every other session alive would be reassurance without the
+ * thing being reassured about. The count comes back so the page can say how
+ * many went.
+ *
+ * `WRONG_CURRENT_PASSWORD` is blamed on the field it is about. It is a
+ * separate code from `INVALID_CREDENTIALS` precisely so this screen can put
+ * the message under the right box rather than above the form.
+ */
+export async function changePassword(
+  formData: FormData,
+): Promise<FormState<PasswordField> & { signedOutSessions: number }> {
+  const parsed = changePasswordSchema.safeParse({
+    currentPassword: formData.get('currentPassword'),
+    newPassword: formData.get('newPassword'),
+    confirmNewPassword: formData.get('confirmNewPassword'),
+  })
+
+  if (!parsed.success) {
+    return {
+      error: null,
+      fieldErrors: fieldErrorsOf(parsed.error.issues, PASSWORD_FIELDS),
+      signedOutSessions: 0,
+    }
+  }
+
+  try {
+    const api = await apiForAction()
+    const { data } = await api.patch<{ signedOutSessions: number }>(
+      '/me/password',
+      parsed.data,
+    )
+
+    return {
+      error: null,
+      fieldErrors: {},
+      signedOutSessions: data.signedOutSessions,
+    }
+  } catch (error) {
+    return {
+      ...failureOf<PasswordField>(error, {
+        [AUTH_ERROR_CODES.WRONG_CURRENT_PASSWORD]: 'currentPassword',
+      }),
+      signedOutSessions: 0,
+    }
+  }
 }

@@ -1,6 +1,5 @@
 'use server'
 
-import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 
 import {
@@ -10,8 +9,8 @@ import {
 } from '@repo/shared'
 
 import { toApiError } from '../../lib/api/errors'
+import { mirrorCookies } from '../../lib/api/mirror-cookies'
 import { apiForAction } from '../../lib/api/server'
-import { parseSetCookie } from '../../lib/api/set-cookie'
 import { SIGN_IN_START, type SignInState } from './sign-in-state'
 
 /**
@@ -91,7 +90,7 @@ async function post(
     // `apiForAction` writes cookies only for a refresh it performed itself.
     // The pair minted by a successful sign-in arrives on *this* response, so
     // it is mirrored by hand — the two lines the harness exists to prove.
-    await mirror(response.headers['set-cookie'])
+    await mirrorCookies(response.headers['set-cookie'])
 
     const data = response.data as { twoFactorRequired?: boolean }
 
@@ -132,18 +131,4 @@ function fieldErrorsOf(
   }
 
   return errors
-}
-
-/** Copies the API's `Set-Cookie` headers onto this action's response. */
-async function mirror(raw: unknown): Promise<void> {
-  if (!Array.isArray(raw)) return
-
-  const jar = await cookies()
-
-  for (const header of raw) {
-    if (typeof header !== 'string') continue
-
-    const cookie = parseSetCookie(header)
-    if (cookie !== null) jar.set(cookie.name, cookie.value, cookie.options)
-  }
 }

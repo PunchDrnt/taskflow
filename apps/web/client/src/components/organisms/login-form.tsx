@@ -1,6 +1,7 @@
 'use client'
 
-import { useActionState } from 'react'
+import Link from 'next/link'
+import { useActionState, useState } from 'react'
 import { useFormStatus } from 'react-dom'
 
 import { Button } from '@repo/ui/components/button'
@@ -64,6 +65,11 @@ function CredentialFields({
   loginError?: string
   passwordError?: string
 }) {
+  // Revealing is a *typing* aid, so it lives with the box rather than in the
+  // form's state: nothing outside this field is any different for it, and it
+  // is always off again the next time the screen is drawn.
+  const [revealed, setRevealed] = useState(false)
+
   return (
     <FieldGroup>
       <Field>
@@ -82,11 +88,20 @@ function CredentialFields({
       </Field>
 
       <Field>
-        <FieldLabel htmlFor="password">Password</FieldLabel>
+        <div className="flex items-baseline justify-between gap-3">
+          <FieldLabel htmlFor="password">Password</FieldLabel>
+          <button
+            type="button"
+            className="text-text-disabled body-3 hover:text-primary-light"
+            onClick={() => setRevealed((one) => !one)}
+          >
+            {revealed ? 'Hide' : 'Show'}
+          </button>
+        </div>
         <Input
           id="password"
           name="password"
-          type="password"
+          type={revealed ? 'text' : 'password'}
           autoComplete="current-password"
           required
           aria-invalid={passwordError !== undefined}
@@ -95,6 +110,13 @@ function CredentialFields({
           <FieldError errors={[{ message: passwordError }]} />
         )}
       </Field>
+
+      <Link
+        href="/forgot-password"
+        className="text-primary-main body-3 hover:text-primary-light w-fit"
+      >
+        Forgot password?
+      </Link>
     </FieldGroup>
   )
 }

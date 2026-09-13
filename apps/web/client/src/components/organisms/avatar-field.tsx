@@ -6,7 +6,7 @@ import { useRef, useState, useTransition } from 'react'
 import { Avatar, AvatarFallback, AvatarImage } from '@repo/ui/components/avatar'
 import { Button } from '@repo/ui/components/button'
 
-import { avatarUploadTarget } from '../../app/(signed-in)/settings/profile/actions'
+import { avatarUploadTarget } from '../../app/(signed-in)/(org)/settings/profile/actions'
 import {
   AVATAR_MAX_EDGE,
   compressForAvatar,
