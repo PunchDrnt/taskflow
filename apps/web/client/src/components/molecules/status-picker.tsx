@@ -76,13 +76,17 @@ export function StatusPicker({
           <ChevronDown className="size-3 opacity-60" />
         </PopoverTrigger>
 
-        <PopoverContent align="start" className="w-48 p-1.5">
+        {/* `gap-0`: `PopoverContent` is a flex column with `gap-2.5`, which
+            is right for a panel of sections and wrong for a list of columns —
+            it spaced five choices like five controls. Same metrics as the
+            toolbar's Group panel and as `DropdownMenuItem`. */}
+        <PopoverContent align="start" className="w-48 gap-0 p-1.5">
           {statuses.map((one) => (
             <button
               key={one.id}
               type="button"
               onClick={() => choose(one.id)}
-              className="hover:bg-action-hover body-2 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left"
+              className="hover:bg-action-hover text-body-md flex w-full items-center gap-1.5 rounded-sm px-1.5 py-1 text-left"
             >
               <span
                 aria-hidden

@@ -144,7 +144,11 @@ export function AssigneePicker({
         <AssigneeStack assignees={assignees} />
       </PopoverTrigger>
 
-      <PopoverContent align="end" className="w-80 p-0">
+      {/* `gap-0` with `p-0`: this panel is sections divided by their own
+          borders, and `PopoverContent`'s default `gap-2.5` left ten pixels
+          between each one — a border-b under the search box with a gap below
+          it reads as a rule floating in space rather than as a division. */}
+      <PopoverContent align="end" className="w-80 gap-0 p-0">
         <div className="border-divider flex items-center gap-2 border-b px-3 py-2">
           <Search className="text-text-disabled size-4 shrink-0" />
           <Input
