@@ -196,7 +196,7 @@ describe.skipIf(!hasTestDatabase)('cross-org isolation', () => {
         projects.create({
           name: 'A owns this',
           color: 'gray',
-          keyPrefix: 'PRJ',
+          keyPrefix: 'OWN',
         }),
       ),
     )
@@ -226,7 +226,7 @@ describe.skipIf(!hasTestDatabase)('cross-org isolation', () => {
         projects.create({
           name: 'to be deleted',
           color: 'gray',
-          keyPrefix: 'PRJ',
+          keyPrefix: 'TBD',
         }),
       ),
     )
@@ -289,7 +289,7 @@ describe.skipIf(!hasTestDatabase)('cross-org isolation', () => {
   it('soft delete writes deletedBy, not just deletedAt', async () => {
     const project = await asOrg(orgA, () =>
       projects.save(
-        projects.create({ name: 'to delete', color: 'gray', keyPrefix: 'PRJ' }),
+        projects.create({ name: 'to delete', color: 'gray', keyPrefix: 'DEL' }),
       ),
     )
     await asOrg(orgA, () => projects.softDeleteById(project.id))
@@ -311,7 +311,7 @@ describe.skipIf(!hasTestDatabase)('cross-org isolation', () => {
         projects.create({
           name: 'disappearing',
           color: 'gray',
-          keyPrefix: 'PRJ',
+          keyPrefix: 'DIS',
         }),
       ),
     )
@@ -336,7 +336,7 @@ describe.skipIf(!hasTestDatabase)('cross-org isolation', () => {
         projects.create({
           name: 'unattributed',
           color: 'gray',
-          keyPrefix: 'PRJ',
+          keyPrefix: 'UNA',
         }),
       ),
     )

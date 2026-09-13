@@ -17,28 +17,28 @@ import { Textarea } from '@repo/ui/components/textarea'
 import {
   updateProject,
   type ProjectField,
-} from '../../app/(signed-in)/(org)/projects/[projectId]/settings/actions'
+} from '../../app/(signed-in)/(org)/projects/[projectKey]/settings/actions'
 import { blankForm } from '../../lib/forms/form-state'
 import { PaletteField } from '../molecules/palette-field'
 
 /**
  * How a project is labelled everywhere in Taskflow.
  *
- * ⚠️ The key prefix carries a warning rather than a confirmation dialog. Every
- * key is assembled from it at read time, so changing it rewrites `OPS-14` into
- * `OP-14` in every list at once — but nothing is lost and nothing becomes
- * ambiguous, because `tasks.number` is what is stored and numbers are never
- * reissued. That is a thing to be told, not a thing to be stopped from doing.
+ * ⚠️ The key prefix is shown and not offered — text, not a disabled input,
+ * because a control nobody may use is a control that invites a click and then
+ * refuses it. It is the project's URL segment and the front half of every task
+ * key, so changing it would 404 every link already pasted into chat, and open
+ * a *different* project the day another one takes the freed prefix. Chosen at
+ * create, where the dialog previews `DEV-14` under the box, and fixed after.
  *
  * Saved on submit rather than per field. The statuses beside it save
- * immediately because each row there is its own object; a name, a prefix and a
- * colour are one description of one thing, and a half-applied rename is a
+ * immediately because each row there is its own object; a name, a colour and a
+ * description are one description of one thing, and a half-applied rename is a
  * project nobody meant to have.
  */
 export function ProjectGeneralForm({ project }: { project: ProjectRow }) {
   const [state, setState] = useState(blankForm<ProjectField>())
   const [saved, setSaved] = useState(false)
-  const [prefix, setPrefix] = useState(project.keyPrefix)
   const [pending, startTransition] = useTransition()
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
@@ -48,7 +48,7 @@ export function ProjectGeneralForm({ project }: { project: ProjectRow }) {
 
     setSaved(false)
     startTransition(async () => {
-      const result = await updateProject(project.id, formData)
+      const result = await updateProject(project.keyPrefix, formData)
 
       setState(result)
       setSaved(
@@ -86,31 +86,18 @@ export function ProjectGeneralForm({ project }: { project: ProjectRow }) {
             </Field>
 
             <Field>
-              <FieldLabel htmlFor="project-key-prefix">Key prefix</FieldLabel>
-              <Input
-                id="project-key-prefix"
-                name="keyPrefix"
-                required
-                maxLength={6}
-                className="font-mono uppercase"
-                value={prefix}
-                aria-invalid={state.fieldErrors.keyPrefix !== undefined}
-                onChange={(event) =>
-                  setPrefix(event.target.value.toUpperCase())
-                }
-              />
+              <FieldLabel>Key prefix</FieldLabel>
+              {/* The input's own metrics — `h-8`, and the same responsive
+                  body size — so the value sits on the baseline its neighbour
+                  does and the row still reads as two fields. */}
+              <p className="text-text-primary text-body-lg md:text-body-md flex h-8 items-center font-mono">
+                {project.keyPrefix}
+              </p>
               <FieldDescription>
-                Every key is rewritten:{' '}
-                <span className="font-mono">
-                  {prefix === '' ? project.keyPrefix : prefix}-14
-                </span>
-                . Numbers are never reissued.
+                Every task is{' '}
+                <span className="font-mono">{project.keyPrefix}-14</span>, and
+                so is this project&rsquo;s link. Set when it was created.
               </FieldDescription>
-              {state.fieldErrors.keyPrefix !== undefined && (
-                <FieldError
-                  errors={[{ message: state.fieldErrors.keyPrefix }]}
-                />
-              )}
             </Field>
           </div>
 

@@ -19,7 +19,7 @@ import { ProjectDot } from '../atoms/project-dot'
 export function ProjectCard({ project }: { project: ProjectRow }) {
   return (
     <Link
-      href={`/projects/${project.id}`}
+      href={`/projects/${project.keyPrefix}`}
       className="bg-paper-elevation-0 border-divider hover:border-divider-soft hover:bg-action-hover flex flex-col gap-2 rounded-lg border p-4 transition-colors"
     >
       <span className="flex items-center gap-2">

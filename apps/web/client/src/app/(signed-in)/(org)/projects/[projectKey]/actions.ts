@@ -60,7 +60,11 @@ export async function quickAddTask(
       parsed.data,
     )
 
-    revalidatePath(`/projects/${projectId}`)
+    // The route, not one project's path: this side holds the project's id and
+    // the URL is keyed by its prefix, so there is no concrete path to name
+    // without a second lookup. `'page'` keeps it to the board itself — the
+    // segment's layout, and every other project under it, are not stale.
+    revalidatePath('/projects/[projectKey]', 'page')
 
     return { ok: true, task: data }
   } catch (error) {

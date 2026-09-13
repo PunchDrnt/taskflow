@@ -23,9 +23,8 @@ export class CreateProject1787188376828 implements MigrationInterface {
         description           text,
         -- A palette token, not a hex value — the same rule statuses follow.
         color                 text        NOT NULL,
-        -- Shown as DEV-120 with tasks.number. Duplicates within one org are
-        -- allowed on purpose: people type it themselves, and the list already
-        -- shows the project name beside the number.
+        -- Shown as DEV-120 with tasks.number, and the segment a project's URL
+        -- is made of (/projects/DEV) — hence unique per org, below.
         key_prefix            text        NOT NULL,
         -- Hidden from the sidebar and from pickers. Not deleted_at: the data
         -- stays readable and members keep their access, so it takes no
@@ -70,6 +69,14 @@ export class CreateProject1787188376828 implements MigrationInterface {
     await queryRunner.query(`
       CREATE UNIQUE INDEX projects_org_name_unique
         ON project.projects (org_id, name) WHERE deleted_at IS NULL
+    `)
+    // The prefix is how a project is addressed — `/projects/DEV/settings` is
+    // what people paste to each other — so one org cannot hold two of them.
+    // Partial, like every unique index on a soft-deleted table: a deleted
+    // project releases its prefix for the next one to take.
+    await queryRunner.query(`
+      CREATE UNIQUE INDEX projects_org_key_prefix_unique
+        ON project.projects (org_id, key_prefix) WHERE deleted_at IS NULL
     `)
 
     await queryRunner.query(`

@@ -96,10 +96,12 @@ async function write(
     return failed(toApiError(error).message)
   }
 
-  revalidatePath(`/projects/${projectId}/settings`)
+  // By route rather than by path, for the reason `quickAddTask` gives: what
+  // this holds is the project's id, and the URL is keyed by its prefix.
+  revalidatePath('/projects/[projectKey]/settings', 'page')
   // The board itself changes too — a renamed column, a new default, a
   // different order — and it is the screen people are on either side of this.
-  revalidatePath(`/projects/${projectId}`)
+  revalidatePath('/projects/[projectKey]', 'page')
 
   return { ok: true }
 }

@@ -1,7 +1,7 @@
 import type { DataSource } from 'typeorm'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
-import type { OrgRole } from '@repo/shared'
+import { updateProjectSchema, type OrgRole } from '@repo/shared'
 
 import { CascadeSoftDelete } from '#shared/entity/cascade-soft-delete'
 import { ApiException } from '#shared/http/api-exception'
@@ -133,9 +133,20 @@ describe.skipIf(!hasTestDatabase)('project', () => {
       [projectId],
     )
 
-  const create = (userId: string, orgRole: OrgRole, name: string) =>
+  // The prefix is unique per org, so a helper that hard-coded one would make
+  // every second project in a test a 409 about something the test is not
+  // asking about. Counted rather than derived from the name, so the tests that
+  // *are* about a clash choose which of the two indexes they collide on.
+  let prefixes = 0
+
+  const create = (
+    userId: string,
+    orgRole: OrgRole,
+    name: string,
+    keyPrefix = `P${(prefixes += 1)}`,
+  ) =>
     as(acme, userId, orgRole, () =>
-      projects.create({ name, keyPrefix: 'DEV', color: 'blue' }),
+      projects.create({ name, keyPrefix, color: 'blue' }),
     )
 
   beforeAll(async () => {
@@ -207,7 +218,7 @@ describe.skipIf(!hasTestDatabase)('project', () => {
 
   describe('who may create one', () => {
     it('lets an owner', async () => {
-      const project = await create(owner, 'owner', 'Apollo')
+      const project = await create(owner, 'owner', 'Apollo', 'DEV')
 
       expect(project.name).toBe('Apollo')
       expect(project.keyPrefix).toBe('DEV')
@@ -313,6 +324,44 @@ describe.skipIf(!hasTestDatabase)('project', () => {
           }),
         ),
       ).resolves.toMatchObject({ name: 'Apollo' })
+    })
+
+    it('refuses a key prefix another live project in this org holds', async () => {
+      // Unique per org since the prefix became the project's URL segment
+      // (docs/04-features/phase-1.md#task-key). A separate code from
+      // NAME_TAKEN because the create sends both and the form has to know
+      // which box to mark — `uniqueClash` reads the constraint to decide.
+      await create(owner, 'owner', 'Mercury', 'MER')
+
+      expect(await codeOf(create(owner, 'owner', 'Zeus', 'MER'))).toBe(
+        'KEY_PREFIX_TAKEN',
+      )
+    })
+
+    it('allows the same key prefix in a different organisation', async () => {
+      await create(owner, 'owner', 'Mercury', 'MER')
+
+      await expect(
+        as(globex, owner, 'owner', () =>
+          projects.create({
+            name: 'Mercury',
+            keyPrefix: 'MER',
+            color: 'green',
+          }),
+        ),
+      ).resolves.toMatchObject({ keyPrefix: 'MER' })
+    })
+
+    it('releases the key prefix when the project is deleted', async () => {
+      // The index is partial, like every unique index on a soft-deleted table
+      // here. A prefix held by a project nobody can reach any more would be a
+      // URL segment retired forever.
+      const gone = await create(owner, 'owner', 'Mercury', 'MER')
+      await as(acme, owner, 'owner', () => projects.remove(gone.id))
+
+      await expect(
+        create(owner, 'owner', 'Zeus', 'MER'),
+      ).resolves.toMatchObject({ keyPrefix: 'MER' })
     })
 
     it('leaves no statuses behind when the name is taken', async () => {
@@ -675,18 +724,19 @@ describe.skipIf(!hasTestDatabase)('project', () => {
       ).resolves.toMatchObject({ name: 'Apollo II' })
     })
 
-    it('re-keys every task at once when the prefix changes', async () => {
-      // Nothing to backfill: the key is composed at display time from the
-      // prefix and `tasks.number`, never stored. What it costs is that a key
-      // pasted into chat last week now reads differently — accepted in
-      // docs/04-features/phase-1.md#task-key.
-      await as(acme, owner, 'owner', () =>
-        projects.update(apollo, { keyPrefix: 'OPS' }),
-      )
+    it('refuses to change the key prefix, which is the project URL', async () => {
+      // `updateProjectSchema` has no `keyPrefix`, so zod strips it and what
+      // reaches here is an empty patch — which is the honest description of a
+      // request that may not change anything. The prefix is set at create and
+      // fixed after: it is the segment of every link to this project and the
+      // front half of every key pasted into chat, and a freed prefix would
+      // later open a different project altogether.
+      const patch = updateProjectSchema.safeParse({ keyPrefix: 'OPS' })
 
+      expect(patch.success).toBe(false)
       expect(
         await as(acme, owner, 'owner', () => projects.findById(apollo)),
-      ).toMatchObject({ keyPrefix: 'OPS' })
+      ).toMatchObject({ keyPrefix: expect.not.stringMatching(/^OPS$/) })
     })
 
     it('writes no audit row when nothing actually changed', async () => {

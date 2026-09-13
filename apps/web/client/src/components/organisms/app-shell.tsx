@@ -187,8 +187,13 @@ function ProjectItem({
   project: ProjectRow
   pathname: string
 }) {
-  const href = `/projects/${project.id}`
-  const open = pathname.startsWith(href)
+  // The key prefix, not the id: it is what the address bar shows and what
+  // somebody pastes to a colleague.
+  const href = `/projects/${project.keyPrefix}`
+  // Not `startsWith(href)` on its own — prefixes are free-text, so a project
+  // called DEV would light up while somebody is looking at DEVOPS. The
+  // boundary has to be the segment, which is what the slash is.
+  const open = pathname === href || pathname.startsWith(`${href}/`)
 
   return (
     <SidebarMenuItem>

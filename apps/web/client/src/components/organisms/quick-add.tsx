@@ -3,7 +3,7 @@
 import { Loader2, Plus } from 'lucide-react'
 import { useState, useTransition } from 'react'
 
-import { quickAddTask } from '../../app/(signed-in)/(org)/projects/[projectId]/actions'
+import { quickAddTask } from '../../app/(signed-in)/(org)/projects/[projectKey]/actions'
 
 /**
  * A title and Enter, and the task exists.

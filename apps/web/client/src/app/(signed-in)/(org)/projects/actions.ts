@@ -26,9 +26,11 @@ export type NewProjectField = 'name' | 'keyPrefix' | 'color' | 'description'
  * CHECK exactly, and a client that re-stated either would eventually let
  * through a value the database refuses, which arrives as a 500.
  *
- * `NAME_TAKEN` is blamed on the name box. The API's sentence is accurate but
- * lands above a form with four fields, and "which one" is the only thing the
- * person needs at that moment.
+ * `NAME_TAKEN` and `KEY_PREFIX_TAKEN` are each blamed on their own box. The
+ * API's sentence is accurate but lands above a form with four fields, and
+ * "which one" is the only thing the person needs at that moment — which is
+ * also why the API distinguishes the two indexes rather than answering one
+ * code for both (`uniqueClash`).
  *
  * No redirect: the dialog closes itself when the state comes back clean, and
  * the revalidated list is already behind it.
@@ -61,6 +63,7 @@ export async function createProject(
   } catch (error) {
     return failureOf<NewProjectField>(error, {
       [PROJECT_ERROR_CODES.NAME_TAKEN]: 'name',
+      [PROJECT_ERROR_CODES.KEY_PREFIX_TAKEN]: 'keyPrefix',
     })
   }
 

@@ -1,7 +1,5 @@
 import { notFound } from 'next/navigation'
 
-import type { ProjectRow } from '@repo/shared'
-
 import { PageBody } from '../../../../../components/atoms/page-body'
 import { ProjectDot } from '../../../../../components/atoms/project-dot'
 import { QuickAdd } from '../../../../../components/organisms/quick-add'
@@ -9,8 +7,8 @@ import { TaskList } from '../../../../../components/organisms/task-list'
 import { PROJECT_TASK_COLUMNS } from '../../../../../components/organisms/task-list/columns'
 import { TaskToolbar } from '../../../../../components/organisms/task-toolbar'
 import { fetchAssignable } from '../../../../../lib/api/assignable'
-import { ApiError } from '../../../../../lib/api/errors'
 import { currentUser } from '../../../../../lib/api/me'
+import { projectByKey } from '../../../../../lib/api/projects'
 import { apiForRender } from '../../../../../lib/api/server'
 import { fetchStatuses } from '../../../../../lib/api/statuses'
 import { fetchTasks, lookupsOf } from '../../../../../lib/api/tasks'
@@ -24,9 +22,15 @@ import {
  * One project: everything on its board, with a box to add to it.
  *
  * 🔒 A project the caller may not see is a **404, not a 403** — the API
- * decides that and this page passes it on. A 403 would confirm the id names a
- * real project in this organisation, which is exactly what somebody guessing
- * at ids is trying to learn.
+ * decides that and this page passes it on. A 403 would confirm the prefix
+ * names a real project in this organisation, which is exactly what somebody
+ * guessing at prefixes is trying to learn. Guessing is easier than it was with
+ * ids, which is the price of a readable URL and is why the gate is a query in
+ * `ProjectService.list` rather than anything on this side.
+ *
+ * **The URL carries the key prefix; everything below carries the id.** The
+ * segment is resolved once, here, by `projectByKey` — see it for why the
+ * prefix goes no further than this line.
  *
  * The list is the same component My Tasks uses, with one column dropped and a
  * different scope. That is the column registry doing its job: the difference
@@ -36,17 +40,21 @@ export default async function ProjectPage({
   params,
   searchParams,
 }: {
-  params: Promise<{ projectId: string }>
+  params: Promise<{ projectKey: string }>
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
-  const { projectId } = await params
+  const { projectKey } = await params
+  const api = await apiForRender()
+  const project = await projectByKey(api, projectKey)
+
+  if (project === null) notFound()
+
+  const projectId = project.id
   const scope: TaskScope = { kind: 'project', projectId }
 
   const search = toURLSearchParams(await searchParams)
   const query = parseTaskQuery(search, scope)
 
-  const api = await apiForRender()
-  const project = await loadProject(api, projectId)
   const page = await fetchTasks(api, scope, query)
 
   // The project's own columns, not the ones its loaded tasks happen to sit
@@ -119,23 +127,4 @@ export default async function ProjectPage({
       />
     </PageBody>
   )
-}
-
-/** 404 for anything the API refuses, which is what it already answers. */
-async function loadProject(
-  api: Awaited<ReturnType<typeof apiForRender>>,
-  projectId: string,
-): Promise<ProjectRow> {
-  try {
-    return (await api.get<ProjectRow>(`/projects/${projectId}`)).data
-  } catch (error) {
-    if (
-      error instanceof ApiError &&
-      (error.status === 404 || error.status === 400)
-    ) {
-      notFound()
-    }
-
-    throw error
-  }
 }

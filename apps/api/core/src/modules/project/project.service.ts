@@ -374,14 +374,14 @@ export class ProjectService {
   }
 
   /**
-   * Renames a project, or changes its colour, description or key prefix.
+   * Renames a project, or changes its colour or description.
    *
-   * Changing `key_prefix` re-keys every task in the project at once — `DEV-120`
-   * becomes `OPS-120` the moment this commits — and that is the design, not an
-   * oversight: the key is composed at display time from the prefix and
-   * `tasks.number`, never stored, so there is nothing to backfill. What it
-   * costs is that a key someone pasted into chat last week now reads
-   * differently. docs/04-features/phase-1.md#task-key accepts that.
+   * **Not its key prefix**, which `updateProjectSchema` does not accept: the
+   * prefix is the project's URL segment and the front half of every task key,
+   * so changing it breaks every link and every `DEV-120` already pasted into
+   * chat — and hands the freed prefix to whichever project takes it next, so
+   * those links resolve to the wrong project rather than to nothing. Set once,
+   * at create. docs/04-features/phase-1.md#task-key.
    *
    * Archiving is not here — it is its own endpoint, so that "rename this
    * project" and "hide it from everyone's sidebar" cannot arrive as the same
@@ -405,7 +405,7 @@ export class ProjectService {
           updatedBy: requireOrgContext().userId,
         })
       } catch (error) {
-        throw nameClash(error, patch.name)
+        throw uniqueClash(error, patch)
       }
 
       await this.audit.record(manager, {
@@ -568,7 +568,7 @@ export class ProjectService {
       // sent are merged back rather than read again in a second statement.
       return { ...(inserted.generatedMaps[0] as Project), ...row }
     } catch (error) {
-      throw nameClash(error, input.name)
+      throw uniqueClash(error, input)
     }
   }
 }
@@ -590,22 +590,41 @@ export function view(project: Project, role: ScopedRole | null): ProjectView {
 }
 
 /**
- * A unique violation on `projects_org_name_unique`, turned into something the
- * client can act on. Anything else is re-thrown untouched — swallowing it
- * would report a dropped connection as a name that is already in use.
+ * A unique violation on one of this table's two partial indexes, turned into
+ * something the client can act on. Anything else is re-thrown untouched —
+ * swallowing it would report a dropped connection as a name already in use.
  *
- * The index is partial (`WHERE deleted_at IS NULL`), so a deleted project
- * releases its name and a live one holds it.
+ * **Which index fired decides which field is blamed**, read from the
+ * constraint name rather than guessed from the body: a create sends a name and
+ * a prefix together, so blaming the name for a prefix collision would point
+ * the form's error at the box the person got right. Both indexes are partial
+ * (`WHERE deleted_at IS NULL`), so a deleted project releases both values.
  */
-export function nameClash(error: unknown, name: string | undefined): unknown {
+export function uniqueClash(
+  error: unknown,
+  input: { name?: string; keyPrefix?: string },
+): unknown {
   const driver = error instanceof QueryFailedError ? error.driverError : null
-  const code = (driver as { code?: string } | null)?.code
+  const { code, constraint } =
+    (driver as { code?: string; constraint?: string } | null) ?? {}
 
-  if (code !== UNIQUE_VIOLATION || name === undefined) return error
+  if (code !== UNIQUE_VIOLATION) return error
 
-  return new ApiException(
-    409,
-    PROJECT_ERROR_CODES.NAME_TAKEN,
-    `A project named "${name}" already exists`,
-  )
+  if (constraint === 'projects_org_key_prefix_unique') {
+    return new ApiException(
+      409,
+      PROJECT_ERROR_CODES.KEY_PREFIX_TAKEN,
+      `Another project already uses the key prefix "${input.keyPrefix}"`,
+    )
+  }
+
+  if (constraint === 'projects_org_name_unique' && input.name !== undefined) {
+    return new ApiException(
+      409,
+      PROJECT_ERROR_CODES.NAME_TAKEN,
+      `A project named "${input.name}" already exists`,
+    )
+  }
+
+  return error
 }

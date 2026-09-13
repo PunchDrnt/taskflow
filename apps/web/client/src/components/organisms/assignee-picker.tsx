@@ -17,7 +17,7 @@ import {
   assignTask,
   searchAssignable,
   unassignTask,
-} from '../../app/(signed-in)/(org)/projects/[projectId]/actions'
+} from '../../app/(signed-in)/(org)/projects/[projectKey]/actions'
 import { AssigneeStack } from '../molecules/assignee-stack'
 
 /**

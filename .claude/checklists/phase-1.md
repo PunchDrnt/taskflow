@@ -312,7 +312,13 @@ unique เต็ม · `views.sort_order` / `is_default`
         · ไม่มีใครเห็นเพราะยังไม่เคยมีใครเรียก `can` กับ subject นี้เลย · **โค้ดขยับมาตรงกับ doc** doc ไม่ต้องแก้ (แพทเทิร์นเดียวกับ `FeatureService` ใน §0)
         · เหตุผลของ doc ผูกกับกติกาข้างล่างพอดี: member เห็นเฉพาะ project ที่ตัวเองอยู่ คนที่มองไม่เห็นว่ามีอะไรอยู่แล้วบ้าง ไม่ใช่คนที่ควรตัดสินว่าต้องมีอันใหม่
       · **ไม่มีกฎ "project admin คนสุดท้าย"** ต่างจาก owner คนสุดท้ายของ org — project ที่ไม่เหลือ admin เลย org owner/admin ยังจัดการได้อยู่ จึงเข้าถึงไม่ได้แบบ org ไร้ owner ไม่ได้
-- [x] **`key_prefix` บังคับกรอกตอนสร้าง** · uppercase `^[A-Z][A-Z0-9]{1,5}$` · ซ้ำกันได้ในหนึ่ง org
+- [x] **`key_prefix` บังคับกรอกตอนสร้าง** · uppercase `^[A-Z][A-Z0-9]{1,5}$` · **ห้ามซ้ำในหนึ่ง org · แก้ไม่ได้**
+      · เปลี่ยนจาก "ซ้ำได้ + แก้ได้" ตอนเอา prefix ไปเป็น URL ของ project — `/projects/DEV/settings`
+        ต้องชี้ใบเดียวและชี้ใบเดิมตลอดไป · ที่ไม่ให้แก้เพราะลิงก์เก่าจะ 404 และถ้า prefix ที่ว่างถูกใช้ซ้ำ
+        ลิงก์เก่าจะเปิดคนละ project เงียบ ๆ ซึ่งเป็นความเสียหายแบบเดียวกับแจก `tasks.number` ซ้ำ
+        · docs อัปเดตแล้วทั้ง [schema](../docs/02-database/schema.md#schema-project) และ [feature](../docs/04-features/phase-1.md#task-key)
+      · 409 แยกสองโค้ด `NAME_TAKEN` / `KEY_PREFIX_TAKEN` อ่านจากชื่อ constraint ไม่ใช่เดาจาก body —
+        create ส่งทั้งชื่อและ prefix มาพร้อมกัน โทษผิดช่องคือชี้ไปที่กล่องที่เขากรอกถูก
       · คอลัมน์ + CHECK ลงแล้ว เหลือฟอร์มกับ validation ฝั่ง API/web · **regex ตาม docs ไม่ใช่ตาม prototype**
         (prototype ยอมให้ `12` ผ่าน ซึ่งตัวแรกต้องเป็นตัวอักษร)
       · ✅ `keyPrefixSchema` ใน `@repo/shared` ใช้ regex ของ docs ตรงกับ CHECK ในตาราง — ค่าที่ API รับแต่ DB ปฏิเสธจะโผล่มาเป็น 500
@@ -490,7 +496,8 @@ unique เต็ม · `views.sort_order` / `is_default`
 - [x] อีเมลเมื่อถูก assign งาน — template `task_assigned` · queue ใน transaction ของ `TaskService.assign`
       · ⚠️ **assign ตัวเองไม่ส่ง** — คนกดเองอยู่ตรงนั้นแล้ว · อีเมลบอกสิ่งที่ตัวเองเพิ่งทำคือฉบับแรกที่คนตั้ง filter ทิ้ง
         แล้ว filter นั้นจะกินฉบับที่สำคัญไปด้วย
-      · ลิงก์เป็น `/tasks/{id}` ไม่ใช่ key — key ซ้ำข้าม project ได้ `WEB-12` ใน URL อาจเปิดงานผิดใบ
+      · ลิงก์เป็น `/tasks/{id}` ไม่ใช่ key · เหตุผลเดิมคือ key ซ้ำข้าม project ได้ ซึ่ง**ไม่จริงแล้ว**
+        ตั้งแต่ prefix unique ต่อ org และแก้ไม่ได้ — `/tasks/WEB-12` จึงเปิดทางไว้แล้วตอนทำหน้า task detail
 - [x] `EmailService.enqueue(manager, …)` รับ transaction ของ caller เหมือน `AuditService`
       · assign สำเร็จแต่อีเมลไม่ออก = คนไม่รู้ว่ามีงาน · อีเมลออกแต่ assign rollback = แย่กว่า
 - [x] Template ที่ยังไม่ implement **ไม่ throw** — ส่งแบบดิบไปก่อน ไม่งั้นวนใน retry loop จนถูก mark failed

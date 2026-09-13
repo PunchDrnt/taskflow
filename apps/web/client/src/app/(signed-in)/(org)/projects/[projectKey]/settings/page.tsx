@@ -1,6 +1,5 @@
 import { notFound } from 'next/navigation'
 
-import type { ProjectRow } from '@repo/shared'
 import {
   Tabs,
   TabsContent,
@@ -12,7 +11,7 @@ import { PageBody } from '../../../../../../components/atoms/page-body'
 import { ProjectDot } from '../../../../../../components/atoms/project-dot'
 import { ProjectGeneralForm } from '../../../../../../components/organisms/project-general-form'
 import { StatusSettings } from '../../../../../../components/organisms/status-settings'
-import { ApiError } from '../../../../../../lib/api/errors'
+import { projectByKey } from '../../../../../../lib/api/projects'
 import { apiForRender } from '../../../../../../lib/api/server'
 import { fetchStatuses } from '../../../../../../lib/api/statuses'
 
@@ -35,25 +34,20 @@ import { fetchStatuses } from '../../../../../../lib/api/statuses'
 export default async function ProjectSettingsPage({
   params,
 }: {
-  params: Promise<{ projectId: string }>
+  params: Promise<{ projectKey: string }>
 }) {
-  const { projectId } = await params
+  const { projectKey } = await params
   const api = await apiForRender()
 
-  let project: ProjectRow
+  // The URL names the project by its key prefix and nothing below this line
+  // does — `projectByKey` says why. Null is a 404 for the same reason the API
+  // answers one: a project the caller may not see must not be distinguishable
+  // from a prefix nobody has taken.
+  const project = await projectByKey(api, projectKey)
 
-  try {
-    project = (await api.get<ProjectRow>(`/projects/${projectId}`)).data
-  } catch (error) {
-    // 404 rather than 403 for a project they cannot see — the API decides
-    // that and this passes it on, because a 403 confirms the id is real.
-    if (error instanceof ApiError && [400, 404].includes(error.status)) {
-      notFound()
-    }
+  if (project === null) notFound()
 
-    throw error
-  }
-
+  const projectId = project.id
   const statuses = await fetchStatuses(api, projectId)
 
   return (

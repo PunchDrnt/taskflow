@@ -51,7 +51,7 @@ import {
   addStatus,
   changeStatus,
   removeStatus,
-} from '../../app/(signed-in)/(org)/projects/[projectId]/settings/status-actions'
+} from '../../app/(signed-in)/(org)/projects/[projectKey]/settings/status-actions'
 import type { StatusOutcome } from '../../lib/statuses/outcome'
 import { PaletteMenu } from '../molecules/palette-menu'
 

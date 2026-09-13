@@ -253,6 +253,7 @@ projects
   description             text     null
   color                   text     token จาก palette 8 สี ไม่ใช่ hex (ทรงเดียวกับ statuses.color)
   key_prefix              text     'DEV' · ตัวพิมพ์ใหญ่ 2-6 ตัว · ประกอบเป็น task key ตอนแสดงผล
+                                   · เป็น segment ของ URL ด้วย (`/projects/DEV`) → ห้ามซ้ำใน org และ **แก้ไม่ได้หลังสร้าง**
   next_task_number        int      default 1 · เลขถัดไปที่จะแจก — ดูด้านล่าง
   archived_at             timestamptz null · ซ่อนจาก sidebar และ picker · ไม่ใช่การลบ
   stale_after_days        int      null (Phase 3) · null = ปิดการเตือนงานค้าง
@@ -263,10 +264,24 @@ projects
 
   CHECK (key_prefix ~ '^[A-Z][A-Z0-9]{1,5}$')
   CREATE UNIQUE INDEX ON project.projects (org_id, name) WHERE deleted_at IS NULL;
+  CREATE UNIQUE INDEX ON project.projects (org_id, key_prefix) WHERE deleted_at IS NULL;
 
 **Task key = `key_prefix` + `tasks.number` ประกอบตอนแสดงผล** ไม่เก็บสตริงสำเร็จรูปไว้ที่ไหน
-เปลี่ยน prefix แล้ว key เปลี่ยนทั้ง project ทันทีโดยไม่ต้อง backfill · prefix **ซ้ำกันได้ในหนึ่ง org**
-เพราะผู้ใช้กรอกเอง ยอมรับว่า `TF-120` ชี้ได้สองงาน (ลิสต์แสดงชื่อ project ข้างเลขอยู่แล้ว)
+
+**prefix ห้ามซ้ำในหนึ่ง org และแก้ไม่ได้หลังสร้าง** (แก้จากเดิมที่ยอมให้ซ้ำและให้แก้ได้)
+— เพราะ prefix กลายเป็น segment ของ URL `/projects/DEV/settings` ซึ่งต้องชี้ project เดียว
+และต้องชี้ใบเดิมตลอดไป · `updateProjectSchema` ไม่มีฟิลด์นี้ มีแค่ `createProjectSchema`
+
+- ที่ไม่ให้แก้เพราะถ้าแก้แล้ว ลิงก์ที่แปะไว้ในแชทจะ 404 และ**แย่กว่านั้น**คือถ้ามีคนตั้ง project
+  ใหม่ที่ใช้ prefix ที่ว่างนั้น ลิงก์เก่าจะเปิดคนละ project โดยไม่มีอะไรบอก — เหตุผลเดียวกับที่
+  `tasks.number` ห้ามแจกซ้ำ
+- ผลพลอยได้คือ `TF-120` เลิกกำกวมไปด้วย
+- index เป็น partial ตามกติกาของตาราง soft delete: project ที่ถูก**ลบ**คืน prefix ให้ตัวถัดไป
+  (ยอมรับความเสี่ยงข้อบนเฉพาะกรณีลบ ซึ่งพา task ทั้ง project ไปด้วยอยู่แล้ว)
+- prefix **ไม่เคยเดินทางไปถึง API ในฐานะ identifier** — หน้าเพจแปลงเป็น `id` ตั้งแต่บรรทัดแรก
+  (`projectByKey`) เพราะที่เหลือทั้งระบบอ้างถึง project ด้วย `id`
+- ถ้าวันหนึ่งต้องให้แก้ prefix จริง ๆ ทางที่เปิดไว้คือตาราง `project.key_prefixes` ที่ถือ
+  uniqueness ทั้งของปัจจุบันและของเก่า แล้ว redirect จากของเก่า — ไม่ใช่การปลดล็อกให้แก้เฉย ๆ
 
 > 🔒 **`next_task_number` เป็นคอลัมน์ ไม่ใช่ `MAX(number)+1`** — `MAX+1` จะแจกเลขซ้ำทันทีที่งาน
 > ที่มีเลขสูงสุดถูกลบ ซึ่งทำให้ key ที่คนแปะไว้ในแชทชี้ผิดงาน · แจกเลขด้วย

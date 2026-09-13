@@ -8,6 +8,7 @@ import {
   type ProjectRow,
 } from '@repo/shared'
 
+import { projectByKey } from '../../../../../../lib/api/projects'
 import { apiForAction } from '../../../../../../lib/api/server'
 import {
   failureOf,
@@ -15,33 +16,37 @@ import {
   type FormState,
 } from '../../../../../../lib/forms/form-state'
 
-export type ProjectField = 'name' | 'keyPrefix' | 'color' | 'description'
+export type ProjectField = 'name' | 'color' | 'description'
 
-const FIELDS: ProjectField[] = ['name', 'keyPrefix', 'color', 'description']
+const FIELDS: ProjectField[] = ['name', 'color', 'description']
 
 /**
- * Renames, recolours or re-prefixes a project.
+ * Renames a project, or changes its colour or description.
  *
- * ⚠️ **Changing the key prefix changes every key already in circulation.**
- * `tasks.number` is what is stored and the key is assembled from the prefix at
- * read time, so `OPS-14` in a two-month-old chat message becomes `OP-14`
- * everywhere at once. Numbers are never reissued, so nothing is ambiguous —
- * but the screen has to say so before somebody does it casually.
+ * **The key prefix is not among them**, and the form shows it as text for the
+ * same reason `updateProjectSchema` refuses it: it is the project's URL and
+ * the front half of every task key, so a rename would 404 every link already
+ * handed out — and open a different project the day another one takes the
+ * freed prefix.
+ *
+ * It takes the URL's segment rather than the project's id because that is what
+ * the screen has, and the id is one lookup away. The prefix cannot move, so
+ * neither can the address bar.
  *
  * The description is sent as `null` when cleared rather than left out, which
  * `updateProjectSchema` distinguishes on purpose: absent means "leave it
  * alone" and null means "there is no description now".
  *
- * `NAME_TAKEN` is blamed on the name for the reason the create dialog does it:
- * the API's sentence is accurate and lands above a form with four boxes.
+ * `NAME_TAKEN` is blamed on the name box: the API's sentence is accurate but
+ * lands above a form with three of them, and "which one" is the only thing the
+ * person needs at that moment.
  */
 export async function updateProject(
-  projectId: string,
+  projectKey: string,
   formData: FormData,
 ): Promise<FormState<ProjectField>> {
   const parsed = updateProjectSchema.safeParse({
     name: formData.get('name'),
-    keyPrefix: formData.get('keyPrefix'),
     color: formData.get('color'),
     description: blankToNull(formData.get('description')),
   })
@@ -55,7 +60,14 @@ export async function updateProject(
 
   try {
     const api = await apiForAction()
-    await api.patch<ProjectRow>(`/projects/${projectId}`, parsed.data)
+    // The id the API works in, from the prefix the URL is written in.
+    const project = await projectByKey(api, projectKey)
+
+    if (project === null) {
+      return { error: 'That project no longer exists.', fieldErrors: {} }
+    }
+
+    await api.patch<ProjectRow>(`/projects/${project.id}`, parsed.data)
   } catch (error) {
     return failureOf<ProjectField>(error, {
       [PROJECT_ERROR_CODES.NAME_TAKEN]: 'name',

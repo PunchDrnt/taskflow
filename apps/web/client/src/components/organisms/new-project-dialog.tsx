@@ -207,7 +207,8 @@ function NameAndPrefix({
           Two to six characters, starting with a letter. Tasks are numbered{' '}
           <span className="font-mono">{prefix === '' ? 'DEV' : prefix}-1</span>,{' '}
           <span className="font-mono">{prefix === '' ? 'DEV' : prefix}-2</span>,
-          and so on.
+          and so on. It is also the project&rsquo;s link, so it cannot be
+          changed later.
         </FieldDescription>
         {prefixError !== undefined && (
           <FieldError errors={[{ message: prefixError }]} />

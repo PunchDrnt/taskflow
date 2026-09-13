@@ -10,6 +10,8 @@ import { idSchema } from './id.js'
 export const PROJECT_ERROR_CODES = {
   /** Another live project in this organisation already has this name. */
   NAME_TAKEN: 'NAME_TAKEN',
+  /** Another live project in this organisation already has this key prefix. */
+  KEY_PREFIX_TAKEN: 'KEY_PREFIX_TAKEN',
   /** The person is already in this project. */
   ALREADY_MEMBER: 'ALREADY_MEMBER',
 } as const
@@ -24,9 +26,22 @@ export const PROJECT_ERROR_CODES = {
  * disagreeing: a value the API accepts and the database then rejects arrives
  * as a 500.
  *
- * Duplicates within an organisation are allowed on purpose. People type these
- * themselves, and `TF-120` pointing at two projects is a cost the spec accepts
- * — every list already shows the project name beside the number.
+ * ⚠️ **Unique per organisation, and set once.** Both follow from the same
+ * decision: the prefix is what a project's URL is made of, so
+ * `/projects/DEV/settings` has to name one project (hence
+ * `projects_org_key_prefix_unique`) and has to go on naming it (hence
+ * `createProjectSchema` accepting this and `updateProjectSchema` not).
+ *
+ * The specification originally allowed duplicates and allowed renaming — the
+ * key was assembled at display time precisely so a rename needed no backfill.
+ * What changed is that a renameable segment makes every link somebody pasted
+ * into chat a 404, and worse, makes it a *different project* the day another
+ * one takes the freed prefix. An identifier people paste is one that must not
+ * be reissued, which is the rule `tasks.number` already lives by.
+ *
+ * The prefix never travels to the API as an identifier even so: it is a
+ * browser URL segment, resolved to an id by the page that reads it. Ids are
+ * what endpoints take, because that is what the rest of the data references.
  */
 export const keyPrefixSchema = z
   .string()
@@ -78,6 +93,14 @@ export type CreateProjectInput = z.infer<typeof createProjectSchema>
  * `description` accepts null: clearing it is a real edit, and `undefined`
  * already means "leave it alone", so the two cannot be collapsed.
  *
+ * `keyPrefix` is deliberately absent, and it is the omission worth stating: it is the
+ * project's URL, and a URL that changes is a link somebody already sent that
+ * now opens nothing — or opens whichever project later takes the prefix. It is
+ * chosen once, at `createProjectSchema`. A body carrying one is *stripped*
+ * rather than refused, which zod objects do by default, so a request whose
+ * only field was the prefix fails the refine below as a body that changes
+ * nothing — which is exactly what it is.
+ *
  * `archivedAt` is deliberately absent. Archiving is its own endpoint because
  * it is a different decision with a different permission and a different
  * confirmation — folding it into a general update makes "rename this project"
@@ -86,7 +109,6 @@ export type CreateProjectInput = z.infer<typeof createProjectSchema>
 export const updateProjectSchema = z
   .object({
     name: projectNameSchema.optional(),
-    keyPrefix: keyPrefixSchema.optional(),
     color: paletteColorSchema.optional(),
     description: projectDescriptionSchema.nullable().optional(),
   })
