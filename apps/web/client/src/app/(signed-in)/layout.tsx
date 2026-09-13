@@ -1,30 +1,27 @@
 import { redirect } from 'next/navigation'
 
-import { AppShell } from '../../components/organisms/app-shell'
 import { currentUser } from '../../lib/api/me'
 
 /**
  * Everything behind a session.
  *
- * A route group, so the URLs are unchanged — `/` stays `/` — and `/login`
- * stays outside it, which is the point: the sign-in screen must not render a
- * sidebar built from a session it does not have.
+ * A route group, so the URLs are unchanged — `/home` stays `/home` — and
+ * `/login` stays outside it, which is the point: the sign-in screen must not
+ * render a shell built from a session it does not have.
  *
- * Somebody in no organisation gets no shell. A sidebar whose first control is
- * an organisation switcher with nothing in it, above navigation that all leads
- * to `NO_ORGANIZATION`, is a worse answer than the page that explains the
- * situation — so the frame starts when there is something to frame.
+ * It checks the session and nothing else. **The frame is chosen one level
+ * down**, by `(home)` and `(org)`, because there are two of them and they are
+ * not variants of one: Home is a screen about the person and lists every
+ * organisation, while everything else is a screen about one organisation and
+ * is scoped by the switcher. One shell trying to be both would have to draw an
+ * org switcher above a page the switcher does not affect.
  */
 export default async function SignedInLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const me = await currentUser()
+  if ((await currentUser()) === null) redirect('/login')
 
-  if (me === null) redirect('/login')
-
-  if (me.organizations.length === 0) return children
-
-  return <AppShell me={me}>{children}</AppShell>
+  return children
 }

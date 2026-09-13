@@ -7,19 +7,21 @@ import {
   createTaskSchema,
   idSchema,
   TASK_ERROR_CODES,
+  updateTaskSchema,
   type AssigneeRow,
   type Page,
   type TaskRow,
 } from '@repo/shared'
 
-import { fetchAssignable } from '../../../../lib/api/assignable'
-import { ApiError, toApiError } from '../../../../lib/api/errors'
-import { apiForAction } from '../../../../lib/api/server'
+import { fetchAssignable } from '../../../../../lib/api/assignable'
+import { ApiError, toApiError } from '../../../../../lib/api/errors'
+import { apiForAction } from '../../../../../lib/api/server'
 import type {
   AssignOutcome,
   PeopleFound,
   QuickAddOutcome,
-} from '../../../../lib/tasks/task-actions-result'
+  StatusChangeOutcome,
+} from '../../../../../lib/tasks/task-actions-result'
 
 /**
  * Quick add — a title and Enter, and nothing else.
@@ -171,5 +173,41 @@ export async function unassignTask(
     }
 
     throw error
+  }
+}
+
+/**
+ * Moves a task to another column on its own board.
+ *
+ * No `revalidatePath`, which is the difference between this and quick add: the
+ * server is not deciding anything the screen cannot already see. A move keeps
+ * the task's own order key, so the row stays where it is and only its status
+ * changes — re-rendering the page for that would throw away the scroll
+ * position of a list somebody is working down.
+ *
+ * The updated task is returned rather than the id that was sent, because the
+ * API does more than it was asked: landing in a column whose kind is `done`
+ * stamps `completed_at` and `completed_by`, and leaving one clears them again.
+ */
+export async function changeTaskStatus(
+  taskId: string,
+  statusId: string,
+): Promise<StatusChangeOutcome> {
+  const parsed = updateTaskSchema.safeParse({ statusId })
+
+  if (
+    !parsed.success ||
+    !idSchema('Invalid task id').safeParse(taskId).success
+  ) {
+    return { ok: false, message: 'That status does not exist.' }
+  }
+
+  try {
+    const api = await apiForAction()
+    const { data } = await api.patch<TaskRow>(`/tasks/${taskId}`, parsed.data)
+
+    return { ok: true, task: data }
+  } catch (error) {
+    return { ok: false, message: toApiError(error).message }
   }
 }

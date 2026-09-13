@@ -27,7 +27,7 @@ import { Textarea } from '@repo/ui/components/textarea'
 import {
   createProject,
   type NewProjectField,
-} from '../../app/(signed-in)/projects/actions'
+} from '../../app/(signed-in)/(org)/projects/actions'
 import { blankForm } from '../../lib/forms/form-state'
 import { PaletteField } from '../molecules/palette-field'
 

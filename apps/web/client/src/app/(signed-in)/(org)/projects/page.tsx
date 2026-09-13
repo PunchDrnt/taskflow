@@ -5,10 +5,11 @@ import {
   EmptyTitle,
 } from '@repo/ui/components/empty'
 
-import { ProjectCard } from '../../../components/molecules/project-card'
-import { NewProjectDialog } from '../../../components/organisms/new-project-dialog'
-import { fetchProjects } from '../../../lib/api/projects'
-import { apiForRender } from '../../../lib/api/server'
+import { PageBody } from '../../../../components/atoms/page-body'
+import { ProjectCard } from '../../../../components/molecules/project-card'
+import { NewProjectDialog } from '../../../../components/organisms/new-project-dialog'
+import { fetchProjects } from '../../../../lib/api/projects'
+import { apiForRender } from '../../../../lib/api/server'
 
 /**
  * Every project in this organisation that the caller may see.
@@ -27,10 +28,10 @@ export default async function ProjectsPage() {
   const projects = await fetchProjects(await apiForRender())
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-6">
+    <PageBody width="wide" className="gap-6">
       <header className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="h6">Projects</h1>
+          <h1 className="h5">Projects</h1>
           <p className="text-text-secondary body-2 mt-1">
             Where tasks live. Each one keeps its own statuses and its own
             members.
@@ -57,6 +58,6 @@ export default async function ProjectsPage() {
           ))}
         </div>
       )}
-    </div>
+    </PageBody>
   )
 }

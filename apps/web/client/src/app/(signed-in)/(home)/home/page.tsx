@@ -1,10 +1,9 @@
-import { Stat } from '../../../components/molecules/stat'
-import { DueWork } from '../../../components/organisms/due-work'
-import { NoOrganisation } from '../../../components/organisms/no-organisation'
-import { OrganisationList } from '../../../components/organisms/organisation-list'
-import { currentUser } from '../../../lib/api/me'
-import { dueWork } from '../../../lib/api/my-work'
-import { dueBucket } from '../../../lib/format/due-date'
+import { PageBody } from '../../../../components/atoms/page-body'
+import { HomeWork } from '../../../../components/organisms/home-work'
+import { NoOrganisation } from '../../../../components/organisms/no-organisation'
+import { currentUser } from '../../../../lib/api/me'
+import { dueWork } from '../../../../lib/api/my-work'
+import { greeting, todayLabel } from '../../../../lib/format/greeting'
 
 /**
  * Home — where signing in lands, and the only screen about the person rather
@@ -15,6 +14,10 @@ import { dueBucket } from '../../../lib/format/due-date'
  * forever; and `/` has a job of its own — deciding, without rendering
  * anything, whether somebody belongs on this page or on the sign-in screen.
  * One path doing both is what makes "where does signing in land" ambiguous.
+ *
+ * The organisations themselves are in the sidebar beside this, not on it —
+ * see `HomeShell`. They are navigation, and a list of them in the page body as
+ * well would be the same links twice.
  *
  * It crosses organisations on purpose. `GET /v1/me/tasks` is the endpoint that
  * exists for it, and docs/04-features/phase-1.md#organization is explicit that
@@ -33,36 +36,26 @@ export default async function HomePage() {
   if (me === null) return null
 
   if (me.organizations.length === 0) {
-    return <NoOrganisation name={me.nickname} />
+    return <NoOrganisation name={me.nickname} email={me.email} />
   }
 
   const { rows, capped } = await dueWork()
-  const now = new Date()
-  const overdue = rows.filter(
-    (row) => dueBucket(row.dueDate, now) === 'overdue',
-  ).length
-  const thisWeek = rows.filter((row) =>
-    ['today', 'soon'].includes(dueBucket(row.dueDate, now)),
-  ).length
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-8 p-6">
-      <header>
-        <h1 className="h6">Hello, {me.nickname}</h1>
-        <p className="text-text-secondary body-2 mt-1">
+    <PageBody width="reading" className="gap-8">
+      <header className="flex flex-col gap-2">
+        <span className="overlined text-text-disabled tracking-wide">
+          {todayLabel()}
+        </span>
+        <h1 className="h4 font-extrabold">
+          {greeting()}, {me.nickname}
+        </h1>
+        <p className="text-text-secondary body-1">
           Everything on your plate, across every organisation you are in.
         </p>
       </header>
 
-      <div className="grid grid-cols-3 gap-3">
-        <Stat label="Open" value={rows.length} capped={capped} />
-        <Stat label="Overdue" value={overdue} tone="urgent" />
-        <Stat label="Due this week" value={thisWeek} />
-      </div>
-
-      <DueWork rows={rows} />
-
-      <OrganisationList organizations={me.organizations} />
-    </div>
+      <HomeWork rows={rows} capped={capped} />
+    </PageBody>
   )
 }

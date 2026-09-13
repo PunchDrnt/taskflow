@@ -6,22 +6,23 @@ import {
   EmptyTitle,
 } from '@repo/ui/components/empty'
 
-import { TaskList } from '../../../components/organisms/task-list'
-import { DEFAULT_TASK_COLUMNS } from '../../../components/organisms/task-list/columns'
-import { TaskToolbar } from '../../../components/organisms/task-toolbar'
-import { ApiError } from '../../../lib/api/errors'
-import { apiForRender } from '../../../lib/api/server'
+import { PageBody } from '../../../../components/atoms/page-body'
+import { TaskList } from '../../../../components/organisms/task-list'
+import { DEFAULT_TASK_COLUMNS } from '../../../../components/organisms/task-list/columns'
+import { TaskToolbar } from '../../../../components/organisms/task-toolbar'
+import { ApiError } from '../../../../lib/api/errors'
+import { apiForRender } from '../../../../lib/api/server'
 import {
   fetchTasks,
   lookupsFor,
   type TaskLookups,
-} from '../../../lib/api/tasks'
+} from '../../../../lib/api/tasks'
 import {
   parseTaskQuery,
   toURLSearchParams,
   type TaskListQueryState,
   type TaskScope,
-} from '../../../lib/tasks/query'
+} from '../../../../lib/tasks/query'
 
 /**
  * My Tasks — what is assigned to me in **this** organisation.
@@ -46,9 +47,9 @@ export default async function MyTasksPage({
   const result = await firstPage(query)
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-6">
+    <PageBody width="wide" className="gap-6">
       <header>
-        <h1 className="h6">My Tasks</h1>
+        <h1 className="h5">My tasks</h1>
         <p className="text-text-secondary body-2 mt-1">
           Everything assigned to you in this organisation. Closed work is hidden
           unless you ask for it.
@@ -65,7 +66,7 @@ export default async function MyTasksPage({
             initialLookups={result.lookups}
             scope={MINE}
             columns={DEFAULT_TASK_COLUMNS}
-            grouping={query.group}
+            query={query}
             search={search.toString()}
           />
         </>
@@ -77,7 +78,7 @@ export default async function MyTasksPage({
           </EmptyHeader>
         </Empty>
       )}
-    </div>
+    </PageBody>
   )
 }
 

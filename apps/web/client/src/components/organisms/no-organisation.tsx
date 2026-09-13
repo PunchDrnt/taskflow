@@ -1,5 +1,7 @@
 import { Button } from '@repo/ui/components/button'
 
+import { SignOutButton } from '../molecules/sign-out-button'
+
 /**
  * What somebody sees when they can sign in but belong to no organisation.
  *
@@ -9,37 +11,57 @@ import { Button } from '@repo/ui/components/button'
  * from `ORG_NOT_SELECTED` for exactly this reason, so that somebody with three
  * companies is never sent to a page telling them they have none.
  *
+ * It carries its own way out. This is the one signed-in screen with no shell
+ * above it, so without the bar at the top there would be no way to sign out of
+ * an account that cannot do anything else either.
+ *
  * The "Create organisation" button is **drawn and deliberately inert** until
  * Phase 3: docs/04-features/phase-1.md#organization asks for the shape to be
  * agreed now, while creating one stays an API-and-seed-script job. A button
  * that does nothing is worse than no button, so it says what it is.
  */
-export function NoOrganisation({ name }: { name: string }) {
+export function NoOrganisation({
+  name,
+  email,
+}: {
+  name: string
+  email: string
+}) {
   return (
-    <main className="bg-default flex min-h-screen items-center justify-center p-6">
-      <div className="bg-paper-elevation-0 border-divider w-full max-w-md rounded-xl border p-8 text-center shadow-sm">
-        <h1 className="h6 mb-2 font-bold">
-          You are not in an organisation yet
-        </h1>
-        <p className="text-text-secondary body-2 mb-6">
-          Hi {name}. Your account works, but there is no company attached to it
-          yet — ask an administrator to add you, and this page becomes your
-          work.
-        </p>
+    <main className="bg-default flex min-h-screen flex-col">
+      <div className="flex items-center justify-between gap-4 px-6 py-4">
+        <span className="subtitle-3 text-primary-main">Taskflow</span>
+        <div className="flex items-center gap-3">
+          <span className="text-text-secondary body-3">{email}</span>
+          <SignOutButton />
+        </div>
+      </div>
 
-        <div className="border-divider flex flex-col gap-3 border-t pt-6">
-          <Button variant="outline" disabled className="w-full">
-            Create an organisation
-          </Button>
-          <p className="text-text-secondary body-3">
-            Not available yet. Until Phase 3, organisations are created through
-            the API or a seed script.
+      <div className="flex flex-1 items-center justify-center p-6">
+        <div className="bg-paper-elevation-0 border-divider w-full max-w-md rounded-xl border p-8 text-center shadow-sm">
+          <h1 className="h6 mb-2 font-bold">
+            You are not in an organisation yet
+          </h1>
+          <p className="text-text-secondary body-2 mb-6">
+            Hi {name}. Your account works, but there is no company attached to
+            it yet — ask an administrator to add you, and this page becomes your
+            work.
+          </p>
+
+          <div className="border-divider flex flex-col gap-3 border-t pt-6">
+            <Button variant="outline" disabled className="w-full">
+              Create an organisation
+            </Button>
+            <p className="text-text-secondary body-3">
+              Not available yet. Until Phase 3, organisations are created
+              through the API or a seed script.
+            </p>
+          </div>
+
+          <p className="text-text-secondary body-3 mt-6">
+            Emailed invitations you can accept yourself arrive in Phase 2.
           </p>
         </div>
-
-        <p className="text-text-secondary body-3 mt-6">
-          Emailed invitations you can accept yourself arrive in Phase 2.
-        </p>
       </div>
     </main>
   )
