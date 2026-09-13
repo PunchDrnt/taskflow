@@ -15,32 +15,51 @@ import { ApiException } from './api-exception'
  * `OrgScopedRepository` removes `skip` from the find family for this reason,
  * so the mistake does not compile.
  *
- * A cursor here is `[sortValue, id]` — the ordering expression's value for the
- * last row, and its id to break ties. The query resumes with a row comparison
- * on exactly that pair, which is why every sort this module offers has a
- * **NOT NULL** ordering expression: `(a, b) > (NULL, c)` is NULL, not true, so
- * a nullable sort column would quietly return an empty page. See
- * `TASK_SORTS`, where `due_date` becomes `COALESCE(due_date, 'infinity')` and
- * priority becomes a rank.
+ * A cursor here is **one value per ordering rule, then the id** — the last row
+ * you saw, described in exactly the terms the list is ordered by. The id is
+ * always last and always ascending, because it is the tiebreaker that makes
+ * the order total: without it two rows sharing every sort value have no
+ * defined position, and a page boundary landing between them repeats one or
+ * drops one.
+ *
+ * Every ordering expression must be **NOT NULL**. A comparison against NULL is
+ * NULL rather than true, so a nullable sort column silently returns an empty
+ * page. See `TASK_SORTS`, where `due_date` becomes
+ * `COALESCE(due_date, 'infinity')` and priority becomes a rank.
  *
  * The encoding is base64url of JSON — opaque on purpose. It is a position in
  * a result set, not an API: a client that parses one has coupled itself to
- * the ordering, and the day a sort gains a tiebreaker their paging breaks in
- * a way nobody can see from here.
+ * the ordering, and the day a sort gains a rule their paging breaks in a way
+ * nobody can see from here.
  */
-export type Cursor = readonly [sortValue: string, id: string]
+export interface Cursor {
+  /** One per ordering rule, in the order the rules apply. */
+  readonly values: readonly string[]
+  readonly id: string
+}
 
 export function encodeCursor(cursor: Cursor): string {
-  return Buffer.from(JSON.stringify(cursor), 'utf8').toString('base64url')
+  return Buffer.from(
+    JSON.stringify([...cursor.values, cursor.id]),
+    'utf8',
+  ).toString('base64url')
 }
 
 /**
- * The pair back out, or a 400.
+ * The position back out, or a 400.
  *
  * A malformed cursor is a bad request, never a 500: they arrive from URLs
  * people copy, edit and share, and half a pasted cursor must not page anybody.
+ *
+ * `rules` is how many ordering values this request expects, and checking it is
+ * what makes a cursor from a *differently sorted* list a 400 rather than a
+ * wrong answer. Changing the sort while holding a cursor is ordinary — the
+ * toolbar does it — and the old position means nothing under the new order:
+ * resuming from it would compare yesterday's due date against today's priority
+ * rank and page from somewhere arbitrary. The client's answer to a 400 here is
+ * to ask for the first page, which is what changing a sort means anyway.
  */
-export function decodeCursor(raw: string): Cursor {
+export function decodeCursor(raw: string, rules: number): Cursor {
   let parsed: unknown
 
   try {
@@ -51,14 +70,15 @@ export function decodeCursor(raw: string): Cursor {
 
   if (
     !Array.isArray(parsed) ||
-    parsed.length !== 2 ||
-    typeof parsed[0] !== 'string' ||
-    typeof parsed[1] !== 'string'
+    parsed.length !== rules + 1 ||
+    !parsed.every((part) => typeof part === 'string')
   ) {
     throw badCursor()
   }
 
-  return [parsed[0], parsed[1]]
+  const parts = parsed as string[]
+
+  return { values: parts.slice(0, rules), id: parts[rules]! }
 }
 
 /**

@@ -1,39 +1,32 @@
 'use client'
 
-import { ArrowDownUp, Group as GroupIcon, Search } from 'lucide-react'
+import { Check, Group as GroupIcon, Search } from 'lucide-react'
 import { usePathname, useRouter } from 'next/navigation'
 import { useState, useTransition } from 'react'
 
-import type { AssignableRow, StatusRow, TaskSortField } from '@repo/shared'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@repo/ui/components/dropdown-menu'
+import type { AssignableRow, StatusRow } from '@repo/shared'
 import {
   InputGroup,
   InputGroupAddon,
   InputGroupInput,
 } from '@repo/ui/components/input-group'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@repo/ui/components/popover'
 import { Switch } from '@repo/ui/components/switch'
 
 import {
-  defaultQueryFor,
   GROUPING_LABELS,
   groupingsFor,
-  SORT_LABELS,
-  sortsFor,
   toSearchParams,
-  type TaskGrouping,
   type TaskListQueryState,
   type TaskScope,
 } from '../../lib/tasks/query'
 import { ToolbarChip } from '../atoms/toolbar-chip'
 import { TaskFilters } from './task-filters'
+import { TaskSort } from './task-sort'
 
 /**
  * The controls above a task list, every one of which writes to the URL.
@@ -53,10 +46,10 @@ import { TaskFilters } from './task-filters'
  * is pushed to the far right — it asks a different question, and putting it
  * first pushed the three controls into the corner nobody looks in.
  *
- * Sort and Group are `DropdownMenu`s rather than popovers holding hand-written
- * buttons: each is one value chosen from a list, which is what
- * `DropdownMenuRadioGroup` *is* — and it brings the roving focus, the typeahead
- * and `aria-checked` with it, none of which a `<button>` in a popover has.
+ * Each of the three opens a panel of its own shape, which is the design's and
+ * is also the honest one: filtering is a list of rules, ordering is a list of
+ * rules, and grouping is one choice from a short list. Only the last is a
+ * menu, so only the last is drawn as one.
  */
 export function TaskToolbar({
   query,
@@ -84,11 +77,6 @@ export function TaskToolbar({
     })
   }
 
-  // A chip is lit when it is doing something, and a list's own opening order
-  // is not something anybody chose — so Sort stays dark until it differs.
-  const fallback = defaultQueryFor(scope)
-  const sorted = query.sort !== fallback.sort || query.dir !== fallback.dir
-
   return (
     <div className="flex flex-wrap items-center gap-1" data-pending={pending}>
       <TaskFilters
@@ -99,53 +87,10 @@ export function TaskToolbar({
         onChange={go}
       />
 
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <ToolbarChip
-              icon={<ArrowDownUp />}
-              label="Sort"
-              value={
-                sorted
-                  ? `${SORT_LABELS[query.sort]} ${query.dir === 'asc' ? '↑' : '↓'}`
-                  : null
-              }
-            />
-          }
-        />
+      <TaskSort query={query} scope={scope} onChange={go} />
 
-        <DropdownMenuContent className="w-52">
-          <DropdownMenuRadioGroup
-            value={query.sort}
-            onValueChange={(sort) => go({ sort: sort as TaskSortField })}
-          >
-            {/* Inside the group, not above it: `DropdownMenuLabel` is Base UI's
-                `GroupLabel`, which reads the group's context to point
-                `aria-labelledby` at itself and throws when there is none. */}
-            <DropdownMenuLabel>Sort by</DropdownMenuLabel>
-            {sortsFor(scope).map((sort) => (
-              <DropdownMenuRadioItem key={sort} value={sort}>
-                {SORT_LABELS[sort]}
-              </DropdownMenuRadioItem>
-            ))}
-          </DropdownMenuRadioGroup>
-
-          <DropdownMenuSeparator />
-
-          <DropdownMenuRadioGroup
-            value={query.dir}
-            onValueChange={(dir) => go({ dir: dir as 'asc' | 'desc' })}
-          >
-            <DropdownMenuRadioItem value="asc">Ascending</DropdownMenuRadioItem>
-            <DropdownMenuRadioItem value="desc">
-              Descending
-            </DropdownMenuRadioItem>
-          </DropdownMenuRadioGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
-
-      <DropdownMenu>
-        <DropdownMenuTrigger
+      <Popover>
+        <PopoverTrigger
           render={
             <ToolbarChip
               icon={<GroupIcon />}
@@ -157,20 +102,28 @@ export function TaskToolbar({
           }
         />
 
-        <DropdownMenuContent className="w-52">
-          <DropdownMenuRadioGroup
-            value={query.group}
-            onValueChange={(group) => go({ group: group as TaskGrouping })}
-          >
-            <DropdownMenuLabel>Group by</DropdownMenuLabel>
-            {groupingsFor(scope).map((group) => (
-              <DropdownMenuRadioItem key={group} value={group}>
-                {GROUPING_LABELS[group]}
-              </DropdownMenuRadioItem>
-            ))}
-          </DropdownMenuRadioGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
+        <PopoverContent align="start" className="w-52 p-2">
+          <p className="text-text-disabled overlined px-2 pt-1 pb-1.5">
+            Group by
+          </p>
+          {groupingsFor(scope).map((group) => (
+            <button
+              key={group}
+              type="button"
+              onClick={() => go({ group })}
+              className="hover:bg-action-hover body-2 flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left"
+            >
+              <span className="flex-1">{GROUPING_LABELS[group]}</span>
+              {query.group === group && (
+                <Check className="text-primary-main size-3.5" />
+              )}
+            </button>
+          ))}
+          <p className="text-text-disabled body-3 px-2 pt-2 pb-1">
+            Groups cover the tasks loaded so far. Empty groups are hidden.
+          </p>
+        </PopoverContent>
+      </Popover>
 
       {/* Only My Tasks hides closed work. A project's Done column is part of
           its board — hiding it there would hide a status somebody made. */}

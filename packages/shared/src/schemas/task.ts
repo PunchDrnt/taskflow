@@ -177,6 +177,76 @@ export const TASK_SORT_FIELDS = [
 
 export type TaskSortField = (typeof TASK_SORT_FIELDS)[number]
 
+/**
+ * How many ordering rules one list may carry.
+ *
+ * Three, not unlimited, and the ceiling is the cursor rather than the screen:
+ * resuming a multi-key sort is an OR-chain with one term per rule
+ * (`TaskService.paginate`), so each rule adds a branch to the predicate that
+ * pages every list. Three covers what anybody actually asks a task list —
+ * "urgent first, then by deadline" — and the fourth rule has never decided
+ * the order of two rows that the first three left tied.
+ */
+export const MAX_SORT_RULES = 3
+
+/** One ordering rule: which property, and which way. */
+export interface TaskSortRule {
+  field: TaskSortField
+  dir: 'asc' | 'desc'
+}
+
+/**
+ * `field:dir` — `priority:desc`, repeated in the order the rules apply.
+ *
+ * A pair in one parameter rather than parallel `sort` and `dir` lists, because
+ * the two halves of a rule have to stay together: `?sort=a&sort=b&dir=desc`
+ * cannot say which of the two is descending without a convention nobody can
+ * see in the URL, and a link with one half edited out sorts by something the
+ * sender never chose.
+ */
+export const taskSortRuleSchema = z
+  .string()
+  .trim()
+  .transform((raw) => {
+    const [field, dir] = raw.split(':')
+
+    return { field, dir: dir ?? 'asc' }
+  })
+  .pipe(
+    z.object({
+      field: z.enum(TASK_SORT_FIELDS, 'Not a field this list can sort by'),
+      dir: z.enum(['asc', 'desc'], 'Sort direction must be asc or desc'),
+    }),
+  )
+
+/**
+ * The ordering rules, in the order they apply, with a fallback for an absent
+ * parameter.
+ *
+ * **No repeated field.** Two rules on `priority` are one rule and a decoration
+ * — the second can never break a tie the first did not already settle — and
+ * allowing it would put a branch in the cursor's OR-chain that never matches.
+ */
+const sortRules = (fallback: readonly TaskSortRule[]) =>
+  z
+    .union([taskSortRuleSchema, z.array(taskSortRuleSchema)])
+    .transform((value) => (Array.isArray(value) ? value : [value]))
+    .refine(
+      (rules) => rules.length <= MAX_SORT_RULES,
+      `At most ${MAX_SORT_RULES} sort rules`,
+    )
+    .refine(
+      (rules) => new Set(rules.map((rule) => rule.field)).size === rules.length,
+      'Each field may be sorted on once',
+    )
+    .optional()
+    // An empty `?sort=` list is not "no order" — a list with no ordering at
+    // all cannot be paged by a cursor, since there is no position to resume
+    // from. The fallback stands in, which is what an absent parameter means.
+    .transform((rules) =>
+      rules === undefined || rules.length === 0 ? [...fallback] : rules,
+    )
+
 /** Repeated query params arrive as one string or several; both mean a list. */
 const many = <T extends z.ZodType>(item: T) =>
   z
@@ -211,8 +281,7 @@ export const listTasksQuerySchema = z.object({
   dueBefore: dueDateSchema.optional(),
   /** Matched against the title, case-insensitively. */
   q: z.string().trim().max(200).optional(),
-  sort: z.enum(TASK_SORT_FIELDS).default('order'),
-  dir: z.enum(['asc', 'desc']).default('asc'),
+  sort: sortRules([{ field: 'order', dir: 'asc' }]),
   limit: z.coerce
     .number()
     .int()
@@ -260,7 +329,7 @@ export type MyTasksQuery = z.infer<typeof myTasksQuerySchema>
  * the cursor still pages it correctly; it is simply never the useful answer.
  */
 export const myWorkQuerySchema = myTasksQuerySchema.extend({
-  sort: z.enum(TASK_SORT_FIELDS).default('dueDate'),
+  sort: sortRules([{ field: 'dueDate', dir: 'asc' }]),
 })
 
 export type MyWorkQuery = z.infer<typeof myWorkQuerySchema>

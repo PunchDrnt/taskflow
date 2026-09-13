@@ -7,6 +7,8 @@ import {
   type ListTasksQuery,
   type MyTasksQuery,
   type OrgRole,
+  type TaskSortField,
+  type TaskSortRule,
 } from '@repo/shared'
 
 import { CascadeSoftDelete } from '#shared/entity/cascade-soft-delete'
@@ -112,7 +114,16 @@ describe.skipIf(!hasTestDatabase)('tasks', () => {
   }
 
   /** The default query, so a test only spells out what it is actually varying. */
-  const LIST: ListTasksQuery = { sort: 'order', dir: 'asc', limit: 50 }
+  const LIST: ListTasksQuery = {
+    sort: [{ field: 'order', dir: 'asc' }],
+    limit: 50,
+  }
+
+  /** `sort: by('priority', 'desc')`, which is most of what these tests vary. */
+  const by = (
+    field: TaskSortField,
+    dir: 'asc' | 'desc' = 'asc',
+  ): TaskSortRule[] => [{ field, dir }]
 
   const board = async (
     query: Partial<ListTasksQuery> = {},
@@ -762,7 +773,9 @@ describe.skipIf(!hasTestDatabase)('tasks', () => {
       // paged with a keyset cursor, and dropping the undated rows entirely
       // would be the other way to get a NOT NULL expression.
       expect(
-        (await asOwner(() => board({ sort: 'dueDate' }))).map((t) => t.title),
+        (await asOwner(() => board({ sort: by('dueDate') }))).map(
+          (t) => t.title,
+        ),
       ).toEqual(['รีวิวโค้ด', 'เขียนสเปก', 'เขียนเทส'])
     })
 
@@ -772,7 +785,7 @@ describe.skipIf(!hasTestDatabase)('tasks', () => {
       // Alphabetically 'high' sits between 'low' and 'urgent', which is the
       // exact wrong answer for the question the column is asked.
       expect(
-        (await asOwner(() => board({ sort: 'priority', dir: 'desc' }))).map(
+        (await asOwner(() => board({ sort: by('priority', 'desc') }))).map(
           (t) => t.priority,
         ),
       ).toEqual(['urgent', 'low', null])
@@ -839,14 +852,96 @@ describe.skipIf(!hasTestDatabase)('tasks', () => {
       expect(seen).toEqual([...seen].sort())
     })
 
+    it('walks a multi-rule sort with mixed directions the same way', async () => {
+      // The case a row comparison cannot express: `(a, b) > (x, y)` has one
+      // operator for the whole tuple, and this asks for priority descending
+      // and title ascending at once. Twelve tasks over three priorities means
+      // every page boundary lands inside a group of ties, which is where a
+      // wrong predicate repeats or drops a row.
+      const priorities = ['urgent', 'high', 'low'] as const
+
+      for (let index = 0; index < 12; index += 1) {
+        await asOwner(() =>
+          tasks.create(apollo, {
+            title: `งาน ${String(index).padStart(2, '0')}`,
+            priority: priorities[index % 3]!,
+          }),
+        )
+      }
+
+      const sort: TaskSortRule[] = [
+        { field: 'priority', dir: 'desc' },
+        { field: 'title', dir: 'asc' },
+      ]
+
+      const walk = async (limit: number): Promise<string[]> => {
+        const seen: string[] = []
+        let cursor: string | undefined
+
+        do {
+          const page = await asOwner(() =>
+            tasks.list(apollo, {
+              ...LIST,
+              sort,
+              limit,
+              ...(cursor ? { cursor } : {}),
+            }),
+          )
+
+          seen.push(...page.data.map((task) => task.title))
+          cursor = page.meta.nextCursor ?? undefined
+        } while (cursor)
+
+        return seen
+      }
+
+      const paged = await walk(5)
+      const whole = await walk(50)
+
+      expect(paged).toHaveLength(12)
+      expect(new Set(paged).size).toBe(12)
+      // Paging must not change the answer — the walk in pages of five is the
+      // same list as the one that fitted in a single page.
+      expect(paged).toEqual(whole)
+      // Urgent first, then high, then low, and alphabetical inside each.
+      expect(whole.slice(0, 4)).toEqual([...whole.slice(0, 4)].sort())
+      expect(whole.slice(4, 8)).toEqual([...whole.slice(4, 8)].sort())
+    })
+
+    it('refuses a cursor taken under a different sort', async () => {
+      await twelve()
+
+      const page = await asOwner(() =>
+        tasks.list(apollo, { ...LIST, limit: 5 }),
+      )
+
+      // One value in it, two rules asking. The values were read off another
+      // ordering, so resuming from them would page from nowhere in
+      // particular; 400 sends the client back to the first page, which is
+      // what changing a sort means.
+      await expect(
+        asOwner(() =>
+          tasks.list(apollo, {
+            ...LIST,
+            sort: [
+              { field: 'priority', dir: 'desc' },
+              { field: 'title', dir: 'asc' },
+            ],
+            limit: 5,
+            cursor: page.meta.nextCursor!,
+          }),
+        ),
+      ).rejects.toThrow(ApiException)
+    })
+
     it('🔒 hands back whole rows whatever it is sorted by', async () => {
       await asOwner(() =>
         tasks.create(apollo, { title: 'ตรวจแถวให้ครบ', priority: 'high' }),
       )
 
-      for (const sort of TASK_SORT_FIELDS) {
+      for (const field of TASK_SORT_FIELDS) {
         const [row] = (
-          await asOwner(() => tasks.list(apollo, { ...LIST, sort }))
+          await asOwner(() => tasks.list(apollo, { ...LIST, sort: by(field) }))
         ).data
 
         // The ordering expression is selected beside the entity so the cursor
@@ -855,10 +950,10 @@ describe.skipIf(!hasTestDatabase)('tasks', () => {
         // row in the response — a whole page of untitled tasks, with no error
         // anywhere. Every sort field is walked because which of them is a path
         // is a property of how it happens to be written.
-        expect(row, sort).toBeDefined()
-        expect(row!.title, sort).toBe('ตรวจแถวให้ครบ')
-        expect(row!.priority, sort).toBe('high')
-        expect(row!.sortOrder, sort).toEqual(expect.any(String))
+        expect(row, field).toBeDefined()
+        expect(row!.title, field).toBe('ตรวจแถวให้ครบ')
+        expect(row!.priority, field).toBe('high')
+        expect(row!.sortOrder, field).toEqual(expect.any(String))
       }
     })
 

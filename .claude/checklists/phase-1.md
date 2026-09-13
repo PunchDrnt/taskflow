@@ -532,11 +532,24 @@ unique เต็ม · `views.sort_order` / `is_default`
       · **AND ทุกข้อ · หลายค่าในข้อเดียว = "is in"** — ไม่มี OR ข้ามฟิลด์ นั่นคือ query builder ของ Phase 4
       · sort: `order` `dueDate` `priority` `created` `title` — `priority` เรียงตาม rank ไม่ใช่ตัวอักษร
         (ตัวอักษรจะได้ `high` อยู่ระหว่าง `low` กับ `urgent` ซึ่งผิดพอดีกับคำถามที่ถาม)
+      · **เรียงได้หลายชั้นตาม design** — `?sort=priority:desc&sort=dueDate:asc` สูงสุด 3 rule
+        · หนึ่ง field ซ้ำไม่ได้ (rule ที่สองไม่มีทางตัดสินอะไรที่ rule แรกไม่ได้ตัดสินไปแล้ว)
+        · cursor พกค่าละ rule + id · resume เป็น OR-chain เพราะแต่ละ rule มีทิศของตัวเอง
+          ([ทำไม](../docs/01-architecture.md#api)) · cursor ข้ามลำดับ = 400 ไม่ใช่คำตอบผิด
+        · หัวตารางกดเรียงได้เหมือนเดิม แต่มัน**แทน**ทั้งชุด ไม่ใช่ต่อท้าย — ลูกศรมีอันเดียว
+          ลิสต์เลยต้องตรงกับลูกศรอันนั้น · หลายชั้นสร้างใน panel ที่เห็นทุก rule พร้อมกัน
       · group by ทำฝั่ง client จากผลลัพธ์ — ไม่ต้องมี endpoint · ✅ ทำแล้ว
       · filter ตาม: คน · status · priority · วันที่
         · ✅ **ครบแล้วทั้งสองหน้า** — filter ทั้งหมดอยู่หลังปุ่ม `Filters` ปุ่มเดียวพร้อมตัวนับ
           เพราะมันคนละชนิดกับ sort/group: sort กับ group จัดเรียงของที่อยู่บนจอแล้ว
           ส่วน filter ตัดสินว่ามีอะไรอยู่บนจอบ้าง · ตัวนับคือสิ่งที่ทำให้ยังเห็นว่ากรองอยู่ตอนปิด popover
+        · **หน้าตาเป็น rule builder ตาม design** — แถวละ property · operator · value
+          · ความหมายเท่าเดิมเป๊ะ (AND ทุกข้อ · "is in" ในข้อเดียว) ไม่ได้เพิ่มอะไรให้ API
+          · ที่เปลี่ยนเพราะ checkbox สี่กองไม่ได้บอกว่ากองมันรวมกันยังไง คนอ่านว่า "อันใดอันหนึ่ง" ได้
+          · แถวคือ**มุมมองของ URL** ไม่ใช่ state คู่ขนาน — `drafts` เก็บแค่แถวที่เพิ่งกดเพิ่มและยังว่าง
+            เพราะ `statusId` ว่างกับไม่มี `statusId` คือ request เดียวกัน
+          · value ที่เลือกหลายค่าใช้ **Combobox** (chips + พิมพ์ค้นได้) ไม่ใช่ checkbox list —
+            คนร้อยคนใน picker เดียวไม่มีใครเลื่อนหา
         · **status + assignee มีเฉพาะหน้า project** — statusId เป็น id ของบอร์ดเดียว
           (สอง project มี "In progress" คนละ id) · ที่ My Tasks assignee คือตัวเองเสมอ
           · `parseTaskQuery` **ทิ้งทั้งสองตัวทิ้งที่ My Tasks** ไม่ส่งต่อ — ยัดมาใน URL ก็ไม่มีผล

@@ -283,14 +283,24 @@ DELETE /api/v1/tasks/:id
 ใช้ cursor ไม่ใช่ offset เพราะ list เรียงด้วย LexoRank ที่แทรกกลางได้ — offset จะข้ามแถวหรือแสดงซ้ำ
 
 **helper อยู่ที่ [`#shared/http/cursor`](../../apps/api/core/src/shared/http/cursor.ts)** ·
-cursor = `[ค่าของ expression ที่ใช้เรียง, id]` เข้ารหัส base64url ของ JSON — **ทึบโดยตั้งใจ**
-client ที่แกะอ่านคือ client ที่ผูกตัวเองกับลำดับ วันที่เพิ่ม tiebreaker ก็พังโดยมองจากฝั่งนี้ไม่เห็น
+cursor = `[ค่าของ expression ที่ใช้เรียงทีละตัวตามลำดับ rule, id]` เข้ารหัส base64url ของ JSON
+— **ทึบโดยตั้งใจ** client ที่แกะอ่านคือ client ที่ผูกตัวเองกับลำดับ วันที่เพิ่ม rule ก็พังโดยมองจากฝั่งนี้ไม่เห็น
+· `id` อยู่ท้ายเสมอและ **ASC เสมอ** เพราะมันคือ tiebreaker ที่ทำให้ลำดับ total ไม่ใช่ความชอบ
 
-> 🔒 **expression ที่ใช้เรียงต้องเป็น NOT NULL ทุกตัว** — keyset resume คือ row comparison
-> และ `(a, b) > (NULL, c)` ได้ NULL ไม่ใช่ true · คอลัมน์ที่ null ได้จะคืน**หน้าว่าง**แทนหน้าถัดไป
-> โดยไม่มี error · `due_date` เลยเป็น `COALESCE(due_date, 'infinity')` และ priority เป็น rank
-> (ดู `TASK_SORTS`) — ไม่ใช่ตัดสองอันนี้ทิ้ง เพราะ "อะไรครบกำหนดก่อน" กับ "อะไรด่วน"
-> คือสองคำถามที่ list view มีไว้ตอบ
+**เรียงได้หลายชั้น** (`?sort=priority:desc&sort=dueDate:asc` สูงสุด `MAX_SORT_RULES` = 3)
+· จำนวน rule ที่ decode ต้องตรงกับที่ request ขอ ไม่งั้น **400** — cursor จากลำดับอื่นถ้าเอามา resume
+จะเทียบ due date กับ rank ของ priority แล้วเปิดหน้าจากที่ไหนก็ไม่รู้ · client เปลี่ยน sort = ขอหน้าแรก
+
+> ⚠️ **resume เป็น OR-chain ไม่ใช่ row comparison** — `(a, b) > (x, y)` สั้นกว่าก็จริง
+> แต่ใช้ได้เมื่อทุก key ไปทางเดียวกันเท่านั้น เพราะ row comparison มี operator เดียวทั้ง tuple
+> · พอแต่ละ rule มีทิศของตัวเอง ("ด่วนก่อน แล้วค่อยใกล้ครบกำหนด" = DESC แล้ว ASC)
+> ต้องกางเป็น `(e1 > v1) OR (e1 = v1 AND e2 < v2) OR (… AND id > vid)` — หนึ่งกิ่งต่อหนึ่ง rule
+> · แลกกับการใช้ index ได้น้อยลง ซึ่งที่หลักพันแถวต่อ project ไม่ใช่ข้อจำกัด แต่ความถูกต้องใช่
+
+> 🔒 **expression ที่ใช้เรียงต้องเป็น NOT NULL ทุกตัว** — เทียบกับ NULL ได้ NULL ไม่ใช่ true
+> · คอลัมน์ที่ null ได้จะคืน**หน้าว่าง**แทนหน้าถัดไปโดยไม่มี error · `due_date` เลยเป็น
+> `COALESCE(due_date, 'infinity')` และ priority เป็น rank (ดู `TASK_SORTS`) — ไม่ใช่ตัดสองอันนี้ทิ้ง
+> เพราะ "อะไรครบกำหนดก่อน" กับ "อะไรด่วน" คือสองคำถามที่ list view มีไว้ตอบ
 
 **ดึงเกินมา 1 แถวเพื่อตอบ `hasMore`** ไม่ใช่ `COUNT(*)` ซ้ำ filter เดิม — count นั้นคือ full scan
 ทุกครั้งที่พิมพ์ในช่องค้นหา เพื่อแสดงสิ่งที่ไม่มีหน้าจอไหนแสดง

@@ -657,10 +657,31 @@ export class TaskService {
    * a query builder is Phase 4's saved views rather than something a person
    * can send a colleague as a link.
    *
-   * 🔒 The resume is a keyset comparison on `(sort expression, id)`, never an
-   * offset: `sort_order` is a fractional index, so a drag between two requests
-   * changes how many rows sit before your position and `OFFSET` then repeats a
-   * row or skips one, silently. See `shared/http/cursor.ts`.
+   * 🔒 The resume is a keyset comparison, never an offset: `sort_order` is a
+   * fractional index, so a drag between two requests changes how many rows sit
+   * before your position and `OFFSET` then repeats a row or skips one,
+   * silently. See `shared/http/cursor.ts`.
+   *
+   * ⚠️ **The predicate is an OR-chain, not a row comparison**, and it has to
+   * be. `(a, b) > (x, y)` is the compact way to resume a keyset, and it is
+   * only correct when every key runs the *same* direction — SQL's row
+   * comparison has one operator for the whole tuple. This list sorts by rules
+   * that each carry their own direction ("urgent first, then the nearest
+   * deadline" is DESC then ASC), so the general form is the one that spells
+   * out what a tie means:
+   *
+   *     (e1 > v1)
+   *     OR (e1 = v1 AND e2 < v2)
+   *     OR (e1 = v1 AND e2 = v2 AND id > vid)
+   *
+   * — one branch per rule, each using its own rule's operator, and a last
+   * branch on the id that makes the order total. It costs index usage that the
+   * tuple form would keep; at a few thousand tasks per project that is not the
+   * constraint, and correctness under mixed directions is.
+   *
+   * The id branch is always ascending, whatever the rules do. It breaks ties
+   * rather than expressing a preference, and flipping it with the last rule
+   * would make two rows sharing every sort value swap places between pages.
    *
    * One extra row is fetched to answer `hasMore` without a second count over
    * the same filters.
@@ -672,8 +693,10 @@ export class TaskService {
     /** Set only by `myWork`, where there is no org context to scope by. */
     crossOrgIds?: string[],
   ): Promise<Page<TaskView>> {
-    const sort = TASK_SORTS[query.sort]
-    const direction = query.dir === 'desc' ? 'DESC' : 'ASC'
+    const rules = query.sort.map((rule) => ({
+      ...TASK_SORTS[rule.field],
+      direction: rule.dir === 'desc' ? ('DESC' as const) : ('ASC' as const),
+    }))
 
     builder.andWhere('task.deletedAt IS NULL')
 
@@ -710,22 +733,41 @@ export class TaskService {
     }
 
     if (query.cursor !== undefined) {
-      const [value, id] = decodeCursor(query.cursor)
+      const { values, id } = decodeCursor(query.cursor, rules.length)
+      const parameters: Record<string, string> = { cursorId: id }
 
       // `CAST(… AS …)` rather than `::`, which TypeORM's parameter parser
       // reads as a placeholder named after the type.
+      const held: string[] = []
+      const branches: string[] = []
+
+      rules.forEach((rule, index) => {
+        const placeholder = `CAST(:cursorValue${index} AS ${rule.cast})`
+        const after = rule.direction === 'ASC' ? '>' : '<'
+
+        parameters[`cursorValue${index}`] = values[index]!
+        branches.push(
+          [...held, `${rule.sql} ${after} ${placeholder}`].join(' AND '),
+        )
+        // Every branch after this one is about rows this rule ties on.
+        held.push(`${rule.sql} = ${placeholder}`)
+      })
+
+      branches.push(
+        [...held, 'task.id > CAST(:cursorId AS uuid)'].join(' AND '),
+      )
+
       builder.andWhere(
-        `(${sort.sql}, task.id) ${direction === 'ASC' ? '>' : '<'} ` +
-          `(CAST(:cursorValue AS ${sort.cast}), CAST(:cursorId AS uuid))`,
-        { cursorValue: value, cursorId: id },
+        branches.map((branch) => `(${branch})`).join(' OR '),
+        parameters,
       )
     }
 
-    const { entities, raw } = await builder
+    rules.forEach((rule, index) => {
       // ⚠️ Parenthesised, and it is not cosmetic. `addSelect('task.title', …)`
       // hands TypeORM something it recognises as an entity property path, so
       // it *renames that column's own alias* instead of adding a computed one:
-      // the row comes back carrying `cursor_value` and no `task_title`, and
+      // the row comes back carrying `cursor_value_0` and no `task_title`, and
       // `getRawAndEntities` then hydrates a Task whose `title` is undefined.
       // Every row of `?sort=title` arrived at the browser without a title,
       // with nothing failing anywhere to say so. `title` is the only one of
@@ -735,11 +777,20 @@ export class TaskService {
       // The parentheses make it unrecognisable as a path, so it stays a
       // computed select. `orderBy` and the cursor comparison are untouched:
       // translating a path is the right thing to do in both.
-      .addSelect(`(${sort.sql})`, 'cursor_value')
-      .orderBy(sort.sql, direction)
-      .addOrderBy('task.id', direction)
+      builder.addSelect(`(${rule.sql})`, `cursor_value_${index}`)
+      // `orderBy` on the first rule replaces whatever ordering the builder
+      // arrived with; `addOrderBy` on the rest appends. Using `addOrderBy`
+      // throughout would leave a caller's ordering in front of the one the
+      // cursor was built from, and the page would resume in the wrong place.
+      if (index === 0) builder.orderBy(rule.sql, rule.direction)
+      else builder.addOrderBy(rule.sql, rule.direction)
+    })
+
+    const { entities, raw } = await builder
+      // Always ascending, whatever the rules chose — see the docblock.
+      .addOrderBy('task.id', 'ASC')
       .limit(query.limit + 1)
-      .getRawAndEntities<{ cursor_value: unknown }>()
+      .getRawAndEntities<Record<string, unknown>>()
 
     const assignees = await this.assigneesOf(
       entities.map((task) => task.id),
@@ -749,7 +800,12 @@ export class TaskService {
     return toPage(
       entities.map((task, index) => ({ task, raw: raw[index] })),
       query.limit,
-      ({ task, raw: row }) => [cursorValue(row?.cursor_value), task.id],
+      ({ task, raw: row }) => ({
+        values: rules.map((_, index) =>
+          cursorValue(row?.[`cursor_value_${index}`]),
+        ),
+        id: task.id,
+      }),
       ({ task }) => view(task, projectOf(task), assignees.get(task.id) ?? []),
     )
   }

@@ -1,9 +1,11 @@
 import {
   DEFAULT_PAGE_SIZE,
+  MAX_SORT_RULES,
   TASK_PRIORITIES,
   TASK_SORT_FIELDS,
   type TaskPriority,
   type TaskSortField,
+  type TaskSortRule,
 } from '@repo/shared'
 
 import { endOfDay, isCalendarDay, startOfDay } from '../format/due-date'
@@ -68,6 +70,37 @@ export function sortsFor(scope: TaskScope): readonly TaskSortField[] {
 }
 
 /**
+ * How many rules may be added, which is the API's ceiling and not a taste.
+ * Each one is another branch in the cursor's keyset predicate.
+ */
+export const MAX_TASK_SORT_RULES = MAX_SORT_RULES
+
+/** The rules that are still worth offering: a field sorts on once. */
+export function unusedSortsFor(
+  scope: TaskScope,
+  rules: readonly TaskSortRule[],
+  keep?: TaskSortField,
+): readonly TaskSortField[] {
+  const taken = new Set(rules.map((rule) => rule.field))
+
+  return sortsFor(scope).filter((field) => field === keep || !taken.has(field))
+}
+
+/** Whether the list is in an order somebody chose, rather than its own. */
+export function isSorted(state: TaskListQueryState, scope: TaskScope): boolean {
+  const fallback = defaultQueryFor(scope).sort
+
+  return (
+    state.sort.length !== fallback.length ||
+    state.sort.some(
+      (rule, index) =>
+        rule.field !== fallback[index]!.field ||
+        rule.dir !== fallback[index]!.dir,
+    )
+  )
+}
+
+/**
  * How the loaded rows are piled up, decided in the browser.
  *
  * ⚠️ **Grouping sees only what is loaded.** It runs over the rows in hand, so
@@ -119,8 +152,15 @@ export interface TaskListQueryState {
    */
   dueFrom: string
   dueTo: string
-  sort: TaskSortField
-  dir: 'asc' | 'desc'
+  /**
+   * The ordering rules, in the order they apply — "urgent first, then the
+   * nearest deadline" is two of them, and the list is what the API takes.
+   *
+   * Never empty. A list with no ordering cannot be paged by a cursor, since
+   * there is no position to resume from, so "no sort" is the default rule
+   * rather than an absence — see `defaultQueryFor`.
+   */
+  sort: TaskSortRule[]
   /** My Tasks only. False hides every status whose kind is done or cancelled. */
   includeClosed: boolean
   group: TaskGrouping
@@ -142,8 +182,9 @@ export function defaultQueryFor(scope: TaskScope): TaskListQueryState {
     assigneeId: [],
     dueFrom: '',
     dueTo: '',
-    sort: scope.kind === 'project' ? 'order' : 'dueDate',
-    dir: 'asc',
+    sort: [
+      { field: scope.kind === 'project' ? 'order' : 'dueDate', dir: 'asc' },
+    ],
     includeClosed: false,
     group: 'none',
   }
@@ -178,8 +219,6 @@ export function parseTaskQuery(
   scope: TaskScope,
 ): TaskListQueryState {
   const fallback = defaultQueryFor(scope)
-  const sort = search.get('sort')
-  const dir = search.get('dir')
   const group = search.get('group')
 
   return {
@@ -198,8 +237,7 @@ export function parseTaskQuery(
       scope.kind === 'project' ? search.getAll('assigneeId').filter(isId) : [],
     dueFrom: day(search.get('dueFrom')),
     dueTo: day(search.get('dueTo')),
-    sort: isOneOf(sort, sortsFor(scope)) ? sort : fallback.sort,
-    dir: dir === 'desc' ? 'desc' : 'asc',
+    sort: sortRules(search.getAll('sort'), scope, fallback.sort),
     includeClosed:
       scope.kind === 'project' ? false : search.get('includeClosed') === 'true',
     group: isOneOf(group, groupingsFor(scope)) ? group : fallback.group,
@@ -227,8 +265,11 @@ export function toSearchParams(
   for (const userId of state.assigneeId) search.append('assigneeId', userId)
   if (state.dueFrom !== '') search.set('dueFrom', state.dueFrom)
   if (state.dueTo !== '') search.set('dueTo', state.dueTo)
-  if (state.sort !== fallback.sort) search.set('sort', state.sort)
-  if (state.dir !== fallback.dir) search.set('dir', state.dir)
+  if (isSorted(state, scope)) {
+    for (const rule of state.sort) {
+      search.append('sort', `${rule.field}:${rule.dir}`)
+    }
+  }
   if (state.includeClosed && scope.kind === 'mine') {
     search.set('includeClosed', 'true')
   }
@@ -259,11 +300,14 @@ export function toApiParams(
   scope: TaskScope,
   cursor: string | null,
 ): URLSearchParams {
-  const params = new URLSearchParams({
-    sort: state.sort,
-    dir: state.dir,
-    limit: String(TASK_PAGE_SIZE),
-  })
+  const params = new URLSearchParams({ limit: String(TASK_PAGE_SIZE) })
+
+  // Repeated rather than comma-joined, in the order they apply — the shape
+  // `taskSortRuleSchema` reads, and the one that needs no agreement about a
+  // separator with whichever query parser Express is configured with.
+  for (const rule of state.sort) {
+    params.append('sort', `${rule.field}:${rule.dir}`)
+  }
 
   if (scope.kind === 'mine') {
     params.set('includeClosed', String(state.includeClosed))
@@ -284,6 +328,35 @@ export function toApiParams(
   if (cursor !== null) params.set('cursor', cursor)
 
   return params
+}
+
+/**
+ * `sort=priority:desc&sort=title:asc` as rules, dropping anything unusable.
+ *
+ * Lenient in the same way the rest of this is: a rule naming a field this
+ * scope does not offer, or a field already used, costs that rule rather than
+ * the page. An empty result falls back to the default, because a list with no
+ * ordering cannot be paged by a cursor.
+ */
+function sortRules(
+  raw: string[],
+  scope: TaskScope,
+  fallback: TaskSortRule[],
+): TaskSortRule[] {
+  const allowed = sortsFor(scope)
+  const rules: TaskSortRule[] = []
+
+  for (const entry of raw.slice(0, MAX_TASK_SORT_RULES)) {
+    const parts = entry.split(':')
+    const field = parts[0] ?? ''
+
+    if (!isOneOf(field, allowed)) continue
+    if (rules.some((rule) => rule.field === field)) continue
+
+    rules.push({ field, dir: parts[1] === 'desc' ? 'desc' : 'asc' })
+  }
+
+  return rules.length === 0 ? fallback : rules
 }
 
 /** A uuid, checked before it is put back in a URL or sent as a filter. */

@@ -121,20 +121,28 @@ export function TaskList({
   const grouping: TaskGrouping = query.group
   const drawn = columns.map((id) => TASK_COLUMNS[id])
 
+  /** The rule the arrows are about: the one that decides the order first. */
+  const primary = query.sort[0]
+
   /**
    * Sorting by a header: the same field again flips the direction, a new one
    * starts ascending. That is what every table people have used does, and the
    * alternative — always ascending — makes "oldest first" a two-step.
+   *
+   * It **replaces** the rules rather than pushing another one on. A header is
+   * how somebody says "order by this", and quietly keeping yesterday's second
+   * and third rules underneath would leave a list that does not match the one
+   * arrow it is showing. Several rules are built in the Sort panel, where all
+   * of them are on screen at once.
    */
   function sortBy(column: TaskColumn) {
     if (column.sort === undefined) return
 
+    const flip =
+      primary?.field === column.sort && primary.dir === 'asc' ? 'desc' : 'asc'
+
     const next = toSearchParams(
-      {
-        ...query,
-        sort: column.sort,
-        dir: query.sort === column.sort && query.dir === 'asc' ? 'desc' : 'asc',
-      },
+      { ...query, sort: [{ field: column.sort, dir: flip }] },
       scope,
     ).toString()
 
@@ -199,9 +207,9 @@ export function TaskList({
                 key={column.id}
                 className={`overlined text-text-disabled h-8 font-normal ${column.className ?? ''}`}
                 aria-sort={
-                  column.sort === undefined || column.sort !== query.sort
+                  column.sort === undefined || column.sort !== primary?.field
                     ? undefined
-                    : query.dir === 'asc'
+                    : primary.dir === 'asc'
                       ? 'ascending'
                       : 'descending'
                 }
@@ -219,8 +227,8 @@ export function TaskList({
                     onClick={() => sortBy(column)}
                   >
                     {column.header}
-                    {column.sort === query.sort &&
-                      (query.dir === 'asc' ? (
+                    {column.sort === primary?.field &&
+                      (primary.dir === 'asc' ? (
                         <ArrowUp className="size-3" />
                       ) : (
                         <ArrowDown className="size-3" />
