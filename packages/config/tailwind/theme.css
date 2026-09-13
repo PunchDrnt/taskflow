@@ -497,33 +497,6 @@ html::-webkit-scrollbar-thumb:hover {
 
   --color-logo-fill: var(--primary-400);
 
-  /* The eight project-status colours from docs/04-features.md. A badge pairs
-     soft background + bright text + the name, never colour alone. */
-  --color-status-gray-soft: #ffffff14;
-  --color-status-gray-main: #a8a29e;
-  --color-status-gray-text: #d6d3d1;
-  --color-status-red-soft: #ef444422;
-  --color-status-red-main: #ef4444;
-  --color-status-red-text: #fca5a5;
-  --color-status-orange-soft: #f9731622;
-  --color-status-orange-main: #fb923c;
-  --color-status-orange-text: #fdba74;
-  --color-status-yellow-soft: #eab30822;
-  --color-status-yellow-main: #facc15;
-  --color-status-yellow-text: #fde047;
-  --color-status-green-soft: #22c55e22;
-  --color-status-green-main: #4ade80;
-  --color-status-green-text: #86efac;
-  --color-status-blue-soft: #0ea5e922;
-  --color-status-blue-main: #38bdf8;
-  --color-status-blue-text: #7dd3fc;
-  --color-status-purple-soft: #6366f122;
-  --color-status-purple-main: #818cf8;
-  --color-status-purple-text: #a5b4fc;
-  --color-status-pink-soft: #db277722;
-  --color-status-pink-main: #f472b6;
-  --color-status-pink-text: #f9a8d4;
-
   --shadow-card-3d:
     -4px -4px 8px 0 var(--color-lighting-dark) inset,
     4px 4px 8px 0 rgb(from var(--color-lighting-lighter) r g b / 20%) inset,
@@ -549,6 +522,48 @@ html::-webkit-scrollbar-thumb:hover {
 }
 
 /* --- Design-system state tokens (dark) --- */
+/* The eight project-status colours.
+   
+   ⚠️ **Outside `@theme`, and that is not a style choice.** Tailwind v4 emits
+   only the theme variables it can see used in a class name, and every one of
+   these is read at runtime as `var(--color-status-${color}-main)` from an
+   inline style — a template string no scanner can resolve. Declared in
+   `@theme` they were dropped from the built CSS entirely, so every status
+   badge, palette swatch and project dot painted `transparent` (measured: not
+   one `--color-status-*` survived into `.next/static/chunks/*.css`).
+   
+   A plain `:root` block is always emitted. Nothing here needs to be a Tailwind
+   utility — no `bg-status-*` class exists anywhere in the repo — so this loses
+   nothing. Any future token consumed only through an inline `var()` belongs
+   here too. A badge pairs soft background + bright text + the name, never
+   colour alone. */
+:root {
+  --color-status-gray-soft: #ffffff14;
+  --color-status-gray-main: #a8a29e;
+  --color-status-gray-text: #d6d3d1;
+  --color-status-red-soft: #ef444422;
+  --color-status-red-main: #ef4444;
+  --color-status-red-text: #fca5a5;
+  --color-status-orange-soft: #f9731622;
+  --color-status-orange-main: #fb923c;
+  --color-status-orange-text: #fdba74;
+  --color-status-yellow-soft: #eab30822;
+  --color-status-yellow-main: #facc15;
+  --color-status-yellow-text: #fde047;
+  --color-status-green-soft: #22c55e22;
+  --color-status-green-main: #4ade80;
+  --color-status-green-text: #86efac;
+  --color-status-blue-soft: #0ea5e922;
+  --color-status-blue-main: #38bdf8;
+  --color-status-blue-text: #7dd3fc;
+  --color-status-purple-soft: #6366f122;
+  --color-status-purple-main: #818cf8;
+  --color-status-purple-text: #a5b4fc;
+  --color-status-pink-soft: #db277722;
+  --color-status-pink-main: #f472b6;
+  --color-status-pink-text: #f9a8d4;
+}
+
 @layer base {
   /* From the design system's tokens/base.css. Without it nothing paints the
      page ground: the app inherited the browser's white and the dark palette
@@ -571,7 +586,6 @@ html::-webkit-scrollbar-thumb:hover {
 
   a:hover {
     color: var(--color-primary-dark);
-    text-decoration: underline;
   }
 }
 
@@ -672,6 +686,13 @@ html::-webkit-scrollbar-thumb:hover {
 }
 
 @theme inline {
+  /* A step that is **not** derived from `--radius`, and has to be.
+     `--radius` is 1.25rem because cards, sheets and buttons are the shapes it
+     was chosen for, and every step below subtracts from it — so the smallest,
+     `xs`, is still 14px. On a 16px control that is a full circle: the checkbox
+     rendered as a radio button and nobody could tell a multi-select list from
+     a single-select one (measured: `border-radius: 14px` on a 16px box). */
+  --radius-control: 0.25rem;
   --radius-xs: calc(var(--radius) - 6px);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);

@@ -472,7 +472,7 @@ function SidebarMenuItem({ className, ...props }: React.ComponentProps<'li'>) {
 }
 
 const sidebarMenuButtonVariants = cva(
-  'peer/menu-button group/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-body-md ring-primary-focus-visible outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! hover:bg-action-hover hover:text-text-primary focus-visible:ring-2 active:bg-action-selected active:text-text-primary disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-open:hover:bg-action-hover data-open:hover:text-text-primary data-active:bg-action-selected data-active:font-medium data-active:text-text-primary [&_svg]:size-4 [&_svg]:shrink-0 [&>span:last-child]:truncate',
+  'peer/menu-button group/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-body-md text-text-primary ring-primary-focus-visible outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! hover:bg-action-hover hover:text-text-primary focus-visible:ring-2 active:bg-action-selected active:text-text-primary disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-open:hover:bg-action-hover data-open:hover:text-text-primary data-active:bg-primary-soft data-active:font-medium data-active:text-primary-main [&_svg]:size-4 [&_svg]:shrink-0 [&>span:last-child]:truncate',
   {
     variants: {
       variant: {
@@ -676,7 +676,7 @@ function SidebarMenuSubButton({
     props: mergeProps<'a'>(
       {
         className: cn(
-          'text-text-primary ring-primary-focus-visible flex h-7 min-w-0 -translate-x-px items-center gap-2 overflow-hidden rounded-md px-2 outline-hidden group-data-[collapsible=icon]:hidden hover:bg-action-hover hover:text-text-primary focus-visible:ring-2 active:bg-action-selected active:text-text-primary disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[size=md]:text-body-md data-[size=sm]:text-body-sm data-active:bg-action-selected data-active:text-text-primary [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-text-primary',
+          'text-text-secondary ring-primary-focus-visible flex h-7 min-w-0 -translate-x-px items-center gap-2 overflow-hidden rounded-md px-2 outline-hidden group-data-[collapsible=icon]:hidden hover:bg-action-hover hover:text-text-primary focus-visible:ring-2 active:bg-action-selected active:text-text-primary disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[size=md]:text-body-md data-[size=sm]:text-body-sm data-active:bg-primary-soft data-active:font-medium data-active:text-primary-main [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0',
           className,
         ),
       },

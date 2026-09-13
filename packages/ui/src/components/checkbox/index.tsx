@@ -31,7 +31,7 @@ function Checkbox({
     <CheckboxPrimitive.Root
       data-slot="checkbox"
       className={cn(
-        'peer border-divider bg-action-hover relative flex size-4 shrink-0 items-center justify-center rounded-xs border transition-colors outline-none group-has-disabled/field:opacity-50 after:absolute after:-inset-x-3 after:-inset-y-2 focus-visible:ring-3 disabled:cursor-not-allowed disabled:opacity-50',
+        'peer border-divider bg-action-hover rounded-control relative flex size-4 shrink-0 items-center justify-center border transition-colors outline-none group-has-disabled/field:opacity-50 after:absolute after:-inset-x-3 after:-inset-y-2 focus-visible:ring-3 disabled:cursor-not-allowed disabled:opacity-50',
         colorClasses[color],
         'aria-invalid:border-error-main aria-invalid:ring-error-focus aria-invalid:ring-3',
         className,
