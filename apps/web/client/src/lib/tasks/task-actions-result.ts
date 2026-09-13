@@ -11,6 +11,10 @@ import type { AssignableRow, AssigneeRow, TaskRow } from '@repo/shared'
 export type QuickAddOutcome =
   { ok: true; task: TaskRow } | { ok: false; message: string }
 
+/** The whole task comes back: a move can also stamp its completion columns. */
+export type StatusChangeOutcome =
+  { ok: true; task: TaskRow } | { ok: false; message: string }
+
 export type PeopleFound =
   { ok: true; people: AssignableRow[] } | { ok: false; message: string }
 

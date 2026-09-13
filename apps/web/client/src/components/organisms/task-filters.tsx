@@ -1,6 +1,7 @@
 'use client'
 
 import { ListFilter } from 'lucide-react'
+import { useId } from 'react'
 
 import {
   TASK_PRIORITIES,
@@ -10,7 +11,13 @@ import {
 } from '@repo/shared'
 import { Button } from '@repo/ui/components/button'
 import { Checkbox } from '@repo/ui/components/checkbox'
-import { Input } from '@repo/ui/components/input'
+import {
+  Field,
+  FieldDescription,
+  FieldLabel,
+  FieldLegend,
+  FieldSet,
+} from '@repo/ui/components/field'
 import {
   Popover,
   PopoverContent,
@@ -24,6 +31,8 @@ import {
   type TaskScope,
 } from '../../lib/tasks/query'
 import { StatusBadge } from '../atoms/status-badge'
+import { ToolbarChip } from '../atoms/toolbar-chip'
+import { DateField } from '../molecules/date-field'
 
 const PRIORITY_LABELS: Record<TaskPriority, string> = {
   urgent: 'Urgent',
@@ -76,15 +85,11 @@ export function TaskFilters({
     <Popover>
       <PopoverTrigger
         render={
-          <Button
-            variant={active > 0 ? 'secondary' : 'outline'}
-            color="primary"
-            size="sm"
-          >
-            <ListFilter />
-            Filters
-            {active > 0 && <span className="tabular-nums">({active})</span>}
-          </Button>
+          <ToolbarChip
+            icon={<ListFilter />}
+            label="Filter"
+            value={active === 0 ? null : String(active)}
+          />
         }
       />
 
@@ -143,28 +148,24 @@ export function TaskFilters({
         )}
 
         <Group label="Due between">
-          <div className="flex items-center gap-2">
-            <Input
-              type="date"
-              className="h-8"
-              aria-label="Due on or after"
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+            <DateField
+              label="Due on or after"
               value={query.dueFrom}
-              max={query.dueTo === '' ? undefined : query.dueTo}
-              onChange={(event) => onChange({ dueFrom: event.target.value })}
+              max={query.dueTo}
+              onChange={(dueFrom) => onChange({ dueFrom })}
             />
             <span className="text-text-disabled body-3">to</span>
-            <Input
-              type="date"
-              className="h-8"
-              aria-label="Due on or before"
+            <DateField
+              label="Due on or before"
               value={query.dueTo}
-              min={query.dueFrom === '' ? undefined : query.dueFrom}
-              onChange={(event) => onChange({ dueTo: event.target.value })}
+              min={query.dueFrom}
+              onChange={(dueTo) => onChange({ dueTo })}
             />
           </div>
-          <p className="text-text-disabled body-3">
+          <FieldDescription>
             Both ends included, read in the company&apos;s time zone.
-          </p>
+          </FieldDescription>
         </Group>
 
         {active > 0 && (
@@ -183,6 +184,13 @@ export function TaskFilters({
   )
 }
 
+/**
+ * One named block of choices inside the panel.
+ *
+ * `FieldSet`/`FieldLegend` rather than a styled `<fieldset>`: a group of
+ * checkboxes needs a real legend for a screen reader to announce what the
+ * boxes are choices *of*, and the design system already draws one.
+ */
 function Group({
   label,
   children,
@@ -191,10 +199,10 @@ function Group({
   children: React.ReactNode
 }) {
   return (
-    <fieldset className="flex flex-col gap-1.5">
-      <legend className="label-medium text-text-secondary mb-1">{label}</legend>
+    <FieldSet className="gap-1.5">
+      <FieldLegend variant="label">{label}</FieldLegend>
       {children}
-    </fieldset>
+    </FieldSet>
   )
 }
 
@@ -207,10 +215,19 @@ function Tick({
   onToggle: () => void
   children: React.ReactNode
 }) {
+  // An explicit id rather than a <label> wrapped around the control: Base UI's
+  // Checkbox renders a <button role="checkbox">, and implicit labelling only
+  // ever reaches a real form control — so wrapping it looks associated and is
+  // not, which costs the label its click target and the box its accessible
+  // name in one go.
+  const id = useId()
+
   return (
-    <label className="body-2 text-text-primary flex cursor-pointer items-center gap-2 py-0.5">
-      <Checkbox checked={checked} onCheckedChange={onToggle} />
-      {children}
-    </label>
+    <Field orientation="horizontal" className="gap-2 py-0.5">
+      <Checkbox id={id} checked={checked} onCheckedChange={onToggle} />
+      <FieldLabel htmlFor={id} className="cursor-pointer font-normal">
+        {children}
+      </FieldLabel>
+    </Field>
   )
 }

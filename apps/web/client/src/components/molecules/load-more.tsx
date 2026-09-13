@@ -33,9 +33,12 @@ export function LoadMore({
   onLoadMore: () => void
 }) {
   return (
-    <div className="flex items-center justify-center gap-3 py-4">
+    // Under the table, not inside it. Centred in the last row it read as a
+    // sixth task with no key and no title — a footnote about the list is not
+    // a member of the list.
+    <div className="flex items-center gap-3">
       <span
-        className="text-text-secondary body-3 tabular-nums"
+        className="text-text-disabled body-3 tabular-nums"
         aria-live="polite"
       >
         {loaded} loaded

@@ -1,30 +1,38 @@
 'use client'
 
-import { ArrowDown, ArrowUp } from 'lucide-react'
+import { ArrowDownUp, Group as GroupIcon, Search } from 'lucide-react'
 import { usePathname, useRouter } from 'next/navigation'
 import { useState, useTransition } from 'react'
 
-import type { AssignableRow, StatusRow } from '@repo/shared'
-import { Button } from '@repo/ui/components/button'
-import { Input } from '@repo/ui/components/input'
+import type { AssignableRow, StatusRow, TaskSortField } from '@repo/shared'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@repo/ui/components/select'
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@repo/ui/components/dropdown-menu'
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from '@repo/ui/components/input-group'
 import { Switch } from '@repo/ui/components/switch'
 
 import {
+  defaultQueryFor,
   GROUPING_LABELS,
   groupingsFor,
   SORT_LABELS,
   sortsFor,
   toSearchParams,
+  type TaskGrouping,
   type TaskListQueryState,
   type TaskScope,
 } from '../../lib/tasks/query'
+import { ToolbarChip } from '../atoms/toolbar-chip'
 import { TaskFilters } from './task-filters'
 
 /**
@@ -32,16 +40,23 @@ import { TaskFilters } from './task-filters'
  *
  * No state is held here beyond the search box's unsent keystrokes. Changing a
  * control navigates, the server re-renders with the new query, and the list
- * below remounts on it — which is what makes a filtered list a link somebody
- * can send, and what makes the back button undo a filter.
+ * below adopts it — which is what makes a filtered list a link somebody can
+ * send, and what makes the back button undo a filter.
  *
  * The search box is the exception, and only until Enter: pushing a URL per
  * keystroke would put a history entry behind every letter and ask the API for
  * a page nobody waited to see.
  *
- * The filters live behind one button rather than in this row, because they are
- * a different kind of control: sorting and grouping rearrange what is already
- * on screen, a filter decides what is on it at all. See `TaskFilters`.
+ * **Filter, Sort and Group sit together at the left, in that order**, because
+ * they read as one sentence about the list and are reached in that order: what
+ * is on screen, then how it is ordered, then how it is divided. The search box
+ * is pushed to the far right — it asks a different question, and putting it
+ * first pushed the three controls into the corner nobody looks in.
+ *
+ * Sort and Group are `DropdownMenu`s rather than popovers holding hand-written
+ * buttons: each is one value chosen from a list, which is what
+ * `DropdownMenuRadioGroup` *is* — and it brings the roving focus, the typeahead
+ * and `aria-checked` with it, none of which a `<button>` in a popover has.
  */
 export function TaskToolbar({
   query,
@@ -69,27 +84,13 @@ export function TaskToolbar({
     })
   }
 
-  return (
-    <div className="flex flex-wrap items-center gap-2" data-pending={pending}>
-      <form
-        className="min-w-48 flex-1"
-        onSubmit={(event) => {
-          event.preventDefault()
-          go({ q: draft.trim() })
-        }}
-      >
-        <label className="sr-only" htmlFor="task-search">
-          Search titles
-        </label>
-        <Input
-          id="task-search"
-          type="search"
-          placeholder="Search titles"
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-        />
-      </form>
+  // A chip is lit when it is doing something, and a list's own opening order
+  // is not something anybody chose — so Sort stays dark until it differs.
+  const fallback = defaultQueryFor(scope)
+  const sorted = query.sort !== fallback.sort || query.dir !== fallback.dir
 
+  return (
+    <div className="flex flex-wrap items-center gap-1" data-pending={pending}>
       <TaskFilters
         query={query}
         scope={scope}
@@ -98,39 +99,83 @@ export function TaskToolbar({
         onChange={go}
       />
 
-      <Picker
-        id="task-sort"
-        label="Sort by"
-        value={query.sort}
-        options={sortsFor(scope).map((sort) => [sort, SORT_LABELS[sort]])}
-        onChange={(sort) => go({ sort })}
-      />
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <ToolbarChip
+              icon={<ArrowDownUp />}
+              label="Sort"
+              value={
+                sorted
+                  ? `${SORT_LABELS[query.sort]} ${query.dir === 'asc' ? '↑' : '↓'}`
+                  : null
+              }
+            />
+          }
+        />
 
-      <Button
-        variant="outline"
-        color="primary"
-        size="icon-sm"
-        aria-label={query.dir === 'asc' ? 'Sort ascending' : 'Sort descending'}
-        onClick={() => go({ dir: query.dir === 'asc' ? 'desc' : 'asc' })}
-      >
-        {query.dir === 'asc' ? <ArrowUp /> : <ArrowDown />}
-      </Button>
+        <DropdownMenuContent className="w-52">
+          <DropdownMenuRadioGroup
+            value={query.sort}
+            onValueChange={(sort) => go({ sort: sort as TaskSortField })}
+          >
+            {/* Inside the group, not above it: `DropdownMenuLabel` is Base UI's
+                `GroupLabel`, which reads the group's context to point
+                `aria-labelledby` at itself and throws when there is none. */}
+            <DropdownMenuLabel>Sort by</DropdownMenuLabel>
+            {sortsFor(scope).map((sort) => (
+              <DropdownMenuRadioItem key={sort} value={sort}>
+                {SORT_LABELS[sort]}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
 
-      <Picker
-        id="task-group"
-        label="Group by"
-        value={query.group}
-        options={groupingsFor(scope).map((group) => [
-          group,
-          GROUPING_LABELS[group],
-        ])}
-        onChange={(group) => go({ group })}
-      />
+          <DropdownMenuSeparator />
+
+          <DropdownMenuRadioGroup
+            value={query.dir}
+            onValueChange={(dir) => go({ dir: dir as 'asc' | 'desc' })}
+          >
+            <DropdownMenuRadioItem value="asc">Ascending</DropdownMenuRadioItem>
+            <DropdownMenuRadioItem value="desc">
+              Descending
+            </DropdownMenuRadioItem>
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <ToolbarChip
+              icon={<GroupIcon />}
+              label="Group"
+              value={
+                query.group === 'none' ? null : GROUPING_LABELS[query.group]
+              }
+            />
+          }
+        />
+
+        <DropdownMenuContent className="w-52">
+          <DropdownMenuRadioGroup
+            value={query.group}
+            onValueChange={(group) => go({ group: group as TaskGrouping })}
+          >
+            <DropdownMenuLabel>Group by</DropdownMenuLabel>
+            {groupingsFor(scope).map((group) => (
+              <DropdownMenuRadioItem key={group} value={group}>
+                {GROUPING_LABELS[group]}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       {/* Only My Tasks hides closed work. A project's Done column is part of
           its board — hiding it there would hide a status somebody made. */}
       {scope.kind === 'mine' && (
-        <label className="text-text-secondary body-3 flex items-center gap-2">
+        <label className="text-text-secondary body-2 ml-2 flex items-center gap-2">
           <Switch
             checked={query.includeClosed}
             onCheckedChange={(includeClosed) => go({ includeClosed })}
@@ -138,48 +183,27 @@ export function TaskToolbar({
           Show closed
         </label>
       )}
-    </div>
-  )
-}
 
-/** A labelled `Select` over a closed list, typed to the list it was given. */
-function Picker<T extends string>({
-  id,
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  id: string
-  label: string
-  value: T
-  options: readonly (readonly [T, string])[]
-  onChange: (value: T) => void
-}) {
-  return (
-    <>
-      <label className="sr-only" htmlFor={id}>
-        {label}
-      </label>
-      <Select
-        value={value}
-        onValueChange={(next) => onChange(next as T)}
-        items={options.map(([option, text]) => ({
-          value: option,
-          label: text,
-        }))}
+      <form
+        className="ml-auto w-56"
+        onSubmit={(event) => {
+          event.preventDefault()
+          go({ q: draft.trim() })
+        }}
       >
-        <SelectTrigger id={id} size="sm" className="w-36">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {options.map(([option, text]) => (
-            <SelectItem key={option} value={option}>
-              {text}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </>
+        <InputGroup>
+          <InputGroupAddon>
+            <Search className="size-3.5" />
+          </InputGroupAddon>
+          <InputGroupInput
+            type="search"
+            aria-label="Search titles"
+            placeholder="Search titles"
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+          />
+        </InputGroup>
+      </form>
+    </div>
   )
 }

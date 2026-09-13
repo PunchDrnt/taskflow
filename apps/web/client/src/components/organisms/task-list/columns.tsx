@@ -1,6 +1,6 @@
 import Link from 'next/link'
 
-import type { TaskRow } from '@repo/shared'
+import type { TaskRow, TaskSortField } from '@repo/shared'
 
 import type { TaskLookups } from '../../../lib/api/tasks'
 import { formatDueDate } from '../../../lib/format/due-date'
@@ -10,6 +10,7 @@ import { ProjectDot } from '../../atoms/project-dot'
 import { StatusBadge } from '../../atoms/status-badge'
 import { TaskKey } from '../../atoms/task-key'
 import { AssigneeStack } from '../../molecules/assignee-stack'
+import { StatusPicker } from '../../molecules/status-picker'
 import { AssigneePicker } from '../assignee-picker'
 
 /**
@@ -48,6 +49,14 @@ export interface TaskColumn {
   id: TaskColumnId
   header: string
   /**
+   * The API field this column can be ordered by, when there is one.
+   *
+   * Only three of the seven have one, and that is the API's list rather than a
+   * choice made here: a header that sorted by something the endpoint cannot
+   * order on would be a control that quietly did nothing.
+   */
+  sort?: TaskSortField
+  /**
    * Put on the `<th>` **and** every `<td>` in the column, which is what keeps
    * a responsive column from becoming a header with no cells under it.
    */
@@ -62,14 +71,15 @@ export interface TaskColumn {
 export const TASK_COLUMNS: Record<TaskColumnId, TaskColumn> = {
   key: {
     id: 'key',
-    header: 'Key',
+    header: 'ID',
     className: 'w-24',
     cell: (task) => <TaskKey>{task.key}</TaskKey>,
   },
 
   title: {
     id: 'title',
-    header: 'Title',
+    header: 'Task',
+    sort: 'title',
     // The one column allowed to take the leftover width, and the one allowed
     // to wrap out of `whitespace-nowrap` — a truncated title is a task nobody
     // can identify, which is the opposite of what a list is for.
@@ -110,20 +120,33 @@ export const TASK_COLUMNS: Record<TaskColumnId, TaskColumn> = {
   status: {
     id: 'status',
     header: 'Status',
-    cell: (task, lookups) => {
+    cell: (task, lookups, context) => {
       const status = lookups.statuses[task.statusId]
 
       if (status === undefined) {
         return <span className="text-text-disabled body-3">—</span>
       }
 
-      return <StatusBadge status={status} />
+      // Editable inside a project and read-only across them, for the same
+      // reason as the assignee column: a status id belongs to one board, and
+      // `lookups.statuses` only holds the whole board when the screen is one.
+      return context.scope.kind === 'project' ? (
+        <StatusPicker
+          taskId={task.id}
+          status={status}
+          statuses={Object.values(lookups.statuses)}
+          onTaskChanged={context.onTaskChanged}
+        />
+      ) : (
+        <StatusBadge status={status} />
+      )
     },
   },
 
   priority: {
     id: 'priority',
     header: 'Priority',
+    sort: 'priority',
     className: 'hidden md:table-cell',
     cell: (task) =>
       task.priority === null ? (
@@ -135,7 +158,7 @@ export const TASK_COLUMNS: Record<TaskColumnId, TaskColumn> = {
 
   assignees: {
     id: 'assignees',
-    header: 'Assignees',
+    header: 'Assignee',
     className: 'hidden sm:table-cell',
     cell: (task, _lookups, context) =>
       // Read-only across projects: assigning needs a project to check
@@ -158,6 +181,7 @@ export const TASK_COLUMNS: Record<TaskColumnId, TaskColumn> = {
   dueDate: {
     id: 'dueDate',
     header: 'Due',
+    sort: 'dueDate',
     className: 'text-right',
     cell: (task) =>
       task.dueDate === null ? (
@@ -178,23 +202,31 @@ export const TASK_COLUMNS: Record<TaskColumnId, TaskColumn> = {
  * already carries a prefix: prefixes are unique per project but may repeat
  * inside one organisation, so `OPS-12` alone does not always say which board
  * it came from.
+ *
+ * The two lists are written out rather than derived from one another. They
+ * differ by more than one entry — a project's board shows priority and no
+ * project column, My Tasks the reverse — and a `filter` that produced the
+ * wrong *order* while still producing the right *set* is the kind of bug that
+ * survives review.
  */
 export const DEFAULT_TASK_COLUMNS: TaskColumnId[] = [
   'key',
   'title',
   'project',
   'status',
-  'priority',
-  'assignees',
   'dueDate',
+  'assignees',
 ]
 
 /**
- * Inside one project, the project column is the same value on every row.
- *
- * Which is the registry earning its keep: the difference between the two
- * screens is one entry missing from an array, not a second table component.
+ * Inside one project, the project column is the same value on every row, and
+ * priority takes the space it frees.
  */
-export const PROJECT_TASK_COLUMNS: TaskColumnId[] = DEFAULT_TASK_COLUMNS.filter(
-  (id) => id !== 'project',
-)
+export const PROJECT_TASK_COLUMNS: TaskColumnId[] = [
+  'key',
+  'title',
+  'priority',
+  'status',
+  'dueDate',
+  'assignees',
+]

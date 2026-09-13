@@ -1,5 +1,7 @@
 'use client'
 
+import { ArrowDown, ArrowUp } from 'lucide-react'
+import { usePathname, useRouter } from 'next/navigation'
 import { Fragment, useState, useTransition } from 'react'
 
 import type { TaskRow } from '@repo/shared'
@@ -21,14 +23,43 @@ import {
 import { loadMoreTasks } from '../../../app/(signed-in)/task-actions'
 import type { TaskLookups } from '../../../lib/api/tasks'
 import type { MoreTasks } from '../../../lib/tasks/more-tasks'
-import type { TaskGrouping, TaskScope } from '../../../lib/tasks/query'
+import {
+  toSearchParams,
+  type TaskGrouping,
+  type TaskListQueryState,
+  type TaskScope,
+} from '../../../lib/tasks/query'
 import { LoadMore } from '../../molecules/load-more'
 import {
   TASK_COLUMNS,
   type TaskCellContext,
+  type TaskColumn,
   type TaskColumnId,
 } from './columns'
 import { groupTasks } from './grouping'
+
+/**
+ * The card is drawn by the body's own cells, not by a wrapper around the table.
+ *
+ * The design puts the column headers *above* the card, and a border on a
+ * wrapping `<div>` cannot express that — it encloses the `<thead>` too. The
+ * separated border model lets the cells carry it instead: the outer edges of
+ * the body become the card, the header sits outside with nothing drawn around
+ * it, and there is still exactly one `<table>`, so the columns cannot drift
+ * apart the way two tables sharing a `<colgroup>` eventually do.
+ *
+ * ⚠️ Row borders and row backgrounds are **ignored** in that model, which is
+ * why the fill and the hover are on the cells rather than on `<tr>`.
+ */
+const BODY_AS_CARD = [
+  '[&>tr>td]:bg-paper-elevation-0 [&>tr:hover>td]:bg-paper-elevation-1',
+  '[&>tr>td]:border-divider [&>tr>td]:border-y [&>tr:not(:first-child)>td]:border-t-0',
+  '[&>tr>td:first-child]:border-l [&>tr>td:last-child]:border-r',
+  '[&>tr:first-child>td:first-child]:rounded-tl-lg',
+  '[&>tr:first-child>td:last-child]:rounded-tr-lg',
+  '[&>tr:last-child>td:first-child]:rounded-bl-lg',
+  '[&>tr:last-child>td:last-child]:rounded-br-lg',
+].join(' ')
 
 /**
  * A list of tasks: the columns it was told to draw, grouped how it was told,
@@ -51,7 +82,7 @@ export function TaskList({
   initialLookups,
   scope,
   columns,
-  grouping,
+  query,
   search,
 }: {
   initialRows: TaskRow[]
@@ -61,10 +92,13 @@ export function TaskList({
   scope: TaskScope
   /** Ids into `TASK_COLUMNS`. Phase 4 hands these down from a saved view. */
   columns: TaskColumnId[]
-  grouping: TaskGrouping
+  /** What the URL currently asks for, so a header can change one part of it. */
+  query: TaskListQueryState
   /** The query string this list is showing, replayed to fetch the next page. */
   search: string
 }) {
+  const router = useRouter()
+  const pathname = usePathname()
   const [rows, setRows] = useState(initialRows)
   const [cursor, setCursor] = useState(initialCursor)
   const [lookups, setLookups] = useState(initialLookups)
@@ -84,7 +118,30 @@ export function TaskList({
     setLookups(initialLookups)
   }
 
+  const grouping: TaskGrouping = query.group
   const drawn = columns.map((id) => TASK_COLUMNS[id])
+
+  /**
+   * Sorting by a header: the same field again flips the direction, a new one
+   * starts ascending. That is what every table people have used does, and the
+   * alternative — always ascending — makes "oldest first" a two-step.
+   */
+  function sortBy(column: TaskColumn) {
+    if (column.sort === undefined) return
+
+    const next = toSearchParams(
+      {
+        ...query,
+        sort: column.sort,
+        dir: query.sort === column.sort && query.dir === 'asc' ? 'desc' : 'asc',
+      },
+      scope,
+    ).toString()
+
+    startTransition(() => {
+      router.push(next === '' ? pathname : `${pathname}?${next}`)
+    })
+  }
 
   const context: TaskCellContext = {
     scope,
@@ -133,22 +190,49 @@ export function TaskList({
   }
 
   return (
-    <div className="bg-paper-elevation-0 border-divider rounded-lg border">
-      <Table>
+    <div className="flex flex-col gap-2">
+      <Table className="border-separate border-spacing-0">
         <TableHeader>
           <TableRow className="hover:bg-transparent">
             {drawn.map((column) => (
               <TableHead
                 key={column.id}
-                className={`table-header text-text-secondary ${column.className ?? ''}`}
+                className={`overlined text-text-disabled h-8 font-normal ${column.className ?? ''}`}
+                aria-sort={
+                  column.sort === undefined || column.sort !== query.sort
+                    ? undefined
+                    : query.dir === 'asc'
+                      ? 'ascending'
+                      : 'descending'
+                }
               >
-                {column.header}
+                {column.sort === undefined ? (
+                  column.header
+                ) : (
+                  <button
+                    type="button"
+                    // `uppercase` again: a <button> does not inherit
+                    // `text-transform` from the <th> under the UA stylesheet,
+                    // so the three sortable headers came out in title case
+                    // beside four that were not.
+                    className="hover:text-text-primary inline-flex items-center gap-1 uppercase"
+                    onClick={() => sortBy(column)}
+                  >
+                    {column.header}
+                    {column.sort === query.sort &&
+                      (query.dir === 'asc' ? (
+                        <ArrowUp className="size-3" />
+                      ) : (
+                        <ArrowDown className="size-3" />
+                      ))}
+                  </button>
+                )}
               </TableHead>
             ))}
           </TableRow>
         </TableHeader>
 
-        <TableBody>
+        <TableBody className={BODY_AS_CARD}>
           {groupTasks(rows, grouping, lookups).map((group) => (
             <Fragment key={group.key}>
               {group.label !== '' && (
@@ -181,10 +265,7 @@ export function TaskList({
       </Table>
 
       {failure !== null && (
-        <p
-          className="text-error-main body-3 px-4 pt-2 text-center"
-          role="alert"
-        >
+        <p className="text-error-main body-3" role="alert">
           {failure}
         </p>
       )}
