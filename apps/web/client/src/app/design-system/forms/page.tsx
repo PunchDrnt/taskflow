@@ -176,6 +176,19 @@ export default function FormsPage() {
         </RadioGroup>
       </Example>
 
+      <Example
+        title="Radio group, pill"
+        description="The same single choice, worn as labelled chips — for a set that sits in a row of other controls rather than under a legend."
+      >
+        <RadioGroup defaultValue="backlog" className="flex flex-row gap-2">
+          {['backlog', 'in progress', 'done'].map((option) => (
+            <RadioGroupItem key={option} value={option} variant="pill">
+              {option}
+            </RadioGroupItem>
+          ))}
+        </RadioGroup>
+      </Example>
+
       <Example title="Slider" description="Pick a value along a range.">
         <Slider defaultValue={[40]} className="w-full max-w-xs" />
       </Example>

@@ -22,6 +22,32 @@ const colorClasses: Record<RadioColor, string> = {
     'focus-visible:border-success-main focus-visible:ring-success-focus-visible aria-invalid:aria-checked:border-success-main data-checked:border-success-main data-checked:bg-success-main data-checked:text-success-contrast',
 }
 
+/**
+ * How one option is drawn.
+ *
+ * `dot` is the control everybody knows, and the default. `pill` is the same
+ * choice wearing its own label: one option in a row of them, checked or not,
+ * for a set that sits among other controls rather than under a legend. The
+ * semantics are identical — one tab stop for the group, arrow keys between the
+ * options, `role="radio"` on each — so the difference is only what the eye
+ * gets. A `pill` takes its label from `children`; a `dot` ignores them.
+ */
+export type RadioVariant = 'dot' | 'pill'
+
+const pillClasses: Record<RadioColor, string> = {
+  primary:
+    'focus-visible:ring-primary-focus-visible data-checked:border-primary-outlined-border data-checked:bg-primary-soft data-checked:text-primary-light',
+  secondary:
+    'focus-visible:ring-secondary-focus-visible data-checked:border-secondary-outlined-border data-checked:bg-secondary-soft data-checked:text-secondary-light',
+  error:
+    'focus-visible:ring-error-focus-visible data-checked:border-error-outlined-border data-checked:bg-error-soft data-checked:text-error-light',
+  warning:
+    'focus-visible:ring-warning-focus-visible data-checked:border-warning-outlined-border data-checked:bg-warning-soft data-checked:text-warning-light',
+  info: 'focus-visible:ring-info-focus-visible data-checked:border-info-outlined-border data-checked:bg-info-soft data-checked:text-info-light',
+  success:
+    'focus-visible:ring-success-focus-visible data-checked:border-success-outlined-border data-checked:bg-success-soft data-checked:text-success-light',
+}
+
 const contrastClasses: Record<RadioColor, string> = {
   primary: 'bg-primary-contrast',
   secondary: 'bg-secondary-contrast',
@@ -44,8 +70,32 @@ function RadioGroup({ className, ...props }: RadioGroupPrimitive.Props) {
 function RadioGroupItem({
   className,
   color = 'primary',
+  variant = 'dot',
+  children,
   ...props
-}: RadioPrimitive.Root.Props & { color?: RadioColor }) {
+}: RadioPrimitive.Root.Props & {
+  color?: RadioColor
+  variant?: RadioVariant
+}) {
+  if (variant === 'pill') {
+    return (
+      <RadioPrimitive.Root
+        data-slot="radio-group-item"
+        data-variant="pill"
+        className={cn(
+          'peer border-divider text-text-disabled body-3 inline-flex shrink-0 items-center justify-center rounded-full border px-2 py-0.5 outline-none focus-visible:ring-3 disabled:cursor-not-allowed disabled:opacity-50',
+          'not-data-checked:hover:text-text-secondary',
+          pillClasses[color],
+          'aria-invalid:border-error-main aria-invalid:ring-error-focus aria-invalid:ring-3',
+          className,
+        )}
+        {...props}
+      >
+        {children}
+      </RadioPrimitive.Root>
+    )
+  }
+
   return (
     <RadioPrimitive.Root
       data-slot="radio-group-item"
