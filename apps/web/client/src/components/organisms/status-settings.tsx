@@ -21,7 +21,13 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { GripVertical, Plus, Trash2 } from 'lucide-react'
+import {
+  ChevronDown,
+  ChevronUp,
+  GripVertical,
+  Plus,
+  Trash2,
+} from 'lucide-react'
 import { useOptimistic, useState, useTransition } from 'react'
 
 import {
@@ -31,56 +37,67 @@ import {
   type StatusRow,
 } from '@repo/shared'
 import { Button } from '@repo/ui/components/button'
-import { Input } from '@repo/ui/components/input'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@repo/ui/components/select'
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from '@repo/ui/components/dropdown-menu'
+import { Input } from '@repo/ui/components/input'
+import { RadioGroup, RadioGroupItem } from '@repo/ui/components/radio-group'
 
 import {
   addStatus,
   changeStatus,
   removeStatus,
-} from '../../app/(signed-in)/projects/[projectId]/statuses/actions'
+} from '../../app/(signed-in)/(org)/projects/[projectId]/settings/status-actions'
 import type { StatusOutcome } from '../../lib/statuses/outcome'
 import { PaletteMenu } from '../molecules/palette-menu'
 
-const KIND_LABELS: Record<StatusKind, string> = {
-  normal: 'In progress',
-  done: 'Counts as done',
-  cancelled: 'Counts as cancelled',
-}
-
 /**
- * The same list as `items` for Base UI's `Select`.
+ * What each kind is called, what choosing it does, and the palette colour the
+ * design gives it — green for done, pink for cancelled, nothing for open.
  *
- * ⚠️ Not optional. `SelectValue` renders the *value* unless the root was told
- * how values map to labels, so leaving it off draws `normal` and `done` in the
- * trigger while the open menu shows the real labels — a mismatch that only
- * appears once the menu is closed, which is most of the time.
+ * "Open" rather than "In progress": the project's own first column is usually
+ * called In progress, and a type menu offering it beside a status named it is
+ * two different things wearing one word. The note is what actually separates
+ * the two closed kinds — both end the work, only one of them did it.
+ *
+ * ⚠️ `tone` is a **token name, not a class**. The eight palette colours are
+ * declared outside `@theme` on purpose — `theme.css` explains why — so there
+ * is no `bg-status-green-soft` utility to write and a class spelled that way
+ * resolves to nothing at all. They are reached through `var()` in a style
+ * attribute, the same as `ProjectDot` and `PaletteMenu`.
  */
-const KIND_ITEMS = STATUS_KINDS.map((kind) => ({
-  value: kind,
-  label: KIND_LABELS[kind],
-}))
+const KINDS: Record<
+  StatusKind,
+  { label: string; note: string; tone: StatusColor | null }
+> = {
+  normal: { label: 'Open', note: 'Still to be worked on', tone: null },
+  done: { label: 'Counts as done', note: 'Closes the task', tone: 'green' },
+  cancelled: {
+    label: 'Counts as cancelled',
+    note: 'Closed without doing it',
+    tone: 'pink',
+  },
+}
 
 /**
  * A project's columns: add, rename, recolour, retype, reorder, remove.
  *
- * Everything writes immediately and then re-reads. Four rules hold this table
+ * Everything writes immediately and then re-reads. Five rules hold this table
  * together and none of them is about one row — a project always keeps at least
- * one status, at least one that counts as finished, and exactly one default —
- * so a change here can move a row nobody touched, and a screen that patched
- * only what was edited would show a board the server does not have.
+ * one status, at least one that counts as finished, whatever it has for
+ * abandoned work, and exactly one default — so a change here can move a row
+ * nobody touched, and a screen that patched only what was edited would show a
+ * board the server does not have.
  *
  * ⚠️ **Changing what a status counts as reaches the tasks in it.** Marking a
  * column done stamps a completion on everything sitting in it, and unmarking
- * it clears them again; the count beside each row is there so that is a
- * decision somebody makes with the number in front of them rather than a
- * surprise afterwards.
+ * it clears them again; that is why the delete button carries the count in its
+ * tooltip rather than the row carrying a column of numbers — the number
+ * matters at the moment somebody is about to act on it, and nowhere else.
  */
 export function StatusSettings({
   projectId,
@@ -102,6 +119,9 @@ export function StatusSettings({
   const [failure, setFailure] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
 
+  /** The status new tasks start in — the whole list's single choice. */
+  const current = order.find((one) => one.isDefault)?.id ?? null
+
   const sensors = useSensors(
     useSensor(PointerSensor, {
       // A drag needs intent. Without a distance threshold every click on the
@@ -122,15 +142,17 @@ export function StatusSettings({
     })
   }
 
-  function onDragEnd(event: DragEndEvent) {
-    const { active, over } = event
+  /**
+   * Puts one status at `to`, wherever the instruction came from.
+   *
+   * Dragging and the two arrows are the same move — the design offers both
+   * because a list of five rows is faster to nudge than to drag, and a drag is
+   * the only way to cross four of them at once.
+   */
+  function moveTo(statusId: string, to: number) {
+    const from = order.findIndex((one) => one.id === statusId)
 
-    if (over === null || active.id === over.id) return
-
-    const from = order.findIndex((one) => one.id === active.id)
-    const to = order.findIndex((one) => one.id === over.id)
-
-    if (from === -1 || to === -1) return
+    if (from === -1 || to < 0 || to >= order.length || to === from) return
 
     const moved = arrayMove(order, from, to)
 
@@ -145,16 +167,27 @@ export function StatusSettings({
       // to: called outside one it would be applied and never taken back.
       reorder(moved)
 
-      const result = await changeStatus(projectId, String(active.id), {
-        afterId,
-      })
+      const result = await changeStatus(projectId, statusId, { afterId })
 
       if (!result.ok) setFailure(result.message)
     })
   }
 
+  function onDragEnd({ active, over }: DragEndEvent) {
+    if (over === null || active.id === over.id) return
+
+    moveTo(
+      String(active.id),
+      order.findIndex((one) => one.id === over.id),
+    )
+  }
+
   return (
     <div className="flex flex-col gap-4">
+      <p className="text-text-secondary body-3 max-w-155">
+        Each project keeps its own set. Order here is the order on the board.
+      </p>
+
       {failure !== null && (
         <p
           role="alert"
@@ -164,37 +197,84 @@ export function StatusSettings({
         </p>
       )}
 
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        modifiers={[restrictToVerticalAxis, restrictToParentElement]}
-        onDragEnd={onDragEnd}
-      >
-        <SortableContext
-          items={order.map((one) => one.id)}
-          strategy={verticalListSortingStrategy}
+      <div className="bg-paper-elevation-1 border-divider flex flex-col gap-2.5 rounded-lg border p-4">
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          modifiers={[restrictToVerticalAxis, restrictToParentElement]}
+          onDragEnd={onDragEnd}
         >
-          <ul className="bg-paper-elevation-0 border-divider flex flex-col rounded-lg border">
-            {order.map((status) => (
-              <StatusRowItem
-                key={status.id}
-                status={status}
-                busy={pending}
-                deletable={deletableReason(status, order)}
-                onChange={(patch) =>
-                  run(() => changeStatus(projectId, status.id, patch))
-                }
-                onRemove={() => run(() => removeStatus(projectId, status.id))}
-              />
-            ))}
-          </ul>
-        </SortableContext>
-      </DndContext>
+          <SortableContext
+            items={order.map((one) => one.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            {/* One `RadioGroup` around the whole list, not a control per row:
+                "which status do new tasks start in" is a single choice made
+                across the rows, and that is what gives the set arrow-key
+                navigation and one tab stop instead of one per status. */}
+            <RadioGroup
+              aria-label="Status new tasks start in"
+              value={current}
+              onValueChange={(id) => {
+                // Only when it actually moved. A group re-emitting the value
+                // it already holds is ordinary — a re-render, a restored
+                // focus — and without this each one is a request, an audit row
+                // and a history entry saying the default changed to itself.
+                if (id === current) return
 
-      <AddStatus
-        busy={pending}
-        onAdd={(form) => run(() => addStatus(projectId, form))}
-      />
+                run(() =>
+                  changeStatus(projectId, String(id), { isDefault: true }),
+                )
+              }}
+              render={<ul className="flex flex-col gap-2.5" />}
+            >
+              {order.map((status, index) => (
+                <StatusRowItem
+                  key={status.id}
+                  status={status}
+                  busy={pending}
+                  first={index === 0}
+                  last={index === order.length - 1}
+                  deletable={deletableReason(status, order)}
+                  onMove={(delta) => moveTo(status.id, index + delta)}
+                  onChange={(patch) =>
+                    run(() => changeStatus(projectId, status.id, patch))
+                  }
+                  onRemove={() => run(() => removeStatus(projectId, status.id))}
+                />
+              ))}
+            </RadioGroup>
+          </SortableContext>
+        </DndContext>
+
+        {/* One press adds a row and nothing else — the name, the colour and
+            the kind are all edited in place a line below, so a form here
+            would be a second way to say the same three things. */}
+        <Button
+          variant="outline"
+          color="neutral"
+          size="sm"
+          disabled={pending}
+          className="border-divider hover:text-primary-main hover:border-primary-outlined-border self-start border-dashed"
+          onClick={() =>
+            run(() =>
+              addStatus(projectId, {
+                name: freshName(order),
+                color: 'gray',
+                kind: 'normal',
+              }),
+            )
+          }
+        >
+          <Plus />
+          Add status
+        </Button>
+
+        <p className="text-text-disabled body-3">
+          A status still in use cannot be deleted — move those tasks first.
+          Exactly one status is the starting status for new tasks.
+        </p>
+      </div>
     </div>
   )
 }
@@ -215,26 +295,64 @@ function deletableReason(status: StatusRow, all: StatusRow[]): string | null {
   if (all.length <= 1) return 'A project needs at least one status'
   if (status.isDefault) return 'New tasks start here'
 
-  if (
-    status.kind === 'done' &&
-    all.filter((one) => one.kind === 'done').length <= 1
-  ) {
-    return 'A project needs one status that counts as finished'
-  }
+  const floor = KIND_FLOORS.find(
+    (one) =>
+      status.kind === one.kind &&
+      all.filter((other) => other.kind === one.kind).length <= 1,
+  )
 
-  return null
+  return floor?.reason ?? null
+}
+
+/**
+ * The kinds a project may not run out of — `StatusService.lastOfItsKind`, said
+ * in the words that fit on a tooltip.
+ *
+ * The cancelled floor is the one people are surprised by, so the reason says
+ * what goes wrong rather than restating the rule: work that is abandoned ends
+ * up marked done, and every progress figure computed afterwards is wrong.
+ */
+const KIND_FLOORS: { kind: StatusKind; reason: string }[] = [
+  {
+    kind: 'done',
+    reason: 'A project needs one status that counts as finished',
+  },
+  {
+    kind: 'cancelled',
+    reason:
+      'A project needs one status for abandoned work, or it gets filed as done',
+  },
+]
+
+/** "New status", or the first numbered one this project does not have. */
+function freshName(all: StatusRow[]): string {
+  const taken = new Set(all.map((one) => one.name))
+
+  if (!taken.has('New status')) return 'New status'
+
+  let n = 2
+
+  while (taken.has(`New status ${n}`)) n += 1
+
+  return `New status ${n}`
 }
 
 function StatusRowItem({
   status,
   busy,
+  first,
+  last,
   deletable,
+  onMove,
   onChange,
   onRemove,
 }: {
   status: StatusRow
   busy: boolean
+  first: boolean
+  last: boolean
   deletable: string | null
+  onMove: (delta: -1 | 1) => void
   onChange: (patch: Record<string, unknown>) => void
   onRemove: () => void
 }) {
@@ -253,31 +371,50 @@ function StatusRowItem({
     <li
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={`border-divider flex items-center gap-2 border-b p-2 last:border-b-0 ${
-        isDragging ? 'bg-paper-elevation-2 relative z-10' : ''
+      className={`border-divider flex items-center gap-2.5 rounded-md border px-2.5 py-2 ${
+        isDragging
+          ? 'bg-paper-elevation-2 relative z-10'
+          : 'bg-paper-elevation-0'
       }`}
     >
       <button
         type="button"
         aria-label={`Reorder ${status.name}`}
-        className="text-text-disabled hover:text-text-secondary cursor-grab touch-none p-1"
+        className="text-text-disabled hover:text-text-secondary shrink-0 cursor-grab touch-none"
         {...attributes}
         {...listeners}
       >
         <GripVertical className="size-4" />
       </button>
 
-      <PaletteMenu
-        value={status.color}
-        disabled={busy}
-        onPick={(color: StatusColor) => onChange({ color })}
-      />
+      {/* The arrows beside the handle, both in the design: dragging is the
+          fast way across a long list and the impossible way on a touchpad,
+          and these are the only path a keyboard has without dnd-kit's. */}
+      <span className="flex shrink-0 flex-col">
+        <MoveButton
+          label={`Move ${status.name} up`}
+          disabled={busy || first}
+          onClick={() => onMove(-1)}
+        >
+          <ChevronUp className="size-3" />
+        </MoveButton>
+        <MoveButton
+          label={`Move ${status.name} down`}
+          disabled={busy || last}
+          onClick={() => onMove(1)}
+        >
+          <ChevronDown className="size-3" />
+        </MoveButton>
+      </span>
 
       <Input
         value={name}
         disabled={busy}
         aria-label={`Name of ${status.name}`}
-        className="h-8 min-w-0 flex-1"
+        // Borderless until it is being used. Five bordered boxes down the
+        // card read as a form to fill in; the design shows the names as text
+        // that happens to be editable, and offers the frame on focus.
+        className="focus:border-divider focus:bg-paper-elevation-1 h-7 min-w-0 flex-1 border-transparent bg-transparent"
         onChange={(event) => setName(event.target.value)}
         // On blur, not on every keystroke: a request per character would write
         // an audit row per character too.
@@ -294,114 +431,133 @@ function StatusRowItem({
         }}
       />
 
-      <Select
-        items={KIND_ITEMS}
+      <PaletteMenu
+        value={status.color}
+        disabled={busy}
+        onPick={(color: StatusColor) => onChange({ color })}
+      />
+
+      <KindPill
         value={status.kind}
         disabled={busy}
-        onValueChange={(kind) => onChange({ kind })}
+        onPick={(kind) => onChange({ kind })}
+      />
+
+      {/* No `onChange` of its own: the group above owns the choice, which is
+          also why nothing here can clear a default without naming its
+          replacement — a project always has exactly one. */}
+      <RadioGroupItem
+        variant="pill"
+        value={status.id}
+        disabled={busy}
+        className="body-3 w-24 whitespace-nowrap"
+        aria-label={`Start new tasks in ${status.name}`}
       >
-        <SelectTrigger size="sm" className="w-44" aria-label="Counts as">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {STATUS_KINDS.map((kind) => (
-            <SelectItem key={kind} value={kind}>
-              {KIND_LABELS[kind]}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-
-      <label className="text-text-secondary body-3 flex shrink-0 items-center gap-1.5">
-        <input
-          type="radio"
-          name="default-status"
-          checked={status.isDefault}
-          disabled={busy}
-          // Only `true` is meaningful — a project always has exactly one
-          // default, so there is no request that clears one without naming
-          // its replacement.
-          onChange={() => onChange({ isDefault: true })}
-        />
-        Default
-      </label>
-
-      <span className="text-text-disabled body-3 w-16 shrink-0 text-right tabular-nums">
-        {status.taskCount} {status.taskCount === 1 ? 'task' : 'tasks'}
-      </span>
+        {status.isDefault ? 'Default' : 'Set default'}
+      </RadioGroupItem>
 
       <Button
         variant="ghost"
-        color="error"
         size="icon-sm"
         disabled={busy || deletable !== null}
         title={deletable ?? `Delete ${status.name}`}
         aria-label={deletable ?? `Delete ${status.name}`}
+        className="text-text-disabled hover:text-error-light size-6"
         onClick={onRemove}
       >
-        <Trash2 />
+        <Trash2 className="size-3.5" />
       </Button>
     </li>
   )
 }
 
-/** A new column always goes on the end — nobody asked for a position. */
-function AddStatus({
-  busy,
-  onAdd,
+/** One of the two nudges beside the drag handle. */
+function MoveButton({
+  label,
+  disabled,
+  onClick,
+  children,
 }: {
-  busy: boolean
-  onAdd: (form: { name: string; color: string; kind: string }) => void
+  label: string
+  disabled: boolean
+  onClick: () => void
+  children: React.ReactNode
 }) {
-  const [name, setName] = useState('')
-  const [color, setColor] = useState<StatusColor>('gray')
-  const [kind, setKind] = useState<StatusKind>('normal')
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      disabled={disabled}
+      onClick={onClick}
+      className="text-text-disabled hover:bg-action-hover hover:text-text-secondary flex h-3.5 w-4 items-center justify-center rounded-sm disabled:pointer-events-none disabled:opacity-25"
+    >
+      {children}
+    </button>
+  )
+}
+
+/**
+ * What a status counts as, as the coloured chip the design draws.
+ *
+ * A menu rather than a `Select` because each option needs its note: "counts as
+ * done" and "counts as cancelled" both close a task and the difference between
+ * them is the sentence underneath, which a select's one-line trigger has
+ * nowhere to put.
+ */
+function KindPill({
+  value,
+  disabled,
+  onPick,
+}: {
+  value: StatusKind
+  disabled: boolean
+  onPick: (kind: StatusKind) => void
+}) {
+  const { label, tone } = KINDS[value]
 
   return (
-    <form
-      className="flex items-center gap-2"
-      onSubmit={(event) => {
-        event.preventDefault()
-
-        if (name.trim() === '') return
-
-        onAdd({ name: name.trim(), color, kind })
-        setName('')
-      }}
-    >
-      <PaletteMenu value={color} disabled={busy} onPick={setColor} />
-
-      <Input
-        value={name}
-        disabled={busy}
-        placeholder="Add a status"
-        aria-label="New status name"
-        className="h-8 min-w-0 flex-1"
-        onChange={(event) => setName(event.target.value)}
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <button
+            type="button"
+            disabled={disabled}
+            aria-label={`Counts as: ${label}`}
+            className={`body-3 flex w-40 shrink-0 items-center justify-center gap-1 rounded-full px-2 py-0.5 font-medium whitespace-nowrap disabled:opacity-50 ${
+              tone === null ? 'bg-action-hover text-text-secondary' : ''
+            }`}
+            style={
+              tone === null
+                ? undefined
+                : {
+                    backgroundColor: `var(--color-status-${tone}-soft)`,
+                    color: `var(--color-status-${tone}-text)`,
+                  }
+            }
+          >
+            {label}
+            <ChevronDown className="size-3 shrink-0 opacity-75" />
+          </button>
+        }
       />
 
-      <Select
-        items={KIND_ITEMS}
-        value={kind}
-        disabled={busy}
-        onValueChange={(next) => setKind(next as StatusKind)}
-      >
-        <SelectTrigger size="sm" className="w-44" aria-label="Counts as">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {STATUS_KINDS.map((one) => (
-            <SelectItem key={one} value={one}>
-              {KIND_LABELS[one]}
-            </SelectItem>
+      <DropdownMenuContent align="start" className="w-52">
+        <DropdownMenuRadioGroup
+          value={value}
+          onValueChange={(kind) => onPick(kind as StatusKind)}
+        >
+          {STATUS_KINDS.map((kind) => (
+            <DropdownMenuRadioItem key={kind} value={kind}>
+              <span className="flex flex-col gap-0.5">
+                <span>{KINDS[kind].label}</span>
+                <span className="text-text-disabled body-3">
+                  {KINDS[kind].note}
+                </span>
+              </span>
+            </DropdownMenuRadioItem>
           ))}
-        </SelectContent>
-      </Select>
-
-      <Button type="submit" color="primary" size="sm" disabled={busy}>
-        <Plus />
-        Add
-      </Button>
-    </form>
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
