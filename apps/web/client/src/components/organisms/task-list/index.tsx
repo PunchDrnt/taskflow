@@ -48,11 +48,22 @@ import { groupTasks } from './grouping'
  * it, and there is still exactly one `<table>`, so the columns cannot drift
  * apart the way two tables sharing a `<colgroup>` eventually do.
  *
+ * **One card per group, because a `<tbody>` is what a group already is.**
+ * Every selector below is relative to the element it sits on, so putting this
+ * on each group's own body closes the border around that group and rounds its
+ * own four corners — without a second `<table>`, which is the thing that would
+ * let the columns drift. A group is a block of work, and a heading floating
+ * inside one long card reads as a row of it.
+ *
  * ⚠️ Row borders and row backgrounds are **ignored** in that model, which is
- * why the fill and the hover are on the cells rather than on `<tr>`.
+ * why the fill and the hover are on the cells rather than on `<tr>`. The
+ * heading row is exempt from both: it is the block's title, not something to
+ * be pointed at, and `data-heading` is how the selectors skip it.
  */
 const BODY_AS_CARD = [
-  '[&>tr>td]:bg-paper-elevation-0 [&>tr:hover>td]:bg-paper-elevation-1',
+  '[&>tr>td]:bg-paper-elevation-0',
+  '[&>tr:not([data-heading]):hover>td]:bg-paper-elevation-1',
+  '[&>tr[data-heading]>td]:bg-action-hover',
   '[&>tr>td]:border-divider [&>tr>td]:border-y [&>tr:not(:first-child)>td]:border-t-0',
   '[&>tr>td:first-child]:border-l [&>tr>td:last-child]:border-r',
   '[&>tr:first-child>td:first-child]:rounded-tl-lg',
@@ -240,20 +251,46 @@ export function TaskList({
           </TableRow>
         </TableHeader>
 
-        <TableBody className={BODY_AS_CARD}>
-          {groupTasks(rows, grouping, lookups).map((group) => (
-            <Fragment key={group.key}>
+        {groupTasks(rows, grouping, lookups).map((group, index) => (
+          <Fragment key={group.key}>
+            {/* The gap between two cards. A table has no margin to give a
+                `<tbody>`, and `border-spacing` would space every row in the
+                table rather than only the blocks, so the space is a row —
+                hidden from the accessibility tree, since it is not a task. */}
+            {index > 0 && (
+              <tbody aria-hidden>
+                <tr>
+                  <td className="h-2.5 p-0" colSpan={drawn.length} />
+                </tr>
+              </tbody>
+            )}
+
+            <TableBody className={BODY_AS_CARD}>
               {group.label !== '' && (
-                <TableRow className="hover:bg-transparent">
-                  <TableCell
-                    colSpan={drawn.length}
-                    // `list-subheader` is the design system's own class for
-                    // exactly this: a label that divides a list rather than
-                    // heading the page around it.
-                    className="list-subheader text-text-secondary bg-action-hover"
-                  >
-                    {group.label}{' '}
-                    <span className="tabular-nums">({group.rows.length})</span>
+                <TableRow data-heading>
+                  <TableCell colSpan={drawn.length} className="px-3 py-2">
+                    <span className="flex items-center gap-2">
+                      {group.dot !== null && (
+                        <span
+                          aria-hidden
+                          className="size-2 shrink-0 rounded-full"
+                          style={{ backgroundColor: group.dot }}
+                        />
+                      )}
+                      <span className="text-text-primary subtitle-4">
+                        {group.label}
+                      </span>
+                      {/* How many are *here*, which is not how many exist —
+                          grouping runs over the loaded rows, so Load more can
+                          add to any block. The title says so rather than the
+                          heading carrying a word on every group. */}
+                      <span
+                        className="text-text-secondary body-3 tabular-nums"
+                        title="Loaded so far. Load more can add to this group."
+                      >
+                        {group.rows.length}
+                      </span>
+                    </span>
                   </TableCell>
                 </TableRow>
               )}
@@ -267,9 +304,9 @@ export function TaskList({
                   ))}
                 </TableRow>
               ))}
-            </Fragment>
-          ))}
-        </TableBody>
+            </TableBody>
+          </Fragment>
+        ))}
       </Table>
 
       {failure !== null && (

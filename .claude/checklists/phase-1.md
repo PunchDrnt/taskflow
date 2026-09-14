@@ -524,11 +524,16 @@ unique เต็ม · `views.sort_order` / `is_default`
       · ⚠️ `<TaskList key={search}>` — แถวที่โหลดมาเป็น state ซึ่งอยู่ข้ามการ re-render
         ของ server ถ้าไม่ remount filter ใหม่จะเอาผลไปต่อท้ายผลเก่า
 - [x] **group by ฝั่ง client** — status · priority · project · due date
-      · ⚠️ จัดกลุ่มเฉพาะแถวที่โหลดมาแล้ว จำนวนในวงเล็บคือ "โหลดมาเท่านี้" ไม่ใช่ยอดจริง
+      · ⚠️ จัดกลุ่มเฉพาะแถวที่โหลดมาแล้ว ตัวเลขข้างหัวกลุ่มคือ "โหลดมาเท่านี้" ไม่ใช่ยอดจริง
         กด "โหลดเพิ่ม" แล้วกลุ่มโตได้ — เป็นผลตรงๆ ของการ group ฝั่ง client ตามสเปก
+        (ปุ่มโหลดเพิ่มมีปุ่มเดียวใต้ลิสต์ ไม่ใช่ปุ่มต่อกลุ่ม — cursor เดียวเดินได้ทีละลำดับเดียว
+        ปุ่มต่อกลุ่มต้องยิงคนละ request พร้อม cursor คนละตัวต่อกลุ่ม ไว้ตอน group ย้ายไปฝั่ง server)
       · ลำดับกลุ่มตามความหมาย ไม่ใช่ตามจำนวน — urgent เหนือ low, overdue เหนือ later
+      · **หนึ่งกลุ่ม = หนึ่งการ์ด** — `<tbody>` ต่อกลุ่ม ตีกรอบของตัวเอง อยู่ใน `<table>` เดียวกัน
+        (คนละตารางคอลัมน์จะเลื่อนไม่ตรงกัน) หัวกลุ่มมีจุดสีเฉพาะกลุ่มที่มีสีจริง —
+        status/project จาก DB, priority จาก token เดียวกับ `PriorityTag` · due date ไม่มีจุด
 - [x] Filter · sort · group · search — **เก็บสถานะใน URL ไม่ save เป็น view** (view ที่ตั้งชื่อได้อยู่ Phase 4)
-      · API: `GET /v1/projects/:id/tasks?statusId=&assigneeId=&priority=&dueAfter=&dueBefore=&q=&sort=&dir=&limit=&cursor=`
+      · API: `GET /v1/projects/:id/tasks?statusId=&assigneeId=&priority=&dueAfter=&dueBefore=&q=&sort=&limit=&cursor=`
       · **AND ทุกข้อ · หลายค่าในข้อเดียว = "is in"** — ไม่มี OR ข้ามฟิลด์ นั่นคือ query builder ของ Phase 4
       · sort: `order` `dueDate` `priority` `created` `title` — `priority` เรียงตาม rank ไม่ใช่ตัวอักษร
         (ตัวอักษรจะได้ `high` อยู่ระหว่าง `low` กับ `urgent` ซึ่งผิดพอดีกับคำถามที่ถาม)

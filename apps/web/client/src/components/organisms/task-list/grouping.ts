@@ -1,4 +1,4 @@
-import { TASK_PRIORITIES, type TaskRow } from '@repo/shared'
+import { TASK_PRIORITIES, type TaskPriority, type TaskRow } from '@repo/shared'
 
 import type { TaskLookups } from '../../../lib/api/tasks'
 import { dueBucket, type DueBucket } from '../../../lib/format/due-date'
@@ -8,6 +8,16 @@ export interface TaskGroup {
   key: string
   /** Empty when nothing is being grouped, which is what suppresses the heading. */
   label: string
+  /**
+   * The colour of the heading's dot, or null when this grouping has none.
+   *
+   * Only the groupings whose colour somebody actually chose carry one —
+   * statuses and projects have a colour in the database, and priority has one
+   * the theme already assigns in `PriorityTag`. Due-date buckets have none,
+   * and painting them would give this heading a colour vocabulary no other
+   * screen uses; the words "Overdue" and "Later" carry themselves.
+   */
+  dot: string | null
   rows: TaskRow[]
 }
 
@@ -30,7 +40,7 @@ export function groupTasks(
   grouping: TaskGrouping,
   lookups: TaskLookups,
 ): TaskGroup[] {
-  if (grouping === 'none') return [{ key: 'all', label: '', rows }]
+  if (grouping === 'none') return [{ key: 'all', label: '', dot: null, rows }]
 
   const groups = new Map<string, TaskGroup & { rank: string }>()
 
@@ -45,7 +55,12 @@ export function groupTasks(
 
   return [...groups.values()]
     .sort((left, right) => left.rank.localeCompare(right.rank))
-    .map(({ key, label, rows: grouped }) => ({ key, label, rows: grouped }))
+    .map(({ key, label, dot, rows: grouped }) => ({
+      key,
+      label,
+      dot,
+      rows: grouped,
+    }))
 }
 
 /**
@@ -61,19 +76,29 @@ function bucketFor(
   task: TaskRow,
   grouping: Exclude<TaskGrouping, 'none'>,
   lookups: TaskLookups,
-): { key: string; label: string; rank: string } {
+): Omit<TaskGroup, 'rows'> & { rank: string } {
   switch (grouping) {
     case 'status': {
       const status = lookups.statuses[task.statusId]
 
       return status === undefined
-        ? { key: 'no-status', label: 'Unknown status', rank: '~' }
-        : { key: status.id, label: status.name, rank: status.sortOrder }
+        ? { key: 'no-status', label: 'Unknown status', dot: MUTED, rank: '~' }
+        : {
+            key: status.id,
+            label: status.name,
+            dot: `var(--color-status-${status.color}-main)`,
+            rank: status.sortOrder,
+          }
     }
 
     case 'priority': {
       if (task.priority === null) {
-        return { key: 'no-priority', label: 'No priority', rank: '~' }
+        return {
+          key: 'no-priority',
+          label: 'No priority',
+          dot: MUTED,
+          rank: '~',
+        }
       }
 
       // Reversed: the array runs low → urgent, and urgent belongs at the top.
@@ -83,6 +108,7 @@ function bucketFor(
       return {
         key: task.priority,
         label: PRIORITY_LABELS[task.priority],
+        dot: PRIORITY_DOTS[task.priority],
         rank: String(rank).padStart(2, '0'),
       }
     }
@@ -91,11 +117,12 @@ function bucketFor(
       const project = lookups.projects[task.projectId]
 
       return project === undefined
-        ? { key: 'no-project', label: 'Unknown project', rank: '~' }
+        ? { key: 'no-project', label: 'Unknown project', dot: MUTED, rank: '~' }
         : // Alphabetical, so the ordering does not shift as work moves about.
           {
             key: project.id,
             label: project.name,
+            dot: `var(--color-status-${project.color}-main)`,
             rank: project.name.toLowerCase(),
           }
     }
@@ -106,10 +133,29 @@ function bucketFor(
       return {
         key: bucket,
         label: DUE_LABELS[bucket],
+        dot: null,
         rank: String(DUE_ORDER.indexOf(bucket)).padStart(2, '0'),
       }
     }
   }
+}
+
+/** The bucket nobody chose: no status, no project, no priority. */
+const MUTED = 'var(--color-text-disabled)'
+
+/**
+ * The same four tones `PriorityTag` paints the word in, as a dot.
+ *
+ * Read from the semantic tokens rather than the eight-colour palette for the
+ * reason that component gives: urgency is something the theme already has an
+ * opinion about, and a heading that disagreed with the cells under it would be
+ * two colours for one fact.
+ */
+const PRIORITY_DOTS: Record<TaskPriority, string> = {
+  urgent: 'var(--color-error-main)',
+  high: 'var(--color-warning-main)',
+  medium: 'var(--color-text-secondary)',
+  low: MUTED,
 }
 
 const PRIORITY_LABELS = {
