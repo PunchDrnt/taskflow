@@ -1,5 +1,3 @@
-'use client'
-
 import { CalendarDays } from 'lucide-react'
 
 import { Button } from '@repo/ui/components/button'

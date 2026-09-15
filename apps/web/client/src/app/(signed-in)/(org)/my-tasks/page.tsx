@@ -8,7 +8,7 @@ import {
 
 import { PageBody } from '@/components/atoms/page-body'
 import { TaskList } from '@/components/organisms/task-list'
-import { DEFAULT_TASK_COLUMNS } from '@/components/organisms/task-list/columns'
+import { DEFAULT_TASK_COLUMNS } from '@/components/organisms/task-list/column-ids'
 import { TaskToolbar } from '@/components/organisms/task-toolbar'
 import { ApiError } from '@/lib/api/errors'
 import { apiForRender } from '@/lib/api/server'

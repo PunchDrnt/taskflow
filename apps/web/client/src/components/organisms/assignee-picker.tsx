@@ -1,5 +1,3 @@
-'use client'
-
 import { Loader2, Search, UserPlus, X } from 'lucide-react'
 import { useRef, useState, useTransition } from 'react'
 

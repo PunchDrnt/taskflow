@@ -1,5 +1,3 @@
-'use client'
-
 import { ImageUp, Loader2 } from 'lucide-react'
 import { useRef, useState, useTransition } from 'react'
 

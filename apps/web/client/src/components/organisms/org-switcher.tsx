@@ -1,5 +1,3 @@
-'use client'
-
 import { Check, ChevronsUpDown } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useTransition } from 'react'

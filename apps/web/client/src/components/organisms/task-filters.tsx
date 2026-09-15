@@ -1,5 +1,3 @@
-'use client'
-
 import { ListFilter, X } from 'lucide-react'
 import { useState } from 'react'
 

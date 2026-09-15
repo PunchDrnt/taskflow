@@ -1,5 +1,3 @@
-'use client'
-
 import { ChevronsRight, History, Maximize2, Minimize2 } from 'lucide-react'
 import { useState, useTransition } from 'react'
 
@@ -227,7 +225,7 @@ function TaskPanel({
         </Button>
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+      <div className="flex min-h-0 flex-1 flex-col items-start lg:flex-row">
         <div className="flex flex-1 justify-center overflow-y-auto px-6 py-6 sm:px-8">
           <div
             className={`flex w-full flex-col ${expanded ? 'max-w-215' : ''}`}

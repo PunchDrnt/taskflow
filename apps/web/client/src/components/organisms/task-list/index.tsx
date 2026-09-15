@@ -39,12 +39,8 @@ import {
 } from '@/lib/tasks/query'
 import type { OpenTask, TaskDetail } from '@/lib/tasks/task-detail'
 
-import {
-  TASK_COLUMNS,
-  type TaskCellContext,
-  type TaskColumn,
-  type TaskColumnId,
-} from './columns'
+import type { TaskColumnId } from './column-ids'
+import { TASK_COLUMNS, type TaskCellContext, type TaskColumn } from './columns'
 import { groupTasks } from './grouping'
 
 /**

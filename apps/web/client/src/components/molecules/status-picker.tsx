@@ -1,5 +1,3 @@
-'use client'
-
 import { Check, ChevronDown } from 'lucide-react'
 import { useState, useTransition } from 'react'
 

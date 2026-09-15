@@ -1,5 +1,3 @@
-'use client'
-
 import { Check } from 'lucide-react'
 
 import { STATUS_COLORS, type StatusColor } from '@repo/shared'

@@ -11,25 +11,24 @@ import type { TaskLookups } from '@/lib/api/tasks'
 import { formatDueDate } from '@/lib/format/due-date'
 import type { TaskScope } from '@/lib/tasks/query'
 
-/**
- * Every column a task list can draw, declared once.
- *
- * 🔒 **No `<th>` is written in JSX anywhere.** The table renders whatever
- * array of ids it is handed, so Phase 4's saved views — where `view.columns`
- * arrives from a row in the database — change what is on screen by changing
- * the array and nothing else. A hard-coded header is not merely untidy: it is
- * a header with no cell to match it, and the two drift the moment somebody
- * reorders one of them.
- *
- * The ids are what crosses a boundary, never these objects. A column holds a
- * `cell` function, which no serialiser can send to a client component or store
- * in a database; a list of strings survives both, and the registry resolves
- * them on the side that draws.
- */
-export type TaskColumnId =
-  'key' | 'title' | 'project' | 'status' | 'priority' | 'assignees' | 'dueDate'
+import type { TaskColumnId } from './column-ids'
 
 /**
+ * How each column is actually drawn.
+ *
+ * 🔒 **No `<th>` is written in JSX anywhere.** The table renders whatever array
+ * of ids it is handed, so Phase 4's saved views — where `view.columns` arrives
+ * from a row in the database — change what is on screen by changing the array
+ * and nothing else. A hard-coded header is not merely untidy: it is a header
+ * with no cell to match it, and the two drift the moment somebody reorders one
+ * of them.
+ *
+ * ⚠️ **This file is client-only, and `column-ids.ts` is the half that is not.**
+ * A `cell` is a function: no serialiser can send it from a Server Component and
+ * no column of a database can hold it. A screen that needs to *name* its
+ * columns imports the ids; only the table that draws them imports this — which
+ * is what keeps the pickers below out of a page's server graph.
+ *
  * What a cell knows besides the row it is drawing.
  *
  * The assignee column is why this exists: it is read-only on My Tasks, which
@@ -218,40 +217,3 @@ export const TASK_COLUMNS: Record<TaskColumnId, TaskColumn> = {
       ),
   },
 }
-
-/**
- * What My Tasks shows until somebody can choose.
- *
- * Hard-coded, which the checklist allows for Phase 1 and the registry above
- * makes a one-line change later. `project` earns its place even though the key
- * already carries a prefix: prefixes are unique per project but may repeat
- * inside one organisation, so `OPS-12` alone does not always say which board
- * it came from.
- *
- * The two lists are written out rather than derived from one another. They
- * differ by more than one entry — a project's board shows priority and no
- * project column, My Tasks the reverse — and a `filter` that produced the
- * wrong *order* while still producing the right *set* is the kind of bug that
- * survives review.
- */
-export const DEFAULT_TASK_COLUMNS: TaskColumnId[] = [
-  'key',
-  'title',
-  'project',
-  'status',
-  'dueDate',
-  'assignees',
-]
-
-/**
- * Inside one project, the project column is the same value on every row, and
- * priority takes the space it frees.
- */
-export const PROJECT_TASK_COLUMNS: TaskColumnId[] = [
-  'key',
-  'title',
-  'priority',
-  'status',
-  'dueDate',
-  'assignees',
-]

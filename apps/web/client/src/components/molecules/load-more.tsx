@@ -1,5 +1,3 @@
-'use client'
-
 import { Button } from '@repo/ui/components/button'
 import { Spinner } from '@repo/ui/components/spinner'
 

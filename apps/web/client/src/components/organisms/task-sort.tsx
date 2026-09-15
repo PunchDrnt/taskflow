@@ -1,5 +1,3 @@
-'use client'
-
 import { ArrowDownUp, X } from 'lucide-react'
 
 import type { TaskSortField, TaskSortRule } from '@repo/shared'
