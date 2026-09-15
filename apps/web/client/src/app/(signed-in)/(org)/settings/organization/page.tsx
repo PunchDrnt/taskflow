@@ -66,37 +66,40 @@ export default async function OrganizationSettingsPage() {
         </p>
       </header>
 
-      <Tabs defaultValue="members">
+      <Tabs defaultValue="general">
         <TabsList
           variant="line"
           className="border-divider w-full justify-start border-b"
         >
-          <TabsTrigger value="members" className="flex-none px-3">
-            Members
-          </TabsTrigger>
           <TabsTrigger value="general" className="flex-none px-3">
             General
+          </TabsTrigger>
+          <TabsTrigger value="members" className="flex-none px-3">
+            Members
           </TabsTrigger>
           <TabsTrigger value="roles" className="flex-none px-3">
             Roles
           </TabsTrigger>
         </TabsList>
 
-        {/* Members first, not General: the thing people open this screen for
-            is somebody joining, leaving or needing different rights. The name
-            of the organisation is set once and read after that. */}
+        {/* General first, which is the order the design draws them in. The
+            screen is about the organisation and its name is what the
+            organisation *is*; opening on the member table would make this
+            read as a people screen that happens to carry settings. Members
+            is still the tab people spend their time in — it is one click
+            away, and it is half of what the sidebar entry is called. */}
+        <TabsContent value="general" className="pt-4">
+          <OrgGeneralForm
+            organization={organization}
+            editable={role === 'owner'}
+          />
+        </TabsContent>
+
         <TabsContent value="members" className="pt-4">
           <OrgMembers
             members={members}
             viewerRole={role}
             viewerId={me?.id ?? ''}
-          />
-        </TabsContent>
-
-        <TabsContent value="general" className="pt-4">
-          <OrgGeneralForm
-            organization={organization}
-            editable={role === 'owner'}
           />
         </TabsContent>
 
