@@ -74,9 +74,16 @@ each other's data and fail in ways that depend on timing.
 | `project.spec.ts`             | Who may start a project, and that one arrives able to hold work       |
 | `status.spec.ts`              | 🔒 A project always keeps a status, and one that counts as finished   |
 | `task.spec.ts`                | 🔒 A task number is never reissued, and completion follows the status |
+| `code-map.spec.ts`            | `src/README.md` still describes the tree it is a map of               |
 | `docs-links.spec.ts`          | Every link in `.claude/docs` points at something that exists          |
+| `sql-injection.spec.ts`       | Nothing is built into SQL text except what is listed, with its reason |
 
-`code-map.spec.ts` is the odd one out here: it touches no database and asserts
-nothing about behaviour. It checks that [`src/README.md`](../src/README.md) —
-the map of where things are — still matches the tree, so a moved file or a new
-directory breaks the build instead of quietly making the map a lie.
+The last three touch no database and assert nothing about behaviour: they read
+the repository itself, and they are here because there is nowhere better to put
+a test of the whole of `src/`. `code-map.spec.ts` checks that
+[`src/README.md`](../src/README.md) — the map of where things are — still
+matches the tree, so a moved file or a new directory breaks the build instead
+of quietly making the map a lie. `sql-injection.spec.ts` parses every file
+under `src/` and fails on any value built into SQL _text_ that is not on its
+list with a reason beside it — which is what keeps "everything that came from a
+request is a bound parameter" true after the audit that established it.
