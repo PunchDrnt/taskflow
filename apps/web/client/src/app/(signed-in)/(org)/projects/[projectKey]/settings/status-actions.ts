@@ -9,9 +9,9 @@ import {
   type StatusRow,
 } from '@repo/shared'
 
-import { toApiError } from '../../../../../../lib/api/errors'
-import { apiForAction } from '../../../../../../lib/api/server'
-import type { StatusOutcome } from '../../../../../../lib/statuses/outcome'
+import { toApiError } from '@/lib/api/errors'
+import { apiForAction } from '@/lib/api/server'
+import type { StatusOutcome } from '@/lib/statuses/outcome'
 
 /**
  * The settings screen's four writes, each one a whole request.

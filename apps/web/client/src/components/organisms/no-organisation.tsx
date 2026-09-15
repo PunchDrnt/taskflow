@@ -1,6 +1,6 @@
 import { Button } from '@repo/ui/components/button'
 
-import { SignOutButton } from '../molecules/sign-out-button'
+import { SignOutButton } from '@/components/molecules/sign-out-button'
 
 /**
  * What somebody sees when they can sign in but belong to no organisation.

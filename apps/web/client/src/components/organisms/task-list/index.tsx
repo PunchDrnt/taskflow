@@ -26,21 +26,19 @@ import {
   TableRow,
 } from '@repo/ui/components/table'
 
-import {
-  loadMoreTasks,
-  loadTaskDetail,
-} from '../../../app/(signed-in)/task-actions'
-import type { TaskLookups } from '../../../lib/api/tasks'
-import type { MoreTasks } from '../../../lib/tasks/more-tasks'
+import { loadMoreTasks, loadTaskDetail } from '@/app/(signed-in)/task-actions'
+import { LoadMore } from '@/components/molecules/load-more'
+import { TaskDrawer } from '@/components/organisms/task-drawer'
+import type { TaskLookups } from '@/lib/api/tasks'
+import type { MoreTasks } from '@/lib/tasks/more-tasks'
 import {
   toSearchParams,
   type TaskGrouping,
   type TaskListQueryState,
   type TaskScope,
-} from '../../../lib/tasks/query'
-import type { OpenTask, TaskDetail } from '../../../lib/tasks/task-detail'
-import { LoadMore } from '../../molecules/load-more'
-import { TaskDrawer } from '../task-drawer'
+} from '@/lib/tasks/query'
+import type { OpenTask, TaskDetail } from '@/lib/tasks/task-detail'
+
 import {
   TASK_COLUMNS,
   type TaskCellContext,

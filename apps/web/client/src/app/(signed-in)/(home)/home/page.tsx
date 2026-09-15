@@ -1,9 +1,9 @@
-import { PageBody } from '../../../../components/atoms/page-body'
-import { HomeWork } from '../../../../components/organisms/home-work'
-import { NoOrganisation } from '../../../../components/organisms/no-organisation'
-import { currentUser } from '../../../../lib/api/me'
-import { dueWork } from '../../../../lib/api/my-work'
-import { greeting, todayLabel } from '../../../../lib/format/greeting'
+import { PageBody } from '@/components/atoms/page-body'
+import { HomeWork } from '@/components/organisms/home-work'
+import { NoOrganisation } from '@/components/organisms/no-organisation'
+import { currentUser } from '@/lib/api/me'
+import { dueWork } from '@/lib/api/my-work'
+import { greeting, todayLabel } from '@/lib/format/greeting'
 
 /**
  * Home — where signing in lands, and the only screen about the person rather

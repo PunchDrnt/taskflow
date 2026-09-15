@@ -6,25 +6,25 @@ import {
   EmptyTitle,
 } from '@repo/ui/components/empty'
 
-import { PageBody } from '../../../../components/atoms/page-body'
-import { TaskList } from '../../../../components/organisms/task-list'
-import { DEFAULT_TASK_COLUMNS } from '../../../../components/organisms/task-list/columns'
-import { TaskToolbar } from '../../../../components/organisms/task-toolbar'
-import { ApiError } from '../../../../lib/api/errors'
-import { apiForRender } from '../../../../lib/api/server'
+import { PageBody } from '@/components/atoms/page-body'
+import { TaskList } from '@/components/organisms/task-list'
+import { DEFAULT_TASK_COLUMNS } from '@/components/organisms/task-list/columns'
+import { TaskToolbar } from '@/components/organisms/task-toolbar'
+import { ApiError } from '@/lib/api/errors'
+import { apiForRender } from '@/lib/api/server'
 import {
   detailFor,
   fetchTasks,
   lookupsFor,
   type TaskLookups,
-} from '../../../../lib/api/tasks'
+} from '@/lib/api/tasks'
 import {
   parseTaskQuery,
   toURLSearchParams,
   type TaskListQueryState,
   type TaskScope,
-} from '../../../../lib/tasks/query'
-import type { TaskDetail } from '../../../../lib/tasks/task-detail'
+} from '@/lib/tasks/query'
+import type { TaskDetail } from '@/lib/tasks/task-detail'
 
 /**
  * My Tasks — what is assigned to me in **this** organisation.

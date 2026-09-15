@@ -1,8 +1,8 @@
 import { TASK_PRIORITIES, type TaskPriority, type TaskRow } from '@repo/shared'
 
-import type { TaskLookups } from '../../../lib/api/tasks'
-import { dueBucket, type DueBucket } from '../../../lib/format/due-date'
-import type { TaskGrouping } from '../../../lib/tasks/query'
+import type { TaskLookups } from '@/lib/api/tasks'
+import { dueBucket, type DueBucket } from '@/lib/format/due-date'
+import type { TaskGrouping } from '@/lib/tasks/query'
 
 export interface TaskGroup {
   key: string

@@ -2,16 +2,16 @@
 
 import { idSchema, updateTaskSchema, type TaskRow } from '@repo/shared'
 
-import { ApiError, toApiError } from '../../lib/api/errors'
-import { apiForAction } from '../../lib/api/server'
-import { fetchTaskDetail, fetchTasks, lookupsFor } from '../../lib/api/tasks'
-import type { MoreTasks } from '../../lib/tasks/more-tasks'
-import { parseTaskQuery, type TaskScope } from '../../lib/tasks/query'
+import { ApiError, toApiError } from '@/lib/api/errors'
+import { apiForAction } from '@/lib/api/server'
+import { fetchTaskDetail, fetchTasks, lookupsFor } from '@/lib/api/tasks'
+import type { MoreTasks } from '@/lib/tasks/more-tasks'
+import { parseTaskQuery, type TaskScope } from '@/lib/tasks/query'
 import type {
   TaskDetailOutcome,
   TaskEditOutcome,
   TaskPatch,
-} from '../../lib/tasks/task-detail'
+} from '@/lib/tasks/task-detail'
 
 /**
  * The page after `cursor`, for the list the screen is already showing.

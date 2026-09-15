@@ -31,6 +31,14 @@ export default {
     // what sits next to the file.
     '^#',
     '',
+    // `@/*` in apps/web/client — a tsconfig alias for its own `src`, which the
+    // Next compiler resolves and nothing at runtime has to. Without a group of
+    // its own it matches none of the patterns above and lands among the
+    // third-party modules, scattering the app's own files through `axios` and
+    // `next`. Same position and same reason as `#` on the API side: after what
+    // the repo depends on, before what sits next to the file.
+    '^@/',
+    '',
     '^[./]',
   ],
   importOrderTypeScriptVersion: '6.0.3',

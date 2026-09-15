@@ -19,7 +19,8 @@ import {
   SidebarProvider,
 } from '@repo/ui/components/sidebar'
 
-import { switchOrganisation } from '../../app/(signed-in)/actions'
+import { switchOrganisation } from '@/app/(signed-in)/actions'
+
 import { Topbar } from './topbar'
 
 /**

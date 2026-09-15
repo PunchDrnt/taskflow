@@ -8,13 +8,13 @@ import {
   type ProjectRow,
 } from '@repo/shared'
 
-import { projectByKey } from '../../../../../../lib/api/projects'
-import { apiForAction } from '../../../../../../lib/api/server'
+import { projectByKey } from '@/lib/api/projects'
+import { apiForAction } from '@/lib/api/server'
 import {
   failureOf,
   fieldErrorsOf,
   type FormState,
-} from '../../../../../../lib/forms/form-state'
+} from '@/lib/forms/form-state'
 
 export type ProjectField = 'name' | 'color' | 'description'
 

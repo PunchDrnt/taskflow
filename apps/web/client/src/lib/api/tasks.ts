@@ -13,8 +13,9 @@ import {
   toApiParams,
   type TaskListQueryState,
   type TaskScope,
-} from '../tasks/query'
-import type { TaskDetail } from '../tasks/task-detail'
+} from '@/lib/tasks/query'
+import type { TaskDetail } from '@/lib/tasks/task-detail'
+
 import { ApiError } from './errors'
 import { fetchProjects, projectById } from './projects'
 import { fetchStatuses } from './statuses'

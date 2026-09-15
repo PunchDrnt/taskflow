@@ -15,7 +15,7 @@ import {
   DropdownMenuTrigger,
 } from '@repo/ui/components/dropdown-menu'
 
-import { switchOrganisation } from '../../app/(signed-in)/actions'
+import { switchOrganisation } from '@/app/(signed-in)/actions'
 
 /**
  * Which company this session is working in, at the top of the sidebar.

@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 
-import { currentUser } from '../../lib/api/me'
+import { currentUser } from '@/lib/api/me'
 
 /**
  * Everything behind a session.

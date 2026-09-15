@@ -26,7 +26,7 @@ import {
   TabsTrigger,
 } from '@repo/ui/components/tabs'
 
-import { Example } from '../_lib/shared'
+import { Example } from '@/app/design-system/_lib/shared'
 
 export default function NavigationPage() {
   return (

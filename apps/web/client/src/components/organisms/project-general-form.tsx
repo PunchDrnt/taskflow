@@ -17,9 +17,9 @@ import { Textarea } from '@repo/ui/components/textarea'
 import {
   updateProject,
   type ProjectField,
-} from '../../app/(signed-in)/(org)/projects/[projectKey]/settings/actions'
-import { blankForm } from '../../lib/forms/form-state'
-import { PaletteField } from '../molecules/palette-field'
+} from '@/app/(signed-in)/(org)/projects/[projectKey]/settings/actions'
+import { PaletteField } from '@/components/molecules/palette-field'
+import { blankForm } from '@/lib/forms/form-state'
 
 /**
  * How a project is labelled everywhere in Taskflow.

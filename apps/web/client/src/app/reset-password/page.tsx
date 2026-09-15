@@ -3,7 +3,7 @@ import Link from 'next/link'
 
 import { buttonVariants } from '@repo/ui/components/button'
 
-import { ResetPasswordForm } from '../../components/organisms/reset-password-form'
+import { ResetPasswordForm } from '@/components/organisms/reset-password-form'
 
 export const metadata: Metadata = {
   title: 'Set a new password · Taskflow',

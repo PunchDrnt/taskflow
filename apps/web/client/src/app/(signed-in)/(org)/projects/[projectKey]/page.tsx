@@ -1,22 +1,22 @@
 import { notFound } from 'next/navigation'
 
-import { PageBody } from '../../../../../components/atoms/page-body'
-import { ProjectDot } from '../../../../../components/atoms/project-dot'
-import { QuickAdd } from '../../../../../components/organisms/quick-add'
-import { TaskList } from '../../../../../components/organisms/task-list'
-import { PROJECT_TASK_COLUMNS } from '../../../../../components/organisms/task-list/columns'
-import { TaskToolbar } from '../../../../../components/organisms/task-toolbar'
-import { fetchAssignable } from '../../../../../lib/api/assignable'
-import { currentUser } from '../../../../../lib/api/me'
-import { projectByKey } from '../../../../../lib/api/projects'
-import { apiForRender } from '../../../../../lib/api/server'
-import { fetchStatuses } from '../../../../../lib/api/statuses'
-import { detailFor, fetchTasks, lookupsOf } from '../../../../../lib/api/tasks'
+import { PageBody } from '@/components/atoms/page-body'
+import { ProjectDot } from '@/components/atoms/project-dot'
+import { QuickAdd } from '@/components/organisms/quick-add'
+import { TaskList } from '@/components/organisms/task-list'
+import { PROJECT_TASK_COLUMNS } from '@/components/organisms/task-list/columns'
+import { TaskToolbar } from '@/components/organisms/task-toolbar'
+import { fetchAssignable } from '@/lib/api/assignable'
+import { currentUser } from '@/lib/api/me'
+import { projectByKey } from '@/lib/api/projects'
+import { apiForRender } from '@/lib/api/server'
+import { fetchStatuses } from '@/lib/api/statuses'
+import { detailFor, fetchTasks, lookupsOf } from '@/lib/api/tasks'
 import {
   parseTaskQuery,
   toURLSearchParams,
   type TaskScope,
-} from '../../../../../lib/tasks/query'
+} from '@/lib/tasks/query'
 
 /**
  * One project: everything on its board, with a box to add to it.

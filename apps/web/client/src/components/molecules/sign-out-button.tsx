@@ -4,7 +4,7 @@ import { useTransition } from 'react'
 
 import { Button } from '@repo/ui/components/button'
 
-import { signOut } from '../../app/(signed-in)/actions'
+import { signOut } from '@/app/(signed-in)/actions'
 
 /**
  * Signing out from a screen with no top bar.

@@ -2,9 +2,9 @@ import Link from 'next/link'
 
 import type { MyWorkRow } from '@repo/shared'
 
-import { formatDueDate } from '../../lib/format/due-date'
-import { ProjectDot } from '../atoms/project-dot'
-import { TaskKey } from '../atoms/task-key'
+import { ProjectDot } from '@/components/atoms/project-dot'
+import { TaskKey } from '@/components/atoms/task-key'
+import { formatDueDate } from '@/lib/format/due-date'
 
 /**
  * One task on Home.

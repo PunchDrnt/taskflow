@@ -16,8 +16,9 @@ import { Input } from '@repo/ui/components/input'
 import {
   saveProfile,
   type ProfileField,
-} from '../../app/(signed-in)/(org)/settings/profile/actions'
-import { blankForm } from '../../lib/forms/form-state'
+} from '@/app/(signed-in)/(org)/settings/profile/actions'
+import { blankForm } from '@/lib/forms/form-state'
+
 import { AvatarField } from './avatar-field'
 
 /**

@@ -6,13 +6,13 @@ import {
   resetPasswordSchema,
 } from '@repo/shared'
 
-import { toApiError } from '../../lib/api/errors'
-import { apiForAction } from '../../lib/api/server'
+import { toApiError } from '@/lib/api/errors'
+import { apiForAction } from '@/lib/api/server'
 import {
   failureOf,
   fieldErrorsOf,
   type FormState,
-} from '../../lib/forms/form-state'
+} from '@/lib/forms/form-state'
 
 export type ForgotField = 'email'
 

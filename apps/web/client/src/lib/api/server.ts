@@ -4,7 +4,8 @@ import axios, {
 } from 'axios'
 import { cookies, headers } from 'next/headers'
 
-import { env } from '../../config/env'
+import { env } from '@/config/env'
+
 import { isAuthEndpoint, REFRESH_PATH, SERVER_API_PATH_PREFIX } from './config'
 import { toApiError } from './errors'
 import { parseSetCookie, type ParsedSetCookie } from './set-cookie'

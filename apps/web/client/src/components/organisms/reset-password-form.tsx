@@ -14,11 +14,8 @@ import {
 } from '@repo/ui/components/field'
 import { Input } from '@repo/ui/components/input'
 
-import {
-  resetPassword,
-  type ResetField,
-} from '../../app/forgot-password/actions'
-import { blankForm } from '../../lib/forms/form-state'
+import { resetPassword, type ResetField } from '@/app/forgot-password/actions'
+import { blankForm } from '@/lib/forms/form-state'
 
 /**
  * Setting a new password from an emailed link.

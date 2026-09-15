@@ -13,8 +13,8 @@ import {
 } from '@repo/ui/components/field'
 import { Input } from '@repo/ui/components/input'
 
-import { signIn } from '../../app/login/actions'
-import { SIGN_IN_START, type SignInState } from '../../app/login/sign-in-state'
+import { signIn } from '@/app/login/actions'
+import { SIGN_IN_START, type SignInState } from '@/app/login/sign-in-state'
 
 /**
  * Sign in, in one form and two stages.

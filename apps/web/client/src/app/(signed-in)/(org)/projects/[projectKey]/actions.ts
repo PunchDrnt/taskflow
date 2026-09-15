@@ -13,15 +13,15 @@ import {
   type TaskRow,
 } from '@repo/shared'
 
-import { fetchAssignable } from '../../../../../lib/api/assignable'
-import { ApiError, toApiError } from '../../../../../lib/api/errors'
-import { apiForAction } from '../../../../../lib/api/server'
+import { fetchAssignable } from '@/lib/api/assignable'
+import { ApiError, toApiError } from '@/lib/api/errors'
+import { apiForAction } from '@/lib/api/server'
 import type {
   AssignOutcome,
   PeopleFound,
   QuickAddOutcome,
   StatusChangeOutcome,
-} from '../../../../../lib/tasks/task-actions-result'
+} from '@/lib/tasks/task-actions-result'
 
 /**
  * Quick add — a title and Enter, and nothing else.

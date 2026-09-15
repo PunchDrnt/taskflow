@@ -3,12 +3,9 @@
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useState, useTransition } from 'react'
 
-import {
-  api,
-  refreshSession,
-  setSessionLostHandler,
-} from '../../lib/api/browser'
-import { toApiError } from '../../lib/api/errors'
+import { api, refreshSession, setSessionLostHandler } from '@/lib/api/browser'
+import { toApiError } from '@/lib/api/errors'
+
 import {
   dropAccessTokenAction,
   loginAction,

@@ -6,12 +6,12 @@ import { useRef, useState, useTransition } from 'react'
 import { Avatar, AvatarFallback, AvatarImage } from '@repo/ui/components/avatar'
 import { Button } from '@repo/ui/components/button'
 
-import { avatarUploadTarget } from '../../app/(signed-in)/(org)/settings/profile/actions'
+import { avatarUploadTarget } from '@/app/(signed-in)/(org)/settings/profile/actions'
 import {
   AVATAR_MAX_EDGE,
   compressForAvatar,
   ImageTooOdd,
-} from '../../lib/image/compress'
+} from '@/lib/image/compress'
 
 /**
  * Choosing a profile picture: shrink it here, PUT it to storage, keep the key.

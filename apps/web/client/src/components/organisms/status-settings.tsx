@@ -51,9 +51,9 @@ import {
   addStatus,
   changeStatus,
   removeStatus,
-} from '../../app/(signed-in)/(org)/projects/[projectKey]/settings/status-actions'
-import type { StatusOutcome } from '../../lib/statuses/outcome'
-import { PaletteMenu } from '../molecules/palette-menu'
+} from '@/app/(signed-in)/(org)/projects/[projectKey]/settings/status-actions'
+import { PaletteMenu } from '@/components/molecules/palette-menu'
+import type { StatusOutcome } from '@/lib/statuses/outcome'
 
 /**
  * What each kind is called, what choosing it does, and the palette colour the

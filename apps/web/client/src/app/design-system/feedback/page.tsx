@@ -12,7 +12,7 @@ import {
   TooltipTrigger,
 } from '@repo/ui/components/tooltip'
 
-import { Example } from '../_lib/shared'
+import { Example } from '@/app/design-system/_lib/shared'
 
 export default function FeedbackPage() {
   return (

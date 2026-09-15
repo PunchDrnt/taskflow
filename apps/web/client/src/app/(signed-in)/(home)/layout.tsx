@@ -1,5 +1,5 @@
-import { HomeShell } from '../../../components/organisms/home-shell'
-import { currentUser } from '../../../lib/api/me'
+import { HomeShell } from '@/components/organisms/home-shell'
+import { currentUser } from '@/lib/api/me'
 
 /**
  * The frame around Home: every organisation listed, and no switcher.

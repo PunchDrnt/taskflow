@@ -6,9 +6,10 @@ import {
   REFRESH_TOKEN_COOKIE,
 } from '@repo/shared'
 
-import { expiryOf } from '../../lib/api/access-token'
-import { toApiError } from '../../lib/api/errors'
-import { apiForRender } from '../../lib/api/server'
+import { expiryOf } from '@/lib/api/access-token'
+import { toApiError } from '@/lib/api/errors'
+import { apiForRender } from '@/lib/api/server'
+
 import { HarnessClient } from './harness-client'
 
 /**

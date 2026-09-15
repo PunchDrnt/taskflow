@@ -4,9 +4,9 @@ import { cookies } from 'next/headers'
 
 import { ACCESS_TOKEN_COOKIE, loginSchema } from '@repo/shared'
 
-import { toApiError } from '../../lib/api/errors'
-import { apiForAction } from '../../lib/api/server'
-import { parseSetCookie } from '../../lib/api/set-cookie'
+import { toApiError } from '@/lib/api/errors'
+import { apiForAction } from '@/lib/api/server'
+import { parseSetCookie } from '@/lib/api/set-cookie'
 
 /**
  * The Server Action half of the harness.

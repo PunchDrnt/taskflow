@@ -12,7 +12,7 @@ import {
 } from '@repo/ui/components/popover'
 import { Textarea } from '@repo/ui/components/textarea'
 
-import { PriorityTag } from '../../atoms/priority-tag'
+import { PriorityTag } from '@/components/atoms/priority-tag'
 
 /**
  * One labelled value, and the shape every row in the panel shares.

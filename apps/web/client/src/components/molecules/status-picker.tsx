@@ -10,7 +10,7 @@ import {
   PopoverTrigger,
 } from '@repo/ui/components/popover'
 
-import { changeTaskStatus } from '../../app/(signed-in)/(org)/projects/[projectKey]/actions'
+import { changeTaskStatus } from '@/app/(signed-in)/(org)/projects/[projectKey]/actions'
 
 /**
  * The status badge, with the board's other columns behind it.

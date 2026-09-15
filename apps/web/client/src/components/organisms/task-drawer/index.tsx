@@ -8,21 +8,22 @@ import { Button } from '@repo/ui/components/button'
 import { Sheet, SheetContent, SheetTitle } from '@repo/ui/components/sheet'
 import { Spinner } from '@repo/ui/components/spinner'
 
-import { editTask } from '../../../app/(signed-in)/task-actions'
+import { editTask } from '@/app/(signed-in)/task-actions'
+import { ProjectDot } from '@/components/atoms/project-dot'
+import { StatusBadge } from '@/components/atoms/status-badge'
+import { TaskKey } from '@/components/atoms/task-key'
+import { DateField } from '@/components/molecules/date-field'
+import { StatusPicker } from '@/components/molecules/status-picker'
+import { AssigneePicker } from '@/components/organisms/assignee-picker'
 import {
   dueBucket,
   endOfDay,
   formatDay,
   formatTimeOfDay,
   toCalendarDay,
-} from '../../../lib/format/due-date'
-import type { OpenTask, TaskPatch } from '../../../lib/tasks/task-detail'
-import { ProjectDot } from '../../atoms/project-dot'
-import { StatusBadge } from '../../atoms/status-badge'
-import { TaskKey } from '../../atoms/task-key'
-import { DateField } from '../../molecules/date-field'
-import { StatusPicker } from '../../molecules/status-picker'
-import { AssigneePicker } from '../assignee-picker'
+} from '@/lib/format/due-date'
+import type { OpenTask, TaskPatch } from '@/lib/tasks/task-detail'
+
 import { namesFrom, TaskActivity } from './activity'
 import {
   EditableDescription,

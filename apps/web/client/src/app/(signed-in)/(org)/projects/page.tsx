@@ -5,11 +5,11 @@ import {
   EmptyTitle,
 } from '@repo/ui/components/empty'
 
-import { PageBody } from '../../../../components/atoms/page-body'
-import { ProjectCard } from '../../../../components/molecules/project-card'
-import { NewProjectDialog } from '../../../../components/organisms/new-project-dialog'
-import { fetchProjects } from '../../../../lib/api/projects'
-import { apiForRender } from '../../../../lib/api/server'
+import { PageBody } from '@/components/atoms/page-body'
+import { ProjectCard } from '@/components/molecules/project-card'
+import { NewProjectDialog } from '@/components/organisms/new-project-dialog'
+import { fetchProjects } from '@/lib/api/projects'
+import { apiForRender } from '@/lib/api/server'
 
 /**
  * Every project in this organisation that the caller may see.

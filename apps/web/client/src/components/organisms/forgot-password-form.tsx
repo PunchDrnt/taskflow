@@ -10,8 +10,8 @@ import { Input } from '@repo/ui/components/input'
 import {
   requestPasswordReset,
   type ForgotField,
-} from '../../app/forgot-password/actions'
-import { blankForm } from '../../lib/forms/form-state'
+} from '@/app/forgot-password/actions'
+import { blankForm } from '@/lib/forms/form-state'
 
 /**
  * Asking for a reset link.

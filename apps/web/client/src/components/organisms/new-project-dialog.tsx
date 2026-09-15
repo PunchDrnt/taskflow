@@ -27,9 +27,9 @@ import { Textarea } from '@repo/ui/components/textarea'
 import {
   createProject,
   type NewProjectField,
-} from '../../app/(signed-in)/(org)/projects/actions'
-import { blankForm } from '../../lib/forms/form-state'
-import { PaletteField } from '../molecules/palette-field'
+} from '@/app/(signed-in)/(org)/projects/actions'
+import { PaletteField } from '@/components/molecules/palette-field'
+import { blankForm } from '@/lib/forms/form-state'
 
 /**
  * Making a project: a name, a key prefix, a colour, and nothing else required.

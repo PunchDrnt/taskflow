@@ -2,10 +2,10 @@ import { notFound, redirect } from 'next/navigation'
 
 import { idSchema } from '@repo/shared'
 
-import { ApiError } from '../../../../../lib/api/errors'
-import { projectById } from '../../../../../lib/api/projects'
-import { apiForRender } from '../../../../../lib/api/server'
-import { fetchTask } from '../../../../../lib/api/tasks'
+import { ApiError } from '@/lib/api/errors'
+import { projectById } from '@/lib/api/projects'
+import { apiForRender } from '@/lib/api/server'
+import { fetchTask } from '@/lib/api/tasks'
 
 /**
  * `/tasks/<id>` — the address an email points at, resolved to the board the

@@ -1,7 +1,7 @@
 import type { ActivityRow, AssigneeRow, StatusRow } from '@repo/shared'
 
-import { formatDay, formatTimeOfDay } from '../../../lib/format/due-date'
-import { initialOf, UserAvatar } from '../../molecules/user-avatar'
+import { initialOf, UserAvatar } from '@/components/molecules/user-avatar'
+import { formatDay, formatTimeOfDay } from '@/lib/format/due-date'
 
 /**
  * What has happened to this task, newest first.

@@ -2,7 +2,7 @@ import Link from 'next/link'
 
 import type { ProjectRow } from '@repo/shared'
 
-import { ProjectDot } from '../atoms/project-dot'
+import { ProjectDot } from '@/components/atoms/project-dot'
 
 /**
  * One project in the list.

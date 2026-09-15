@@ -47,7 +47,7 @@ import {
   TableRow,
 } from '@repo/ui/components/table'
 
-import { Example } from '../_lib/shared'
+import { Example } from '@/app/design-system/_lib/shared'
 
 export default function DataDisplayPage() {
   return (

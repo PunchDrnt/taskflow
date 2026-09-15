@@ -38,7 +38,7 @@ import { Slider } from '@repo/ui/components/slider'
 import { Switch } from '@repo/ui/components/switch'
 import { Textarea } from '@repo/ui/components/textarea'
 
-import { colors, Example } from '../_lib/shared'
+import { colors, Example } from '@/app/design-system/_lib/shared'
 
 export default function FormsPage() {
   const [date, setDate] = useState<Date | undefined>(new Date())

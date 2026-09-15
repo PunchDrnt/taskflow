@@ -17,14 +17,15 @@ import {
 } from '@repo/ui/components/popover'
 import { Switch } from '@repo/ui/components/switch'
 
+import { ToolbarChip } from '@/components/atoms/toolbar-chip'
 import {
   GROUPING_LABELS,
   groupingsFor,
   toSearchParams,
   type TaskListQueryState,
   type TaskScope,
-} from '../../lib/tasks/query'
-import { ToolbarChip } from '../atoms/toolbar-chip'
+} from '@/lib/tasks/query'
+
 import { TaskFilters } from './task-filters'
 import { TaskSort } from './task-sort'
 

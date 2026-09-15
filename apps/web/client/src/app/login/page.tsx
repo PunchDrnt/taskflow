@@ -1,8 +1,8 @@
 import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 
-import { LoginForm } from '../../components/organisms/login-form'
-import { currentUser } from '../../lib/api/me'
+import { LoginForm } from '@/components/organisms/login-form'
+import { currentUser } from '@/lib/api/me'
 
 export const metadata: Metadata = {
   title: 'Sign in · Taskflow',

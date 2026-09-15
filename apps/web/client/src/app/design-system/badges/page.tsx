@@ -1,6 +1,6 @@
 import { Badge } from '@repo/ui/components/badge'
 
-import { colors } from '../_lib/shared'
+import { colors } from '@/app/design-system/_lib/shared'
 
 const badgeVariants = ['default', 'secondary', 'outline', 'ghost'] as const
 

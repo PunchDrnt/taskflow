@@ -1,15 +1,15 @@
 import type { TaskRow, TaskSortField } from '@repo/shared'
 
-import type { TaskLookups } from '../../../lib/api/tasks'
-import { formatDueDate } from '../../../lib/format/due-date'
-import type { TaskScope } from '../../../lib/tasks/query'
-import { PriorityTag } from '../../atoms/priority-tag'
-import { ProjectDot } from '../../atoms/project-dot'
-import { StatusBadge } from '../../atoms/status-badge'
-import { TaskKey } from '../../atoms/task-key'
-import { AssigneeStack } from '../../molecules/assignee-stack'
-import { StatusPicker } from '../../molecules/status-picker'
-import { AssigneePicker } from '../assignee-picker'
+import { PriorityTag } from '@/components/atoms/priority-tag'
+import { ProjectDot } from '@/components/atoms/project-dot'
+import { StatusBadge } from '@/components/atoms/status-badge'
+import { TaskKey } from '@/components/atoms/task-key'
+import { AssigneeStack } from '@/components/molecules/assignee-stack'
+import { StatusPicker } from '@/components/molecules/status-picker'
+import { AssigneePicker } from '@/components/organisms/assignee-picker'
+import type { TaskLookups } from '@/lib/api/tasks'
+import { formatDueDate } from '@/lib/format/due-date'
+import type { TaskScope } from '@/lib/tasks/query'
 
 /**
  * Every column a task list can draw, declared once.

@@ -24,7 +24,8 @@ import {
   SidebarProvider,
 } from '@repo/ui/components/sidebar'
 
-import { ProjectDot } from '../atoms/project-dot'
+import { ProjectDot } from '@/components/atoms/project-dot'
+
 import { OrgSwitcher } from './org-switcher'
 import { Topbar } from './topbar'
 

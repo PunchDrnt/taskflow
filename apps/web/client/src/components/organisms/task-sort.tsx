@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from '@repo/ui/components/select'
 
+import { ToolbarChip } from '@/components/atoms/toolbar-chip'
 import {
   defaultQueryFor,
   isSorted,
@@ -24,8 +25,7 @@ import {
   unusedSortsFor,
   type TaskListQueryState,
   type TaskScope,
-} from '../../lib/tasks/query'
-import { ToolbarChip } from '../atoms/toolbar-chip'
+} from '@/lib/tasks/query'
 
 /**
  * How the list is ordered — one rule per row, applied in the order they sit.

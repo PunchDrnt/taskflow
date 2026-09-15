@@ -8,9 +8,10 @@ import {
   twoFactorLoginSchema,
 } from '@repo/shared'
 
-import { toApiError } from '../../lib/api/errors'
-import { mirrorCookies } from '../../lib/api/mirror-cookies'
-import { apiForAction } from '../../lib/api/server'
+import { toApiError } from '@/lib/api/errors'
+import { mirrorCookies } from '@/lib/api/mirror-cookies'
+import { apiForAction } from '@/lib/api/server'
+
 import { SIGN_IN_START, type SignInState } from './sign-in-state'
 
 /**

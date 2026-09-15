@@ -10,14 +10,14 @@ import {
   type Me,
 } from '@repo/shared'
 
-import { toApiError } from '../../../../../lib/api/errors'
-import { apiForAction } from '../../../../../lib/api/server'
+import { toApiError } from '@/lib/api/errors'
+import { apiForAction } from '@/lib/api/server'
 import {
   failureOf,
   fieldErrorsOf,
   type FormState,
-} from '../../../../../lib/forms/form-state'
-import type { UploadTarget } from '../../../../../lib/image/upload-target'
+} from '@/lib/forms/form-state'
+import type { UploadTarget } from '@/lib/image/upload-target'
 
 export type ProfileField =
   'username' | 'name' | 'nickname' | 'phone' | 'avatarUrl'

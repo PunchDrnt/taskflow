@@ -8,7 +8,7 @@ import {
   type TaskSortRule,
 } from '@repo/shared'
 
-import { endOfDay, isCalendarDay, startOfDay } from '../format/due-date'
+import { endOfDay, isCalendarDay, startOfDay } from '@/lib/format/due-date'
 
 /**
  * The whole state of a task list, as it lives in the URL.

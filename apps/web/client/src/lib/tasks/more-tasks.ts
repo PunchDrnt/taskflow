@@ -1,6 +1,6 @@
 import type { TaskRow } from '@repo/shared'
 
-import type { TaskLookups } from '../api/tasks'
+import type { TaskLookups } from '@/lib/api/tasks'
 
 /**
  * What one press of Load more comes back with.

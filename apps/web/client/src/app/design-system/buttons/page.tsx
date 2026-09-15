@@ -1,6 +1,6 @@
 import { Button } from '@repo/ui/components/button'
 
-import { buttonVariants, colors } from '../_lib/shared'
+import { buttonVariants, colors } from '@/app/design-system/_lib/shared'
 
 export default function ButtonsPage() {
   return (

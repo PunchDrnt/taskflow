@@ -16,8 +16,8 @@ import { Input } from '@repo/ui/components/input'
 import {
   changePassword,
   type PasswordField,
-} from '../../app/(signed-in)/(org)/settings/profile/actions'
-import { blankForm } from '../../lib/forms/form-state'
+} from '@/app/(signed-in)/(org)/settings/profile/actions'
+import { blankForm } from '@/lib/forms/form-state'
 
 /**
  * Changing your own password.

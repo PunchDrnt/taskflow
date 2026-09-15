@@ -1,9 +1,9 @@
 import type { ProjectRow } from '@repo/shared'
 
-import { AppShell } from '../../../components/organisms/app-shell'
-import { currentUser } from '../../../lib/api/me'
-import { fetchProjects } from '../../../lib/api/projects'
-import { apiForRender } from '../../../lib/api/server'
+import { AppShell } from '@/components/organisms/app-shell'
+import { currentUser } from '@/lib/api/me'
+import { fetchProjects } from '@/lib/api/projects'
+import { apiForRender } from '@/lib/api/server'
 
 /**
  * The frame around one organisation's screens.

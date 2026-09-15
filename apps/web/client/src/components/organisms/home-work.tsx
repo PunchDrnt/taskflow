@@ -5,8 +5,8 @@ import { useState } from 'react'
 
 import type { MyWorkRow } from '@repo/shared'
 
-import { dueBucket } from '../../lib/format/due-date'
-import { WorkRow } from '../molecules/work-row'
+import { WorkRow } from '@/components/molecules/work-row'
+import { dueBucket } from '@/lib/format/due-date'
 
 type Bucket = 'open' | 'overdue' | 'week'
 

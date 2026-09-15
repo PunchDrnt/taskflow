@@ -50,7 +50,7 @@ import {
   SheetTrigger,
 } from '@repo/ui/components/sheet'
 
-import { Example } from '../_lib/shared'
+import { Example } from '@/app/design-system/_lib/shared'
 
 export default function OverlaysPage() {
   return (

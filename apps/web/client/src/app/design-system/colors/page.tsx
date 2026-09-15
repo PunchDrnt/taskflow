@@ -1,4 +1,8 @@
-import { paletteClasses, paletteFamilies, Swatch } from '../_lib/shared'
+import {
+  paletteClasses,
+  paletteFamilies,
+  Swatch,
+} from '@/app/design-system/_lib/shared'
 
 export default function ColorsPage() {
   return (

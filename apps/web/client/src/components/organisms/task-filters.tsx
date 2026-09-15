@@ -34,14 +34,14 @@ import {
   SelectValue,
 } from '@repo/ui/components/select'
 
+import { ToolbarChip } from '@/components/atoms/toolbar-chip'
+import { DateField } from '@/components/molecules/date-field'
 import {
   activeFilterCount,
   clearedFilters,
   type TaskListQueryState,
   type TaskScope,
-} from '../../lib/tasks/query'
-import { ToolbarChip } from '../atoms/toolbar-chip'
-import { DateField } from '../molecules/date-field'
+} from '@/lib/tasks/query'
 
 const PRIORITY_LABELS: Record<TaskPriority, string> = {
   urgent: 'Urgent',

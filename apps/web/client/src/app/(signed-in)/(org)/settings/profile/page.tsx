@@ -1,9 +1,9 @@
 import { redirect } from 'next/navigation'
 
-import { PageBody } from '../../../../../components/atoms/page-body'
-import { PasswordForm } from '../../../../../components/organisms/password-form'
-import { ProfileForm } from '../../../../../components/organisms/profile-form'
-import { currentUser } from '../../../../../lib/api/me'
+import { PageBody } from '@/components/atoms/page-body'
+import { PasswordForm } from '@/components/organisms/password-form'
+import { ProfileForm } from '@/components/organisms/profile-form'
+import { currentUser } from '@/lib/api/me'
 
 /**
  * Your own details, and your password.

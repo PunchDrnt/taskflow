@@ -13,8 +13,8 @@ import {
   DropdownMenuTrigger,
 } from '@repo/ui/components/dropdown-menu'
 
-import { signOut } from '../../app/(signed-in)/actions'
-import { initialOf, UserAvatar } from '../molecules/user-avatar'
+import { signOut } from '@/app/(signed-in)/actions'
+import { initialOf, UserAvatar } from '@/components/molecules/user-avatar'
 
 /**
  * Who is signed in, and the two things they can do about it.

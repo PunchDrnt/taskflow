@@ -7,13 +7,13 @@ import {
   TabsTrigger,
 } from '@repo/ui/components/tabs'
 
-import { PageBody } from '../../../../../../components/atoms/page-body'
-import { ProjectDot } from '../../../../../../components/atoms/project-dot'
-import { ProjectGeneralForm } from '../../../../../../components/organisms/project-general-form'
-import { StatusSettings } from '../../../../../../components/organisms/status-settings'
-import { projectByKey } from '../../../../../../lib/api/projects'
-import { apiForRender } from '../../../../../../lib/api/server'
-import { fetchStatuses } from '../../../../../../lib/api/statuses'
+import { PageBody } from '@/components/atoms/page-body'
+import { ProjectDot } from '@/components/atoms/project-dot'
+import { ProjectGeneralForm } from '@/components/organisms/project-general-form'
+import { StatusSettings } from '@/components/organisms/status-settings'
+import { projectByKey } from '@/lib/api/projects'
+import { apiForRender } from '@/lib/api/server'
+import { fetchStatuses } from '@/lib/api/statuses'
 
 /**
  * Everything about one project that is not a task.
