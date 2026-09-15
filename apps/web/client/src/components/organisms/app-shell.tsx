@@ -1,6 +1,6 @@
 'use client'
 
-import { Home, ListTodo, Plus } from 'lucide-react'
+import { Home, ListTodo, Plus, Settings } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
@@ -83,6 +83,21 @@ export function AppShell({
                   active={pathname.startsWith('/my-tasks')}
                 >
                   <ListTodo />
+                </NavItem>
+
+                {/* Beside "My tasks" rather than inside the switcher above it,
+                    which is where the design puts it. The switcher answers
+                    "whose data is this" and changes it; this is a place to go,
+                    and a destination hidden behind a control that means
+                    something else is a destination nobody finds. Shown to
+                    everybody: a member may read the people and the roles,
+                    which is `read all` in `ability.ts`. */}
+                <NavItem
+                  href="/settings/organization"
+                  label="Settings & members"
+                  active={pathname.startsWith('/settings')}
+                >
+                  <Settings />
                 </NavItem>
               </SidebarMenu>
             </SidebarGroupContent>

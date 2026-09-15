@@ -299,7 +299,10 @@ unique เต็ม · `views.sort_order` / `is_default`
         และคนที่ค้างอยู่ใน org นั้นโดนเด้งกลางคัน — cookie `active_org` ชี้ไป org ที่หายไป `AuthGuard` เคลียร์ทิ้ง
 - [x] **ตาราง `organization.invitations`** — ลงแล้ว ยังไม่มีใครอ่าน API + หน้าจอมา Phase 2
       · Phase 1 เพิ่มคนเข้า org ด้วย seed script — **หรือหน้าจอ** ตั้งแต่ข้อล่าง
-- [x] **หน้า Organization settings** — `/settings/organization` เข้าจากเมนู org switcher
+- [x] **หน้า Organization settings** — `/settings/organization` เข้าจาก **sidebar** ชื่อ "Settings & members"
+      · อยู่ใต้ "My tasks" ในกลุ่มแรก ตาม design · เคยใส่ไว้ในเมนู org switcher แล้วย้ายออก:
+        switcher ตอบคำถามว่า "นี่ข้อมูลของใคร" และใช้เปลี่ยน ส่วนอันนี้เป็นที่ที่จะไป
+        ปลายทางที่ซ่อนอยู่หลังปุ่มที่แปลว่าอย่างอื่น คือปลายทางที่ไม่มีใครหาเจอ
       · เข้าได้ทุก role · member อ่านได้ (`can('read','all')`) แต่แก้ไม่ได้ — org ที่คนในไม่รู้ว่าใครอยู่บ้างไม่มีประโยชน์
       · **สามแท็บ: Members · General · Roles** (Members มาก่อนเพราะเป็นเหตุผลที่คนเปิดหน้านี้
         ชื่อ org ตั้งครั้งเดียวแล้วอ่านอย่างเดียวตลอด)
