@@ -1,13 +1,22 @@
 import type { AxiosInstance } from 'axios'
 
-import type { Page, ProjectRow, StatusRow, TaskRow } from '@repo/shared'
+import {
+  idSchema,
+  type ActivityRow,
+  type Page,
+  type ProjectRow,
+  type StatusRow,
+  type TaskRow,
+} from '@repo/shared'
 
 import {
   toApiParams,
   type TaskListQueryState,
   type TaskScope,
 } from '../tasks/query'
-import { fetchProjects } from './projects'
+import type { TaskDetail } from '../tasks/task-detail'
+import { ApiError } from './errors'
+import { fetchProjects, projectById } from './projects'
 import { fetchStatuses } from './statuses'
 
 /**
@@ -104,4 +113,83 @@ export function lookupsOf(
 
 function byId<T extends { id: string }>(rows: T[]): Record<string, T> {
   return Object.fromEntries(rows.map((row) => [row.id, row]))
+}
+
+/** One task by id — the same shape a list row is, because it is one. */
+export async function fetchTask(
+  api: AxiosInstance,
+  taskId: string,
+): Promise<TaskRow> {
+  const { data } = await api.get<TaskRow>(`/tasks/${taskId}`)
+
+  return data
+}
+
+/**
+ * What has happened to one task, newest first.
+ *
+ * Wrapped like every other list even though it does not page — see
+ * `wholeList()` in `@repo/shared` for why the envelope is unconditional.
+ */
+export async function fetchTaskActivity(
+  api: AxiosInstance,
+  taskId: string,
+): Promise<ActivityRow[]> {
+  const { data } = await api.get<Page<ActivityRow>>(`/tasks/${taskId}/activity`)
+
+  return data.data
+}
+
+/**
+ * Everything the detail drawer needs, in one round of requests.
+ *
+ * The task first, because the other three depend on it: two of them need the
+ * project it is in, and asking for them before knowing that would mean
+ * fetching a board the task might not be on. The rest go out together.
+ *
+ * The statuses are fetched even on a screen that already has some. A cross-
+ * project list holds a flat map of every loaded project's columns with nothing
+ * on a `StatusRow` saying which project it came from, so there is no filtering
+ * this could do instead — see `TaskDetail`.
+ */
+export async function fetchTaskDetail(
+  api: AxiosInstance,
+  taskId: string,
+): Promise<TaskDetail> {
+  const task = await fetchTask(api, taskId)
+
+  const [project, statuses, activity] = await Promise.all([
+    projectById(api, task.projectId),
+    fetchStatuses(api, task.projectId),
+    fetchTaskActivity(api, taskId),
+  ])
+
+  return { task, project, statuses, activity }
+}
+
+/**
+ * The task a `?task=` parameter names, for a page that has to render with the
+ * drawer already open.
+ *
+ * Null covers all three ways there is nothing to open: no parameter, a
+ * parameter that is not an id, and an id the API will not answer for. The last
+ * one is the interesting case — a link pasted into chat months ago, pointing at
+ * a task since deleted, or at a project the reader has been removed from — and
+ * the right answer to it is the list, not an error page. The rest of the screen
+ * is perfectly good.
+ */
+export async function detailFor(
+  api: AxiosInstance,
+  taskId: string | null,
+): Promise<TaskDetail | null> {
+  if (taskId === null || !idSchema('Invalid task id').safeParse(taskId).success)
+    return null
+
+  try {
+    return await fetchTaskDetail(api, taskId)
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) return null
+
+    throw error
+  }
 }

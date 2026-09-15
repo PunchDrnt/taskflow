@@ -1,12 +1,17 @@
 'use server'
 
-import { idSchema } from '@repo/shared'
+import { idSchema, updateTaskSchema, type TaskRow } from '@repo/shared'
 
-import { ApiError } from '../../lib/api/errors'
+import { ApiError, toApiError } from '../../lib/api/errors'
 import { apiForAction } from '../../lib/api/server'
-import { fetchTasks, lookupsFor } from '../../lib/api/tasks'
+import { fetchTaskDetail, fetchTasks, lookupsFor } from '../../lib/api/tasks'
 import type { MoreTasks } from '../../lib/tasks/more-tasks'
 import { parseTaskQuery, type TaskScope } from '../../lib/tasks/query'
+import type {
+  TaskDetailOutcome,
+  TaskEditOutcome,
+  TaskPatch,
+} from '../../lib/tasks/task-detail'
 
 /**
  * The page after `cursor`, for the list the screen is already showing.
@@ -55,5 +60,94 @@ export async function loadMoreTasks(
     }
 
     return { ok: false, message: 'Could not load more tasks.' }
+  }
+}
+
+/**
+ * Everything the detail drawer draws, for one task.
+ *
+ * Here rather than on the page because opening the drawer must not re-render
+ * the list behind it: the rows Load more has added live in that component's
+ * state, and a server round trip through the router would hand it a fresh
+ * first page and drop them. The drawer therefore asks for its own data, from
+ * the click that opens it.
+ *
+ * A **deep link is the exception** and is served by the page instead — see
+ * `initialDetail` on `TaskList`. There is no click to fetch from when the URL
+ * arrives already pointing at a task, and doing it on mount would mean
+ * `setState` from an effect.
+ *
+ * The id is the only parameter, and it is checked for shape here and for
+ * access by the API, which answers 404 for a task in a project the caller
+ * cannot see rather than 403 — a 403 would confirm the task exists.
+ */
+export async function loadTaskDetail(
+  taskId: string,
+): Promise<TaskDetailOutcome> {
+  if (!idSchema('Invalid task id').safeParse(taskId).success) {
+    return { ok: false, message: 'That task does not exist.' }
+  }
+
+  try {
+    const api = await apiForAction()
+
+    return { ok: true, detail: await fetchTaskDetail(api, taskId) }
+  } catch (error) {
+    if (error instanceof ApiError && error.isNetworkFailure) {
+      return { ok: false, message: 'Could not reach the server. Try again.' }
+    }
+
+    return { ok: false, message: toApiError(error).message }
+  }
+}
+
+/**
+ * One field of one task, changed from the drawer.
+ *
+ * Not `revalidatePath`, for the reason `changeTaskStatus` gives: the server is
+ * deciding nothing the screen cannot see, and re-rendering the list would cost
+ * the scroll position of a list somebody is working down. The whole task comes
+ * back because the API does more than it was asked — a status that counts as
+ * done stamps `completedAt` and `completedBy`, and leaving one clears them.
+ *
+ * ⚠️ **The patch goes on the wire as it arrived, not as zod returned it.**
+ * `dueDateSchema` parses the string into a `Date`, and `JSON.stringify` sends a
+ * `Date` as UTC `Z` — the same instant, but no longer the offset the browser
+ * meant, which makes what the API stores impossible to read back against what
+ * was sent. Validating and forwarding are two jobs, and only the first needs
+ * the transform.
+ */
+export async function editTask(
+  taskId: string,
+  patch: TaskPatch,
+): Promise<TaskEditOutcome> {
+  const parsed = updateTaskSchema.safeParse(patch)
+
+  if (
+    !parsed.success ||
+    !idSchema('Invalid task id').safeParse(taskId).success
+  ) {
+    return {
+      ok: false,
+      message: parsed.success
+        ? 'That task does not exist.'
+        : (parsed.error.issues[0]?.message ?? 'Could not save that change.'),
+    }
+  }
+
+  // `parsed.data` for the stripping — an unknown field a caller added never
+  // reaches the API — with the due date put back the way it came in.
+  const body = {
+    ...parsed.data,
+    ...(patch.dueDate === undefined ? {} : { dueDate: patch.dueDate }),
+  }
+
+  try {
+    const api = await apiForAction()
+    const { data } = await api.patch<TaskRow>(`/tasks/${taskId}`, body)
+
+    return { ok: true, task: data }
+  } catch (error) {
+    return { ok: false, message: toApiError(error).message }
   }
 }

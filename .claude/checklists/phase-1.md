@@ -463,6 +463,32 @@ unique เต็ม · `views.sort_order` / `is_default`
       · เลือกคนนอก project → ถามว่าเพิ่มเข้า project เลยไหม
       · แสดง avatar + ชื่อ + ชื่อเล่นทุกแถว (กันเลือกผิดคน — บริษัท 100 คนมีชื่อซ้ำแน่)
       · 🟡 แต่ตัดไม่ได้เหมือน quick add
+- [x] **หน้า task detail เป็น drawer เปิดทับลิสต์ ไม่ใช่หน้าใหม่** — ตาม design
+      · ✅ `components/organisms/task-drawer/` — ที่เดียวที่แก้ title · description · status ·
+        assignee · priority · due date ได้ · ก่อนหน้านี้ title กับ description ไม่มีหน้าจอให้แก้เลย
+        ทั้งที่สเปกข้อแรกของ §6 เขียนไว้
+      · URL เป็น `?task=<id>` เขียนด้วย `history.pushState` **ไม่ใช่ `router.push`**
+        · `router.push` = server re-render = `initialRows` ก้อนใหม่ = แถวที่กด "โหลดเพิ่ม" มาหายหมด
+          ทั้งที่คนยังดูอยู่ · pushState เปลี่ยนแค่ address bar ลิงก์ยังส่งต่อได้เหมือนเดิม
+        · **deep link ดึงที่ page ฝั่ง server** (`initialDetail`) ไม่ใช่ตอน mount — ไม่มีคลิกให้ยิงจาก
+          และ fetch ตอน mount คือ `setState` ใน effect ซึ่ง lint ห้าม (เหตุผลเดียวกับ assignee picker)
+        · ปุ่ม back เป็นของเราเอง — Next จัดการ popstate ให้เฉพาะ navigation ของมันเอง
+        · เปลี่ยน filter ปิด drawer ให้เอง — `toSearchParams` สร้าง URL จาก state ของลิสต์ซึ่งไม่เคยมี
+          `task` ถ้าไม่ปิดจะค้างอยู่บนลิสต์ที่ URL บอกว่าไม่ได้เปิดอะไรอยู่
+      · ชื่องานในลิสต์เป็น `<a href>` จริง — ⌘-click เปิดแท็บใหม่ได้ คลิกเปล่าถึงเป็น drawer
+      · **status กับ assignee แก้ได้ที่ My Tasks ด้วย** ต่างจากคอลัมน์ในลิสต์ที่อ่านอย่างเดียว —
+        เหตุผลเดิม (ลิสต์ข้าม project ไม่มีบอร์ดเดียวให้เลือก ไม่มี project ให้เช็ค membership)
+        ใช้กับ drawer ไม่ได้ มันมี project เดียวแน่นอน
+      · `StatusRow` ไม่มี `projectId` → `lookups.statuses` ของ My Tasks แยกไม่ออกว่าคอลัมน์ไหนของบอร์ดไหน
+        drawer เลยยิง statuses ของ project นั้นเอง · ระหว่างรอแสดงเป็น badge ไม่ใช่ picker
+        (picker ที่มีตัวเลือกเดียวคือปุ่มที่กดแล้วไม่มีอะไรเกิดขึ้น)
+      · 🔒 **วันที่เลือกจากปฏิทินบันทึกเป็น "สิ้นวัน" ตามโซนบริษัท** (`endOfDay`) ไม่ใช่เที่ยงคืน —
+        เที่ยงคืนแปลว่างานที่ครบกำหนดวันที่ 30 เลยกำหนดตั้งแต่เช้าวันที่ 30 · เข้าชุดกับกฎ offset ของ `dueDateSchema`
+      · **ที่ design มีแต่ Phase 1 ไม่มี**: ช่องพิมพ์คอมเมนต์ · sub-task · แถว Sprint (ทั้งหมด Phase 2)
+        และแถว "Created by" — `TaskRow` ไม่ได้ส่ง creator มา และบรรทัดสุดท้ายของ activity ตอบข้อนี้อยู่แล้ว
+- [ ] **ปุ่มลบ task** — API พร้อมตั้งแต่ §6 (`DELETE /v1/tasks/:taskId` ลบลูกไปด้วย เลขไม่คืน)
+      แต่ยังไม่มีที่ให้กด · drawer ใน design ไม่มีปุ่มนี้ เลยยังไม่ได้ใส่ ตอนใส่ต้องมีถามยืนยัน
+      และบอกว่าลบลูกไปด้วย
 
 ---
 
@@ -482,6 +508,17 @@ unique เต็ม · `views.sort_order` / `is_default`
 - [x] **อ่านกลับได้** — `GET /v1/tasks/:taskId/activity` ผ่าน `AuditService.findForEntity`
       · ไม่ join `audit.logs` จาก module อื่น · เห็น task ได้ = อ่านประวัติได้ (ไม่มีเงื่อนไขเพิ่ม)
       · ข้อนี้ไม่ได้อยู่ในเช็คลิสต์เดิมซึ่งมีแต่ฝั่งเขียน — activity log ที่ไม่มีใครอ่านได้ไม่ใช่ฟีเจอร์
+      · ✅ **หน้าจอลงแล้ว** — แผง Activity ใน task drawer (ปิดไว้ก่อนตาม design กดที่หัวเพื่อเปิด)
+      · **ประโยคประกอบฝั่ง client ไม่ใช่ฝั่ง API** — แถวเก็บแค่ `{ field: { from, to } }`
+        id ที่อยู่ข้างในแปลเป็นชื่อได้เฉพาะคนที่เห็น project นั้น และถ้า render เป็นประโยคตั้งแต่ตอนเขียน
+        คำพูดชุดนั้นจะถูกแช่อยู่ใน log ตลอดกาล
+      · ⚠️ `changes_json` เป็น `jsonb` และตารางนี้ห้ามลบ — ที่อ่านกลับมาจึงเป็นอะไรก็ได้ที่โค้ดเวอร์ชันไหน
+        สักเวอร์ชันเขียนไว้ · ฝั่ง web เลยรับเป็น `unknown` ต่อ field แล้วค่อยแคบเอาตอนวาด
+        (`ActivityRow` · `AuditLog.changesJson` ฝั่ง API ก็ถือจุดยืนเดียวกัน)
+      · เวลาแสดงเป็น "วัน + นาฬิกา" ไม่ใช่ "2 ชั่วโมงที่แล้ว" — ค่าสัมพัทธ์คำนวณครั้งเดียวแล้วค้าง
+        และทะเลาะกับตัวเองข้าม hydration ตอนสองฝั่งคนละนาที
+      · ชื่อคนที่ตั้งชื่อไม่ได้ (เคยถูก assign แล้วเอาออก ไม่เคยทำอย่างอื่น) แสดงว่า "somebody"
+        ไม่ยิง `/assignable` เพิ่มเพื่อปิดช่องนี้ — มัน cap อยู่แล้วเลยปิดไม่สนิท แถมเพิ่ม request ทุกครั้งที่เปิด
 - [x] เก็บ id ของคนที่ถูก assign ไว้ใน `changes_json` — `entity_id` คือ task ไม่ใช่คน
       และ `audit.logs` ไม่มีคอลัมน์อื่นให้ใส่ ([ทุกคอลัมน์](../docs/02-database/schema.md#schema-audit))
       · index `logs_actor_idx (org_id, actor_id, action, occurred_at DESC)` มีตั้งแต่ Phase 0 แล้ว
@@ -498,6 +535,9 @@ unique เต็ม · `views.sort_order` / `is_default`
         แล้ว filter นั้นจะกินฉบับที่สำคัญไปด้วย
       · ลิงก์เป็น `/tasks/{id}` ไม่ใช่ key · เหตุผลเดิมคือ key ซ้ำข้าม project ได้ ซึ่ง**ไม่จริงแล้ว**
         ตั้งแต่ prefix unique ต่อ org และแก้ไม่ได้ — `/tasks/WEB-12` จึงเปิดทางไว้แล้วตอนทำหน้า task detail
+      · ✅ **`/tasks/:id` มีจริงแล้ว** — resolve เป็น project ของงานนั้นแล้ว redirect ไป
+        `/projects/<prefix>?task=<id>` คือบอร์ดที่เปิด drawer ค้างไว้ · ก่อนหน้านี้ลิงก์ในอีเมลได้ 404
+        · ไม่ทำเป็นหน้าเดี่ยวเพราะสิ่งที่คนทำต่อจากเปิดงานหนึ่งคือดูงานถัดไป — หน้าที่ไม่มีลิสต์อยู่ข้างหลังตอบข้อนั้นไม่ได้
 - [x] `EmailService.enqueue(manager, …)` รับ transaction ของ caller เหมือน `AuditService`
       · assign สำเร็จแต่อีเมลไม่ออก = คนไม่รู้ว่ามีงาน · อีเมลออกแต่ assign rollback = แย่กว่า
 - [x] Template ที่ยังไม่ implement **ไม่ throw** — ส่งแบบดิบไปก่อน ไม่งั้นวนใน retry loop จนถูก mark failed

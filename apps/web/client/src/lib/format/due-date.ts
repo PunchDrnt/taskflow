@@ -71,8 +71,16 @@ export function dueBucket(
   return days <= 7 ? 'soon' : 'later'
 }
 
-/** `Today` · `Tomorrow` · `12 Sep`, in the company's zone. */
-export function formatDueDate(iso: IsoDateTime, now = new Date()): string {
+/**
+ * `Today` · `Tomorrow` · `12 Sep`, in the company's zone.
+ *
+ * Coarse on purpose. A finer relative label — "2 hours ago" — is wrong twice
+ * over on a server-rendered page: it is computed once and then goes stale
+ * while the tab stays open, and it disagrees with itself across the hydration
+ * boundary whenever the two sides straddle a minute. A day is the smallest
+ * unit that survives both.
+ */
+export function formatDay(iso: IsoDateTime, now = new Date()): string {
   const days = daysAway(iso, now)
 
   if (days === 0) return 'Today'
@@ -80,6 +88,40 @@ export function formatDueDate(iso: IsoDateTime, now = new Date()): string {
   if (days === -1) return 'Yesterday'
 
   return labelFormatter.format(new Date(iso))
+}
+
+/** The same label, under the name the lists ask for it by. */
+export function formatDueDate(iso: IsoDateTime, now = new Date()): string {
+  return formatDay(iso, now)
+}
+
+const timeFormatter = new Intl.DateTimeFormat('en-GB', {
+  timeZone: APP_TIME_ZONE,
+  hour: '2-digit',
+  minute: '2-digit',
+})
+
+/**
+ * The clock time in the company's zone — `16:42`.
+ *
+ * Paired with `formatDay` wherever something happened at a moment rather than
+ * on a day: the day goes in the heading and this goes on the line, which
+ * together say everything "2 hours ago" says without going stale.
+ */
+export function formatTimeOfDay(iso: IsoDateTime): string {
+  return timeFormatter.format(new Date(iso))
+}
+
+/**
+ * The Bangkok calendar day an instant falls on, as `YYYY-MM-DD`.
+ *
+ * The inverse of `startOfDay` / `endOfDay`, and the form a day picker and a
+ * day heading both want: two instants seven hours apart can be the same day
+ * here and different days in UTC, so the grouping has to be done in the zone
+ * the reader lives in rather than the one the container runs in.
+ */
+export function toCalendarDay(iso: IsoDateTime): string {
+  return calendarDay(new Date(iso))
 }
 
 /**

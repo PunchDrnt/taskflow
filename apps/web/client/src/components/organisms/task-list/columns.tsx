@@ -1,5 +1,3 @@
-import Link from 'next/link'
-
 import type { TaskRow, TaskSortField } from '@repo/shared'
 
 import type { TaskLookups } from '../../../lib/api/tasks'
@@ -43,6 +41,16 @@ export type TaskColumnId =
 export interface TaskCellContext {
   scope: TaskScope
   onTaskChanged: (task: TaskRow) => void
+  /** Opens the detail drawer over the list. The title cell is the handle. */
+  openTask: (task: TaskRow) => void
+  /**
+   * Where that drawer lives, as an address.
+   *
+   * The title is a real `<a>` with a real `href`, so a ⌘-click opens the task
+   * in a tab and the browser's own "copy link" works — the two things a
+   * `<div onClick>` quietly takes away from a list people share out of.
+   */
+  hrefFor: (task: TaskRow) => string
 }
 
 export interface TaskColumn {
@@ -84,13 +92,30 @@ export const TASK_COLUMNS: Record<TaskColumnId, TaskColumn> = {
     // to wrap out of `whitespace-nowrap` — a truncated title is a task nobody
     // can identify, which is the opposite of what a list is for.
     className: 'w-full max-w-0',
-    cell: (task) => (
-      <Link
-        href={`/tasks/${task.id}`}
+    cell: (task, _lookups, context) => (
+      <a
+        href={context.hrefFor(task)}
         className="text-text-primary body-2 hover:text-primary-light block truncate"
+        onClick={(event) => {
+          // A plain click opens the drawer, which is not a navigation: the
+          // list behind it keeps its scroll and every row Load more added.
+          // Every modified click is left to the browser.
+          if (
+            event.metaKey ||
+            event.ctrlKey ||
+            event.shiftKey ||
+            event.altKey ||
+            event.button !== 0
+          ) {
+            return
+          }
+
+          event.preventDefault()
+          context.openTask(task)
+        }}
       >
         {task.title}
-      </Link>
+      </a>
     ),
   },
 

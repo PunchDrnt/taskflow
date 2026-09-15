@@ -2,6 +2,8 @@ import type { AxiosInstance } from 'axios'
 
 import type { Page, ProjectRow } from '@repo/shared'
 
+import { ApiError } from './errors'
+
 /**
  * Every project in the active organisation the caller may see.
  *
@@ -51,4 +53,30 @@ export async function projectByKey(
   })
 
   return data.data.find((project) => project.keyPrefix === wanted) ?? null
+}
+
+/**
+ * One project by id, or null when the caller may not see it.
+ *
+ * By id and not by prefix, because this one is reached from a row rather than
+ * from the address bar: a task carries `projectId`, and resolving that through
+ * the prefix would mean guessing at a string the API never sent.
+ *
+ * A 404 becomes null for the reason `projectByKey` returns null: the API
+ * answers 404 rather than 403 for a project outside the caller's reach, and a
+ * screen that treated the two differently would be confirming which ids exist.
+ */
+export async function projectById(
+  api: AxiosInstance,
+  id: string,
+): Promise<ProjectRow | null> {
+  try {
+    const { data } = await api.get<ProjectRow>(`/projects/${id}`)
+
+    return data
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) return null
+
+    throw error
+  }
 }

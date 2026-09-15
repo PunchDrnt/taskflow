@@ -2,7 +2,13 @@
 
 import { ArrowDown, ArrowUp } from 'lucide-react'
 import { usePathname, useRouter } from 'next/navigation'
-import { Fragment, useState, useTransition } from 'react'
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useState,
+  useTransition,
+} from 'react'
 
 import type { TaskRow } from '@repo/shared'
 import {
@@ -20,7 +26,10 @@ import {
   TableRow,
 } from '@repo/ui/components/table'
 
-import { loadMoreTasks } from '../../../app/(signed-in)/task-actions'
+import {
+  loadMoreTasks,
+  loadTaskDetail,
+} from '../../../app/(signed-in)/task-actions'
 import type { TaskLookups } from '../../../lib/api/tasks'
 import type { MoreTasks } from '../../../lib/tasks/more-tasks'
 import {
@@ -29,7 +38,9 @@ import {
   type TaskListQueryState,
   type TaskScope,
 } from '../../../lib/tasks/query'
+import type { TaskDetail } from '../../../lib/tasks/task-detail'
 import { LoadMore } from '../../molecules/load-more'
+import { TaskDrawer } from '../task-drawer'
 import {
   TASK_COLUMNS,
   type TaskCellContext,
@@ -91,6 +102,7 @@ export function TaskList({
   initialRows,
   initialCursor,
   initialLookups,
+  initialDetail,
   scope,
   columns,
   query,
@@ -99,6 +111,17 @@ export function TaskList({
   initialRows: TaskRow[]
   initialCursor: string | null
   initialLookups: TaskLookups
+  /**
+   * The task `?task=` named, already fetched, when the URL arrived pointing at
+   * one.
+   *
+   * Server-rendered rather than fetched on mount, and that is not an
+   * optimisation: fetching when a component appears means `setState` from an
+   * effect, which this repo's lint refuses on principle and which would draw
+   * the drawer empty first either way. Every other open comes from a click,
+   * which has somewhere better to put the request — see `openTask`.
+   */
+  initialDetail: TaskDetail | null
   /** Which list this is — it decides where the next page comes from. */
   scope: TaskScope
   /** Ids into `TASK_COLUMNS`. Phase 4 hands these down from a saved view. */
@@ -115,6 +138,7 @@ export function TaskList({
   const [lookups, setLookups] = useState(initialLookups)
   const [failure, setFailure] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
+  const [open, setOpen] = useState<OpenTask | null>(opened(initialDetail))
 
   // The server's page is the authority, and this is React's own answer to
   // "reset state when a prop changes" — an assignment during render rather
@@ -127,6 +151,21 @@ export function TaskList({
     setRows(initialRows)
     setCursor(initialCursor)
     setLookups(initialLookups)
+  }
+
+  // The same trick for the drawer, keyed on the query string instead.
+  //
+  // ⚠️ **A filter change closes it, and has to.** The toolbar pushes an
+  // address built by `toSearchParams` from the list's own state, which never
+  // carries `task` — so a drawer left open would be sitting over a list whose
+  // URL says nothing is open, and the back button would then close it twice.
+  // Keyed on `search` rather than on `initialRows` because opening a task
+  // never re-renders the server (see `openTask`), and this must not fire then.
+  const [renderedSearch, setRenderedSearch] = useState(search)
+
+  if (renderedSearch !== search) {
+    setRenderedSearch(search)
+    setOpen(opened(initialDetail))
   }
 
   const grouping: TaskGrouping = query.group
@@ -162,12 +201,130 @@ export function TaskList({
     })
   }
 
+  /**
+   * Where the drawer for a task lives, and where the list lives without one.
+   *
+   * Built from the query string the **server** rendered rather than from
+   * `window.location`, so it is the same string during SSR and in the browser.
+   * That string already carries `task` when the page was deep-linked, which is
+   * what makes `urlFor(null)` the way back out.
+   */
+  const urlFor = useCallback(
+    (taskId: string | null): string => {
+      const params = new URLSearchParams(search)
+
+      if (taskId === null) params.delete('task')
+      else params.set('task', taskId)
+
+      const query = params.toString()
+
+      return query === '' ? pathname : `${pathname}?${query}`
+    },
+    [pathname, search],
+  )
+
+  /**
+   * Opens a task, and fetches the rest of what the drawer draws.
+   *
+   * ⚠️ **`history.pushState`, not `router.push`.** The router would re-render
+   * this page on the server, which hands this component a fresh `initialRows`
+   * — and the block above then drops every row Load more added, while
+   * somebody is still looking at them. Next supports the shallow update
+   * directly for exactly this: the URL changes, the server is not asked, and
+   * the address is still a link somebody can send.
+   *
+   * The provisional detail is what the clicked row already knows, so the panel
+   * opens with its title, its dates and its people rather than on a spinner.
+   */
+  const show = useCallback(
+    async (taskId: string, provisional: TaskDetail | null) => {
+      setOpen({ taskId, detail: provisional, loading: true, failure: null })
+
+      const result = await loadTaskDetail(taskId)
+
+      setOpen((held) => {
+        // Somebody clicked a second task, or closed the drawer, while this was
+        // in flight. The answer belongs to a screen that has moved on.
+        if (held === null || held.taskId !== taskId) return held
+
+        return result.ok
+          ? { taskId, detail: result.detail, loading: false, failure: null }
+          : { ...held, loading: false, failure: result.message }
+      })
+    },
+    [],
+  )
+
+  function openTask(task: TaskRow) {
+    window.history.pushState(null, '', urlFor(task.id))
+    void show(task.id, provisionalDetail(task, lookups))
+  }
+
+  /**
+   * Closes it, by pushing the list's own address rather than going back.
+   *
+   * `history.back()` would be wrong for the case the drawer was the first thing
+   * in this tab's history — a link out of an email — where back means leaving
+   * the application.
+   */
+  function closeTask() {
+    window.history.pushState(null, '', urlFor(null))
+    setOpen(null)
+  }
+
+  const openId = open?.taskId ?? null
+
+  /**
+   * The back button, which `pushState` leaves for this component to answer.
+   *
+   * Next handles `popstate` for its own navigations; an entry pushed by hand is
+   * one it will restore the URL for and nothing else, so the drawer has to read
+   * the address it landed on. Setting state from a browser event is not the
+   * effect-driven `setState` the lint rule is about — the effect only
+   * subscribes.
+   */
+  useEffect(() => {
+    function onPop() {
+      const wanted = new URLSearchParams(window.location.search).get('task')
+
+      if (wanted === openId) return
+
+      if (wanted === null) {
+        setOpen(null)
+
+        return
+      }
+
+      const row = rows.find((task) => task.id === wanted)
+
+      void show(
+        wanted,
+        row === undefined ? null : provisionalDetail(row, lookups),
+      )
+    }
+
+    window.addEventListener('popstate', onPop)
+
+    return () => window.removeEventListener('popstate', onPop)
+  }, [lookups, openId, rows, show])
+
+  /** An edit lands on the row in the list and on the task in the drawer. */
+  function taskChanged(changed: TaskRow) {
+    setRows((held) =>
+      held.map((task) => (task.id === changed.id ? changed : task)),
+    )
+    setOpen((held) =>
+      held?.detail?.task.id === changed.id
+        ? { ...held, detail: { ...held.detail, task: changed } }
+        : held,
+    )
+  }
+
   const context: TaskCellContext = {
     scope,
-    onTaskChanged: (changed) =>
-      setRows((held) =>
-        held.map((task) => (task.id === changed.id ? changed : task)),
-      ),
+    onTaskChanged: taskChanged,
+    openTask,
+    hrefFor: (task) => urlFor(task.id),
   }
 
   function loadMore() {
@@ -194,133 +351,198 @@ export function TaskList({
     }))
   }
 
+  /**
+   * Drawn beside the list rather than inside it, and drawn in both branches
+   * below: a deep link can name a task the current filter excludes, and an
+   * empty list is exactly when somebody needs to see the one they asked for.
+   */
+  const drawer =
+    open === null || open.detail === null ? null : (
+      <TaskDrawer
+        detail={open.detail}
+        loading={open.loading}
+        failure={open.failure}
+        onClose={closeTask}
+        onTaskChanged={taskChanged}
+      />
+    )
+
   if (rows.length === 0) {
     return (
-      <Empty>
-        <EmptyHeader>
-          <EmptyTitle>Nothing here</EmptyTitle>
-          <EmptyDescription>
-            Work assigned to you shows up here. Closed tasks are hidden unless
-            you ask for them.
-          </EmptyDescription>
-        </EmptyHeader>
-      </Empty>
+      <>
+        <Empty>
+          <EmptyHeader>
+            <EmptyTitle>Nothing here</EmptyTitle>
+            <EmptyDescription>
+              Work assigned to you shows up here. Closed tasks are hidden unless
+              you ask for them.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+        {drawer}
+      </>
     )
   }
 
   return (
-    <div className="flex flex-col gap-2">
-      <Table className="border-separate border-spacing-0">
-        <TableHeader>
-          <TableRow className="hover:bg-transparent">
-            {drawn.map((column) => (
-              <TableHead
-                key={column.id}
-                className={`overlined text-text-disabled h-8 font-normal ${column.className ?? ''}`}
-                aria-sort={
-                  column.sort === undefined || column.sort !== primary?.field
-                    ? undefined
-                    : primary.dir === 'asc'
-                      ? 'ascending'
-                      : 'descending'
-                }
-              >
-                {column.sort === undefined ? (
-                  column.header
-                ) : (
-                  <button
-                    type="button"
-                    // `uppercase` again: a <button> does not inherit
-                    // `text-transform` from the <th> under the UA stylesheet,
-                    // so the three sortable headers came out in title case
-                    // beside four that were not.
-                    className="hover:text-text-primary inline-flex items-center gap-1 uppercase"
-                    onClick={() => sortBy(column)}
-                  >
-                    {column.header}
-                    {column.sort === primary?.field &&
-                      (primary.dir === 'asc' ? (
-                        <ArrowUp className="size-3" />
-                      ) : (
-                        <ArrowDown className="size-3" />
-                      ))}
-                  </button>
-                )}
-              </TableHead>
-            ))}
-          </TableRow>
-        </TableHeader>
+    <>
+      <div className="flex flex-col gap-2">
+        <Table className="border-separate border-spacing-0">
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              {drawn.map((column) => (
+                <TableHead
+                  key={column.id}
+                  className={`overlined text-text-disabled h-8 font-normal ${column.className ?? ''}`}
+                  aria-sort={
+                    column.sort === undefined || column.sort !== primary?.field
+                      ? undefined
+                      : primary.dir === 'asc'
+                        ? 'ascending'
+                        : 'descending'
+                  }
+                >
+                  {column.sort === undefined ? (
+                    column.header
+                  ) : (
+                    <button
+                      type="button"
+                      // `uppercase` again: a <button> does not inherit
+                      // `text-transform` from the <th> under the UA stylesheet,
+                      // so the three sortable headers came out in title case
+                      // beside four that were not.
+                      className="hover:text-text-primary inline-flex items-center gap-1 uppercase"
+                      onClick={() => sortBy(column)}
+                    >
+                      {column.header}
+                      {column.sort === primary?.field &&
+                        (primary.dir === 'asc' ? (
+                          <ArrowUp className="size-3" />
+                        ) : (
+                          <ArrowDown className="size-3" />
+                        ))}
+                    </button>
+                  )}
+                </TableHead>
+              ))}
+            </TableRow>
+          </TableHeader>
 
-        {groupTasks(rows, grouping, lookups).map((group, index) => (
-          <Fragment key={group.key}>
-            {/* The gap between two cards. A table has no margin to give a
+          {groupTasks(rows, grouping, lookups).map((group, index) => (
+            <Fragment key={group.key}>
+              {/* The gap between two cards. A table has no margin to give a
                 `<tbody>`, and `border-spacing` would space every row in the
                 table rather than only the blocks, so the space is a row —
                 hidden from the accessibility tree, since it is not a task. */}
-            {index > 0 && (
-              <tbody aria-hidden>
-                <tr>
-                  <td className="h-2.5 p-0" colSpan={drawn.length} />
-                </tr>
-              </tbody>
-            )}
+              {index > 0 && (
+                <tbody aria-hidden>
+                  <tr>
+                    <td className="h-2.5 p-0" colSpan={drawn.length} />
+                  </tr>
+                </tbody>
+              )}
 
-            <TableBody className={BODY_AS_CARD}>
-              {group.label !== '' && (
-                <TableRow data-heading>
-                  <TableCell colSpan={drawn.length} className="px-3 py-2">
-                    <span className="flex items-center gap-2">
-                      {group.dot !== null && (
-                        <span
-                          aria-hidden
-                          className="size-2 shrink-0 rounded-full"
-                          style={{ backgroundColor: group.dot }}
-                        />
-                      )}
-                      <span className="text-text-primary subtitle-4">
-                        {group.label}
-                      </span>
-                      {/* How many are *here*, which is not how many exist —
+              <TableBody className={BODY_AS_CARD}>
+                {group.label !== '' && (
+                  <TableRow data-heading>
+                    <TableCell colSpan={drawn.length} className="px-3 py-2">
+                      <span className="flex items-center gap-2">
+                        {group.dot !== null && (
+                          <span
+                            aria-hidden
+                            className="size-2 shrink-0 rounded-full"
+                            style={{ backgroundColor: group.dot }}
+                          />
+                        )}
+                        <span className="text-text-primary subtitle-4">
+                          {group.label}
+                        </span>
+                        {/* How many are *here*, which is not how many exist —
                           grouping runs over the loaded rows, so Load more can
                           add to any block. The title says so rather than the
                           heading carrying a word on every group. */}
-                      <span
-                        className="text-text-secondary body-3 tabular-nums"
-                        title="Loaded so far. Load more can add to this group."
-                      >
-                        {group.rows.length}
+                        <span
+                          className="text-text-secondary body-3 tabular-nums"
+                          title="Loaded so far. Load more can add to this group."
+                        >
+                          {group.rows.length}
+                        </span>
                       </span>
-                    </span>
-                  </TableCell>
-                </TableRow>
-              )}
-
-              {group.rows.map((task) => (
-                <TableRow key={task.id}>
-                  {drawn.map((column) => (
-                    <TableCell key={column.id} className={column.className}>
-                      {column.cell(task, lookups, context)}
                     </TableCell>
-                  ))}
-                </TableRow>
-              ))}
-            </TableBody>
-          </Fragment>
-        ))}
-      </Table>
+                  </TableRow>
+                )}
 
-      {failure !== null && (
-        <p className="text-error-main body-3" role="alert">
-          {failure}
-        </p>
-      )}
+                {group.rows.map((task) => (
+                  <TableRow key={task.id}>
+                    {drawn.map((column) => (
+                      <TableCell key={column.id} className={column.className}>
+                        {column.cell(task, lookups, context)}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Fragment>
+          ))}
+        </Table>
 
-      <LoadMore
-        loaded={rows.length}
-        hasMore={cursor !== null}
-        pending={pending}
-        onLoadMore={loadMore}
-      />
-    </div>
+        {failure !== null && (
+          <p className="text-error-main body-3" role="alert">
+            {failure}
+          </p>
+        )}
+
+        <LoadMore
+          loaded={rows.length}
+          hasMore={cursor !== null}
+          pending={pending}
+          onLoadMore={loadMore}
+        />
+      </div>
+
+      {drawer}
+    </>
   )
+}
+
+/**
+ * A task the drawer is open on.
+ *
+ * `detail` is null only in the one case nothing can fill it: the back button
+ * landing on a task whose row is no longer in the list — a filter changed
+ * underneath it — where there is nothing to show until the fetch returns.
+ */
+interface OpenTask {
+  taskId: string
+  detail: TaskDetail | null
+  /** True while `detail` is the provisional version, or missing entirely. */
+  loading: boolean
+  failure: string | null
+}
+
+/** A server-rendered detail, as the state the drawer is driven by. */
+function opened(detail: TaskDetail | null): OpenTask | null {
+  return detail === null
+    ? null
+    : { taskId: detail.task.id, detail, loading: false, failure: null }
+}
+
+/**
+ * What the clicked row already knows, in the shape the drawer reads.
+ *
+ * ⚠️ `statuses` holds **the one column this task is in**, never the board.
+ * `lookups.statuses` is every loaded project's columns in one flat map and a
+ * `StatusRow` does not say which project it came from, so there is nothing
+ * here to pick a board out of — which is why the drawer draws a badge rather
+ * than a picker until `loading` clears.
+ */
+function provisionalDetail(task: TaskRow, lookups: TaskLookups): TaskDetail {
+  const status = lookups.statuses[task.statusId]
+
+  return {
+    task,
+    project: lookups.projects[task.projectId] ?? null,
+    statuses: status === undefined ? [] : [status],
+    activity: [],
+  }
 }

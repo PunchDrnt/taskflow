@@ -102,6 +102,34 @@ export interface MyWorkRow extends TaskRow {
 }
 
 /**
+ * One line of a task's activity panel.
+ *
+ * The wire twin of the API's `ActivityEntry`, which says `Date` where this says
+ * `IsoDateTime` — see `IsoDateTime` for why the two are declared apart rather
+ * than shared with the dates left alone.
+ *
+ * `changes` is `audit.logs.changes_json` verbatim: one entry per field that
+ * moved, written as `{ from, to }`. It is deliberately not a pre-rendered
+ * sentence — the API does not know which of the ids in it the reader can put a
+ * name to, and the screen does.
+ *
+ * ⚠️ **`unknown` per field, and not the `{ from, to }` it is written as.** The
+ * column is `jsonb` and the table is never deleted from, so what comes back is
+ * whatever some version of the code put there — a field that has since been
+ * renamed, a shape from before a writer changed. `AuditLog.changesJson` takes
+ * the same position on the server. Whoever renders a line narrows it.
+ */
+export interface ActivityRow {
+  id: string
+  /** `created` · `updated` · `assigned` · `unassigned` · `deleted`. */
+  action: string
+  occurredAt: IsoDateTime
+  changes: Record<string, unknown>
+  /** Who did it. Names come from `iam` through its service, never a join. */
+  actor: AssigneeRow
+}
+
+/**
  * A project as a sidebar, a picker or a list row draws it.
  *
  * `archivedAt` is a string here and a `Date` on the API's `ProjectView`, for

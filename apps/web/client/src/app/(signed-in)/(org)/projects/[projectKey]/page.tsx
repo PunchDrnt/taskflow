@@ -11,7 +11,7 @@ import { currentUser } from '../../../../../lib/api/me'
 import { projectByKey } from '../../../../../lib/api/projects'
 import { apiForRender } from '../../../../../lib/api/server'
 import { fetchStatuses } from '../../../../../lib/api/statuses'
-import { fetchTasks, lookupsOf } from '../../../../../lib/api/tasks'
+import { detailFor, fetchTasks, lookupsOf } from '../../../../../lib/api/tasks'
 import {
   parseTaskQuery,
   toURLSearchParams,
@@ -59,11 +59,14 @@ export default async function ProjectPage({
 
   // The project's own columns, not the ones its loaded tasks happen to sit
   // in: an empty board still has statuses, and the filter has to offer them.
-  const [statuses, people, me] = await Promise.all([
+  const [statuses, people, me, opened] = await Promise.all([
     fetchStatuses(api, projectId),
     fetchAssignable(api, projectId),
     // Cached per request, so the layout above already paid for this one.
     currentUser(),
+    // The detail drawer, when the address arrived with one open. Null the rest
+    // of the time, which costs nothing — see `detailFor`.
+    detailFor(api, search.get('task')),
   ])
 
   const orgName =
@@ -120,6 +123,7 @@ export default async function ProjectPage({
         initialRows={page.data}
         initialCursor={page.meta.nextCursor}
         initialLookups={lookups}
+        initialDetail={opened}
         scope={scope}
         columns={PROJECT_TASK_COLUMNS}
         query={query}

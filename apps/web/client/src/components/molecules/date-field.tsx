@@ -30,6 +30,9 @@ export function DateField({
   label,
   min,
   max,
+  placeholder = 'Any',
+  variant = 'outline',
+  className,
 }: {
   /** `YYYY-MM-DD`, or `''` for no day chosen. */
   value: string
@@ -38,6 +41,21 @@ export function DateField({
   label: string
   min?: string
   max?: string
+  /**
+   * What an unset day reads as. "Any" is filter language — one end of a range
+   * left open — and a field that holds a task's own deadline means something
+   * else by empty, so it says so.
+   */
+  placeholder?: string
+  /**
+   * `ghost` for a value sitting in a row of values, `outline` for a control in
+   * a form. The difference is whether the box around it helps: in a panel of
+   * four fields it separates them, and in a list of labelled values it draws
+   * four boxes around things that are mostly being read.
+   */
+  variant?: 'outline' | 'ghost'
+  /** Merged onto the trigger — the caller's width, or a colour for overdue. */
+  className?: string
 }) {
   const selected = toDate(value)
 
@@ -46,18 +64,18 @@ export function DateField({
       <PopoverTrigger
         render={
           <Button
-            variant="outline"
+            variant={variant}
             // Neutral, not primary: this is an empty field waiting for input,
             // and an accent outline around one makes the panel read as four
             // things to press rather than one.
             color="neutral"
             size="sm"
             aria-label={label}
-            className="w-full justify-start font-normal"
+            className={`w-full justify-start font-normal ${className ?? ''}`}
           >
             <CalendarDays />
             {value === '' ? (
-              <span className="text-text-disabled">Any</span>
+              <span className="text-text-disabled">{placeholder}</span>
             ) : (
               <span className="tabular-nums">{value}</span>
             )}

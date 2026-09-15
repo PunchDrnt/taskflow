@@ -13,6 +13,7 @@ import { TaskToolbar } from '../../../../components/organisms/task-toolbar'
 import { ApiError } from '../../../../lib/api/errors'
 import { apiForRender } from '../../../../lib/api/server'
 import {
+  detailFor,
   fetchTasks,
   lookupsFor,
   type TaskLookups,
@@ -23,6 +24,7 @@ import {
   type TaskListQueryState,
   type TaskScope,
 } from '../../../../lib/tasks/query'
+import type { TaskDetail } from '../../../../lib/tasks/task-detail'
 
 /**
  * My Tasks — what is assigned to me in **this** organisation.
@@ -45,6 +47,9 @@ export default async function MyTasksPage({
   const search = toURLSearchParams(await searchParams)
   const query = parseTaskQuery(search, MINE)
   const result = await firstPage(query)
+  // Only when the address names one, so the ordinary load pays nothing for a
+  // drawer nobody asked for.
+  const opened = result.ok ? await openedTask(search) : null
 
   return (
     <PageBody width="wide" className="gap-6">
@@ -64,6 +69,7 @@ export default async function MyTasksPage({
             initialRows={result.rows}
             initialCursor={result.nextCursor}
             initialLookups={result.lookups}
+            initialDetail={opened}
             scope={MINE}
             columns={DEFAULT_TASK_COLUMNS}
             query={query}
@@ -80,6 +86,16 @@ export default async function MyTasksPage({
       )}
     </PageBody>
   )
+}
+
+/**
+ * The task the URL is pointing at, fetched here because there is no click to
+ * fetch it from — see `initialDetail` on `TaskList`.
+ */
+async function openedTask(search: URLSearchParams): Promise<TaskDetail | null> {
+  const taskId = search.get('task')
+
+  return taskId === null ? null : detailFor(await apiForRender(), taskId)
 }
 
 /** This screen is always the same scope; naming it keeps it out of six calls. */
