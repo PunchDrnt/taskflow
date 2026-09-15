@@ -75,3 +75,8 @@ each other's data and fail in ways that depend on timing.
 | `status.spec.ts`              | 🔒 A project always keeps a status, and one that counts as finished   |
 | `task.spec.ts`                | 🔒 A task number is never reissued, and completion follows the status |
 | `docs-links.spec.ts`          | Every link in `.claude/docs` points at something that exists          |
+
+`code-map.spec.ts` is the odd one out here: it touches no database and asserts
+nothing about behaviour. It checks that [`src/README.md`](../src/README.md) —
+the map of where things are — still matches the tree, so a moved file or a new
+directory breaks the build instead of quietly making the map a lie.
