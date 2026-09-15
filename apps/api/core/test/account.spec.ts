@@ -28,12 +28,12 @@ import {
   PasswordResetService,
 } from '../src/modules/iam/auth/password/password-reset.service'
 import { PasswordService } from '../src/modules/iam/auth/password/password.service'
-import { Session } from '../src/modules/iam/auth/session.entity'
-import { SessionService } from '../src/modules/iam/auth/session.service'
+import { Session } from '../src/modules/iam/auth/session/session.entity'
+import { SessionService } from '../src/modules/iam/auth/session/session.service'
 import {
   ACCESS_TOKEN_TTL_SECONDS,
   TokenService,
-} from '../src/modules/iam/auth/token.service'
+} from '../src/modules/iam/auth/session/token.service'
 import { RecoveryCode } from '../src/modules/iam/auth/two-factor/recovery-code.entity'
 import { TotpCredential } from '../src/modules/iam/auth/two-factor/totp-credential.entity'
 import { TotpService } from '../src/modules/iam/auth/two-factor/totp.service'

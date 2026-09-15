@@ -70,11 +70,20 @@ migrated, and the feature is a later phase. The second kind is marked, so
 
 Inside `iam/`:
 
-- `auth/` — signing in, sessions, the guard, lockout, tokens, and `/me`
+- `auth/` — signing in and out, and `/me`: the controller, `AuthService`,
+  lockout, and the OAuth identity row
+  - `auth/session/` — how a request proves who it is, all four pieces
+    together: the two JWTs, the cookies that carry them, the `sessions` row the
+    refresh token points at, and the guard that reads all three on every request
   - `auth/password/` — hashing, reset tokens, changing your own
   - `auth/two-factor/` — TOTP, recovery codes, enrolment
 - `user/` — the account itself, and the avatar endpoint
 - `system/` — system-level RBAC tables. Ours, crossing organisations
+
+`auth/` is the one directory deep enough to need this, and the split is by
+subject rather than by kind: a `services/` beside an `entities/` would put
+`session.entity.ts` and `session.service.ts` in different places, which is the
+opposite of what somebody reading about sessions wants.
 
 ## `shared/`
 

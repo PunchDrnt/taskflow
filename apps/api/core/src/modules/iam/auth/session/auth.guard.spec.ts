@@ -11,15 +11,15 @@ import { ApiException } from '#shared/http/api-exception'
 import { IS_PUBLIC, SKIP_ORG_SCOPE } from '#shared/http/route-metadata'
 import { openRequestContext } from '#shared/org-scope/request-context'
 
-import type { Env } from '../../../config/env'
-import type { Membership } from '../../organization/membership.service'
+import type { Env } from '../../../../config/env'
+import type { Membership } from '../../../organization/membership.service'
+import type { AuthenticatedUser, AuthService } from '../auth.service'
 import {
   ACCESS_TOKEN_COOKIE,
   ACTIVE_ORG_COOKIE,
   AuthCookies,
-} from './auth.cookies'
+} from './auth-cookies'
 import { AuthGuard } from './auth.guard'
-import type { AuthenticatedUser, AuthService } from './auth.service'
 import { ACCESS_TOKEN_TTL_SECONDS, TokenService } from './token.service'
 
 /**

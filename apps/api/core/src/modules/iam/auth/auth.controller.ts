@@ -31,17 +31,17 @@ import { ZodValidationPipe } from '#shared/http/zod-validation.pipe'
 
 import { FeatureService } from '../../../feature/feature.service'
 import {
-  AuthCookies,
-  REFRESH_TOKEN_COOKIE,
-  TWO_FACTOR_COOKIE,
-} from './auth.cookies'
-import {
   AuthService,
   isTwoFactorChallenge,
   type LoginResult,
 } from './auth.service'
 import { PasswordResetService } from './password/password-reset.service'
-import { TokenService } from './token.service'
+import {
+  AuthCookies,
+  REFRESH_TOKEN_COOKIE,
+  TWO_FACTOR_COOKIE,
+} from './session/auth-cookies'
+import { TokenService } from './session/token.service'
 import { TwoFactorService } from './two-factor/two-factor.service'
 
 /**

@@ -39,7 +39,7 @@ import { storageKey } from '../../storage/storage-key'
 import { StorageService } from '../../storage/storage.service'
 import { toStoredImage } from '../../storage/stored-image'
 import { UserService } from '../user/user.service'
-import { AuthCookies } from './auth.cookies'
+import { AuthCookies } from './session/auth-cookies'
 import { TwoFactorService } from './two-factor/two-factor.service'
 
 /**

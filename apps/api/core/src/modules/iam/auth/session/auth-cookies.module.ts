@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common'
 
-import { AuthCookies } from './auth.cookies'
+import { AuthCookies } from './auth-cookies'
 
 /**
  * `AuthCookies` alone, so that both `AuthModule` and `UserModule` can reach it

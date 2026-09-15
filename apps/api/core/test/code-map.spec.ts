@@ -36,6 +36,17 @@ function sourceFiles(dir = SRC, prefix = ''): string[] {
 
 const files = sourceFiles()
 
+/** Every directory below `dir`, as paths relative to it. */
+function directoriesUnder(dir: string, prefix = ''): string[] {
+  return readdirSync(dir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .flatMap((entry) => {
+      const path = prefix === '' ? entry.name : `${prefix}/${entry.name}`
+
+      return [path, ...directoriesUnder(join(dir, entry.name), path)]
+    })
+}
+
 describe('the source map', () => {
   it('names every directory directly under src', () => {
     const directories = readdirSync(SRC, { withFileTypes: true })
@@ -54,6 +65,24 @@ describe('the source map', () => {
       .map((entry) => `\`${entry.name}/\``)
 
     expect(modules.filter((name) => !MAP.includes(name))).toEqual([])
+  })
+
+  it('names the directories inside a module too', () => {
+    // `iam/` is split three deep and the rest are flat, so the sub-tree is
+    // where the map is most useful and most likely to rot: somebody adds a
+    // fourth directory under `auth/` and nothing says so.
+    //
+    // By bare name rather than by full path, because the map writes them the
+    // way a person would — `auth/password/`, not `iam/auth/password/`.
+    const nested = directoriesUnder(join(SRC, 'modules')).filter(
+      (path) => path.includes('/'), // not the modules themselves
+    )
+
+    const missing = nested.filter(
+      (path) => !MAP.includes(`${path.split('/').at(-1)!}/`),
+    )
+
+    expect(missing).toEqual([])
   })
 
   it('names every route prefix, and the file answering it', () => {

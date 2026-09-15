@@ -32,8 +32,8 @@ import {
   SessionService,
   type SessionOrigin,
   type SessionRecord,
-} from './session.service'
-import { TokenService, type Tokens } from './token.service'
+} from './session/session.service'
+import { TokenService, type Tokens } from './session/token.service'
 import { TwoFactorService } from './two-factor/two-factor.service'
 
 const alerts = alertsFor('auth')

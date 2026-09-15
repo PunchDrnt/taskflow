@@ -9,7 +9,7 @@ import {
   TWO_FACTOR_COOKIE,
 } from '@repo/shared'
 
-import type { Env } from '../../../config/env'
+import type { Env } from '../../../../config/env'
 import {
   ACCESS_TOKEN_TTL_SECONDS,
   REFRESH_TOKEN_TTL_SECONDS,

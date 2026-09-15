@@ -2,14 +2,14 @@ import type { ConfigService } from '@nestjs/config'
 import type { CookieOptions, Response } from 'express'
 import { describe, expect, it } from 'vitest'
 
-import type { Env } from '../../../config/env'
+import type { Env } from '../../../../config/env'
 import {
   ACCESS_TOKEN_COOKIE,
   ACTIVE_ORG_COOKIE,
   AuthCookies,
   REFRESH_TOKEN_COOKIE,
   TWO_FACTOR_COOKIE,
-} from './auth.cookies'
+} from './auth-cookies'
 
 interface SetCall {
   name: string
@@ -65,7 +65,7 @@ describe('cookie attributes', () => {
     // The refresh token and the challenge were scoped to `/api/v1/auth` and
     // were widened on purpose: a path-scoped cookie is not sent with page
     // requests, so the Next proxy and Server Actions never held the token and
-    // could not renew a session. See COOKIE_PATH in auth.cookies.ts.
+    // could not renew a session. See COOKIE_PATH in auth-cookies.ts.
     //
     // Pinned so that narrowing one again is a failing test rather than a
     // Thursday spent working out why every cold load renders signed out.
