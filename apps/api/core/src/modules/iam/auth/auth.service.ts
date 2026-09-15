@@ -26,7 +26,7 @@ import {
 } from '../../organization/membership.service'
 import { ACTIVE_USER_STATUS, UserService } from '../user/user.service'
 import { LockoutService } from './lockout.service'
-import { PasswordService } from './password.service'
+import { PasswordService } from './password/password.service'
 import {
   ROTATION_GRACE_MS,
   SessionService,
@@ -34,7 +34,7 @@ import {
   type SessionRecord,
 } from './session.service'
 import { TokenService, type Tokens } from './token.service'
-import { TwoFactorService } from './two-factor.service'
+import { TwoFactorService } from './two-factor/two-factor.service'
 
 const alerts = alertsFor('auth')
 

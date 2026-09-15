@@ -11,7 +11,7 @@ import { SYSTEM_USER_ID } from '#shared/system-user'
 
 import { AuditService } from '../src/modules/audit/audit.service'
 import { AuditLog } from '../src/modules/audit/log.entity'
-import { PasswordService } from '../src/modules/iam/auth/password.service'
+import { PasswordService } from '../src/modules/iam/auth/password/password.service'
 import { User } from '../src/modules/iam/user/user.entity'
 import { UserService } from '../src/modules/iam/user/user.service'
 import { OrganizationMember } from '../src/modules/organization/member.entity'

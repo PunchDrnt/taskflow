@@ -3,7 +3,7 @@ import { Module } from '@nestjs/common'
 import { provideOrgRepository } from '#shared/org-scope/org-repository.provider'
 
 import { AuditModule } from '../audit/audit.module'
-import { PasswordModule } from '../iam/auth/password.module'
+import { PasswordModule } from '../iam/auth/password/password.module'
 import { UserModule } from '../iam/user/user.module'
 import { OrganizationMember } from './member.entity'
 import { MemberService } from './member.service'

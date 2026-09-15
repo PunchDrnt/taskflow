@@ -9,7 +9,7 @@ import { Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { generateSecret, generateSync, generateURI } from 'otplib'
 
-import type { Env } from '../../../config/env'
+import type { Env } from '../../../../config/env'
 
 /** How many 30-second steps either side of now a code is still accepted. */
 const WINDOW_STEPS = 1

@@ -40,9 +40,9 @@ import {
   isTwoFactorChallenge,
   type LoginResult,
 } from './auth.service'
-import { PasswordResetService } from './password-reset.service'
+import { PasswordResetService } from './password/password-reset.service'
 import { TokenService } from './token.service'
-import { TwoFactorService } from './two-factor.service'
+import { TwoFactorService } from './two-factor/two-factor.service'
 
 /**
  * Sign in, sign out, refresh. Every route is `@Public()` — not because they are

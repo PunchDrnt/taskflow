@@ -22,22 +22,22 @@ import { AuditService } from '../src/modules/audit/audit.service'
 import { AuditLog } from '../src/modules/audit/log.entity'
 import { AuthService } from '../src/modules/iam/auth/auth.service'
 import { LockoutService } from '../src/modules/iam/auth/lockout.service'
-import { PasswordResetToken } from '../src/modules/iam/auth/password-reset-token.entity'
+import { PasswordResetToken } from '../src/modules/iam/auth/password/password-reset-token.entity'
 import {
   PASSWORD_RESET_TEMPLATE,
   PasswordResetService,
-} from '../src/modules/iam/auth/password-reset.service'
-import { PasswordService } from '../src/modules/iam/auth/password.service'
-import { RecoveryCode } from '../src/modules/iam/auth/recovery-code.entity'
+} from '../src/modules/iam/auth/password/password-reset.service'
+import { PasswordService } from '../src/modules/iam/auth/password/password.service'
 import { Session } from '../src/modules/iam/auth/session.entity'
 import { SessionService } from '../src/modules/iam/auth/session.service'
 import {
   ACCESS_TOKEN_TTL_SECONDS,
   TokenService,
 } from '../src/modules/iam/auth/token.service'
-import { TotpCredential } from '../src/modules/iam/auth/totp-credential.entity'
-import { TotpService } from '../src/modules/iam/auth/totp.service'
-import { TwoFactorService } from '../src/modules/iam/auth/two-factor.service'
+import { RecoveryCode } from '../src/modules/iam/auth/two-factor/recovery-code.entity'
+import { TotpCredential } from '../src/modules/iam/auth/two-factor/totp-credential.entity'
+import { TotpService } from '../src/modules/iam/auth/two-factor/totp.service'
+import { TwoFactorService } from '../src/modules/iam/auth/two-factor/two-factor.service'
 import { User } from '../src/modules/iam/user/user.entity'
 import { UserService } from '../src/modules/iam/user/user.service'
 import { EmailService } from '../src/modules/notify/email.service'

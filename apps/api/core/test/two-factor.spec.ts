@@ -16,20 +16,20 @@ import {
   isTwoFactorChallenge,
 } from '../src/modules/iam/auth/auth.service'
 import { LockoutService } from '../src/modules/iam/auth/lockout.service'
-import { PasswordService } from '../src/modules/iam/auth/password.service'
-import { RecoveryCode } from '../src/modules/iam/auth/recovery-code.entity'
+import { PasswordService } from '../src/modules/iam/auth/password/password.service'
 import { Session } from '../src/modules/iam/auth/session.entity'
 import { SessionService } from '../src/modules/iam/auth/session.service'
 import {
   ACCESS_TOKEN_TTL_SECONDS,
   TokenService,
 } from '../src/modules/iam/auth/token.service'
-import { TotpCredential } from '../src/modules/iam/auth/totp-credential.entity'
+import { RecoveryCode } from '../src/modules/iam/auth/two-factor/recovery-code.entity'
+import { TotpCredential } from '../src/modules/iam/auth/two-factor/totp-credential.entity'
 import {
   TOTP_STEP_SECONDS,
   TotpService,
-} from '../src/modules/iam/auth/totp.service'
-import { TwoFactorService } from '../src/modules/iam/auth/two-factor.service'
+} from '../src/modules/iam/auth/two-factor/totp.service'
+import { TwoFactorService } from '../src/modules/iam/auth/two-factor/two-factor.service'
 import { User } from '../src/modules/iam/user/user.entity'
 import { UserService } from '../src/modules/iam/user/user.service'
 import { OrganizationMember } from '../src/modules/organization/member.entity'

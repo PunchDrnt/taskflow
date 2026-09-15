@@ -8,7 +8,7 @@ import { SkipOrgScope } from '#shared/http/route-metadata'
 import { ZodValidationPipe } from '#shared/http/zod-validation.pipe'
 import { requireRequestContext } from '#shared/org-scope/request-context'
 
-import { AuthService } from './auth.service'
+import { AuthService } from '../auth.service'
 
 /**
  * `PATCH /v1/me/password`, on the `me` path but in the `auth` module.

@@ -40,7 +40,7 @@ import { StorageService } from '../../storage/storage.service'
 import { toStoredImage } from '../../storage/stored-image'
 import { UserService } from '../user/user.service'
 import { AuthCookies } from './auth.cookies'
-import { TwoFactorService } from './two-factor.service'
+import { TwoFactorService } from './two-factor/two-factor.service'
 
 /**
  * The signed-in person, across organisations rather than inside one — hence
