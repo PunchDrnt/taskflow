@@ -63,7 +63,7 @@ function walk(dir: string, match: (path: string) => boolean): string[] {
  * vowels and tone marks are combining marks, not letters**, so `\w` — and even
  * `[a-z0-9]` with `u` — silently strips them and turns every Thai heading into
  * a different anchor than the one being linked to. Half the headings in these
- * docs are Thai. Same trap as `StorageService.keyFor`.
+ * docs are Thai. Same trap as `safeName` in `storage-key.ts`.
  */
 function slugify(heading: string): string {
   return heading

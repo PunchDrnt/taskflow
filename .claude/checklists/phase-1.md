@@ -200,6 +200,22 @@ unique เต็ม · `views.sort_order` / `is_default`
       · `cache-control: private, max-age=60` — URL ไม่เปลี่ยนตอนเปลี่ยนรูป (key เปลี่ยน แต่ path เดิม)
         นานกว่านี้ = คนเพิ่งเปลี่ยนรูปมองเห็นรูปเก่า · สั้นกว่านี้ = ลิสต์สมาชิก 30 หน้า = 30 request ต่อการกดหนึ่งครั้ง
       · object หายแต่ row ยังชี้อยู่ → `get` คืน null → 404 ไม่ใช่ 500
+- [x] 🔒 **โครง key บอกว่าไฟล์ตายไปกับใคร** — `modules/storage/storage-key.ts`
+      · `org/<orgId>/<type>/<entityId>/<uuid>-<name>` — ตายไปกับ org
+      · `user/<userId>/<type>/<uuid>-<name>` — ติดตัวคน ข้าม org ไปด้วย
+      · ⚠️ **แก้บั๊กที่รออยู่** — avatar เคยถูกยัดใต้ org ที่กำลัง active (`keyFor(orgId ?? userId, …)`)
+        · คนที่อยู่สอง org รูปไปอยู่ใต้ org ที่บังเอิญเปิดอยู่ตอนอัป
+        · วันที่ Phase 2 มีปุ่มลบ org แล้วกวาด prefix ของ A ทิ้ง → **รูปปัจจุบันของคนที่ยังอยู่ B หายด้วย**
+        · แถม `orgId ?? userId` เอา user id ไปวางในช่องที่ปกติเป็น org id — สอง namespace ระดับเดียวกัน
+      · `storagePrefix()` มี `/` ปิดท้าย — ไม่งั้น `org/<id>` แมตช์ `org/<id>-อะไรก็ได้` ด้วย
+        และ listing ที่ตั้งใจลบไฟล์ของลูกค้าหนึ่งราย เป็นที่ที่แย่ที่สุดที่จะมารู้เรื่องนี้
+      · `StorageEntityType` เป็น union ปิด — พิมพ์ผิดเป็น compile error ไม่ใช่ต้นไม้ที่สองที่เงียบอยู่
+        ชื่อตรงกับ `discussion.attachments.entity_type` ที่ Phase 3 จะเขียนคู่กัน
+      · **ของเก่าใน bucket ไม่ต้อง migrate** — key เป็นตำแหน่งทึบที่ row เก็บไว้ ไม่มีใคร parse
+        `get(key)` ดึงของที่อยู่ตรงนั้น · เปลี่ยนแค่ทรงของอันที่เขียนใหม่
+      · **bucket เดียวต่อ environment ไม่ใช่ต่อ org** — bucket ต่อ org = การสร้าง org มีขั้นตอน
+        provisioning ที่ล้มกลางทางได้ · lifecycle rule คูณจำนวนลูกค้า · งานที่ข้าม org กลายเป็น N call
+        · จะแยก bucket เมื่อมีของที่ public จริงๆ (เช่นโลโก้ org บนหน้า login) — ตอนนั้นค่อยสร้าง
 
 - [x] **ย่อ + บีบรูปสองฝั่ง** — ด้านยาว 512px · WebP ~0.85 · ปกติเหลือ 30-60KB
       · ✅ ฝั่ง browser `lib/image/compress.ts` + `AvatarField` · ฝั่ง API `modules/storage/image.ts` (sharp)

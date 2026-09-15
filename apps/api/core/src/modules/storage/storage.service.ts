@@ -116,31 +116,6 @@ export class StorageService implements OnModuleInit {
   }
 
   /**
-   * Where a file lives. Keyed by org first so a misdirected key is visible as
-   * a wrong prefix rather than an anonymous uuid, and so one organisation's
-   * objects can be listed or removed together.
-   */
-  keyFor(
-    orgId: string,
-    entityType: string,
-    entityId: string,
-    fileName: string,
-  ): string {
-    // \w is [A-Za-z0-9_], so it replaced every Thai character in the name and
-    // "ใบเสร็จ 2026.pdf" arrived as "_2026.pdf". \p{M} is not optional here:
-    // Thai vowels and tone marks are combining marks, not letters, so
-    // \p{L}\p{N} alone still hollows the word out to "ใบเสร_จ". Path
-    // separators are still replaced, so ../ cannot climb out of the prefix.
-    const safeName = [...fileName.replace(/[^\p{L}\p{N}\p{M}._-]+/gu, '_')]
-      // Sliced by code point, not code unit: cutting the tail of a Thai name
-      // mid-character would leave a tone mark with nothing to sit on.
-      .slice(-120)
-      .join('')
-
-    return `${orgId}/${entityType}/${entityId}/${crypto.randomUUID()}-${safeName}`
-  }
-
-  /**
    * Stores one object. The caller has already decided the bytes are allowed —
    * this is where they land, not where they are judged.
    *

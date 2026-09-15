@@ -142,6 +142,20 @@ CREATE UNIQUE INDEX ON iam.users (email)
   — ไม่ใช่แนบ URL ไปกับทุกแถวของทุกลิสต์ ซึ่งจะสร้างเป็นร้อยต่อหน้าจอโดยส่วนใหญ่ไม่ถูกวาด
 · ค่าที่เป็น `http(s)://` อยู่แล้วจะ redirect ตรงๆ — นั่นคือรูปที่ host ที่อื่น ไม่ต้องช่วยอะไร
 
+🔒 **โครง key บอกว่าไฟล์ตายไปกับใคร** — bucket เดียว prefix เป็นโครงสร้าง
+
+```
+org/<orgId>/<type>/<entityId>/<uuid>-<name>   ตายไปกับ org
+user/<userId>/<type>/<uuid>-<name>            ติดตัวคน ข้าม org ไปด้วย
+```
+
+· รูปโปรไฟล์เป็นของ **คน** ไม่ใช่ของ org — คนที่อยู่สอง org ต้องมีรูปเดียว ไม่ใช่รูปต่อ org
+  และการลบ org ต้องไม่พารูปของคนที่ยังทำงานอยู่อีกที่ไปด้วย
+· ไม่ใช่ bucket ต่อ org — การสร้าง org จะมีขั้นตอน provisioning ที่ล้มกลางทางได้
+  lifecycle rule คูณจำนวนลูกค้า และงานที่ข้าม org กลายเป็น N call · prefix พอแล้ว
+  เมื่อ API เป็นผู้อ่านคนเดียวและเซ็นทุก request
+· `StorageEntityType` เป็น union ปิด ชื่อตรงกับ `discussion.attachments.entity_type` ของ Phase 3
+
 > **เคยเป็น presigned PUT ตรงจาก browser และเปลี่ยนแล้ว** — เหตุผลเดิม (ไฟล์ไม่ผ่าน Node) ยังจริง
 > แต่ราคาที่ไม่ได้คิดคือ **browser ต้องไปถึง store ให้ได้** · บน server `S3_HOST` คือ `garage`
 > ซึ่งเป็นชื่อใน docker network เท่านั้น และ Caddy เป็นตัวเดียวที่ publish port

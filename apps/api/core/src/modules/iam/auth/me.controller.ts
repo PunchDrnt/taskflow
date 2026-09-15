@@ -35,8 +35,9 @@ import { ZodValidationPipe } from '#shared/http/zod-validation.pipe'
 import { requireRequestContext } from '#shared/org-scope/request-context'
 
 import { MembershipService } from '../../organization/membership.service'
-import { toStoredImage } from '../../storage/image'
+import { storageKey } from '../../storage/storage-key'
 import { StorageService } from '../../storage/storage.service'
+import { toStoredImage } from '../../storage/stored-image'
 import { UserService } from '../user/user.service'
 import { AuthCookies } from './auth.cookies'
 import { TwoFactorService } from './two-factor.service'
@@ -147,10 +148,12 @@ export class MeController {
    * whole file, and the type is checked against what was actually sent rather
    * than against a filename anybody could have typed.
    *
-   * `@SkipOrgScope()` because a profile picture belongs to the person, not to
-   * whichever organisation they are acting for — but the key is filed under
-   * the active org when there is one, so a bucket listing still groups by
-   * customer. With no active org it goes under the user's own id.
+   * `@SkipOrgScope()` because a profile picture belongs to the person and not
+   * to whichever organisation they are acting for — and so, now, does the key:
+   * `user/<id>/avatar/...`. It was filed under the active org until the layout
+   * in `storage-key.ts` was fixed, which meant somebody in two companies had
+   * their picture under whichever one they were looking at, waiting for the
+   * first thing that deletes an organisation to take it.
    *
    * The key is returned rather than saved: `PATCH /v1/me` applies it with the
    * rest of the profile, so a picture chosen and then abandoned changes
@@ -179,7 +182,7 @@ export class MeController {
   async uploadAvatar(
     @UploadedFile() file: UploadedImage | undefined,
   ): Promise<{ key: string }> {
-    const { userId, orgId } = requireRequestContext()
+    const { userId } = requireRequestContext()
 
     if (file === undefined) throw ApiException.badRequest('No file was sent')
 
@@ -206,12 +209,11 @@ export class MeController {
     // Named for what it is now, not for what was sent. Everything stored here
     // is WebP, and an object called `.png` holding WebP bytes misleads whoever
     // opens the bucket later at no benefit.
-    const key = this.storage.keyFor(
-      orgId ?? userId,
-      'avatar',
-      userId,
-      `${stem(fileName.data)}.webp`,
-    )
+    const key = storageKey({
+      owner: { user: userId },
+      entityType: 'avatar',
+      fileName: `${stem(fileName.data)}.webp`,
+    })
 
     await this.storage.put(key, image, 'image/webp')
 
