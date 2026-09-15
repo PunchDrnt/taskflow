@@ -22,7 +22,7 @@ import {
   formatTimeOfDay,
   toCalendarDay,
 } from '@/lib/format/due-date'
-import type { OpenTask, TaskPatch } from '@/lib/tasks/task-detail'
+import type { OpenTask, TaskDetail, TaskPatch } from '@/lib/tasks/task-detail'
 
 import { namesFrom, TaskActivity } from './activity'
 import {
@@ -75,39 +75,84 @@ export function TaskDrawer({
   /** An edit made here is a row the list behind is also showing. */
   onTaskChanged: (task: TaskRow) => void
 }) {
+  /**
+   * The last task that was open, kept so there is something to draw while the
+   * panel slides out.
+   */
+  const [held, setHeld] = useState(open)
+
+  if (open !== null && open !== held) setHeld(open)
+
+  const showing = open ?? held
+  const detail = showing?.detail ?? null
+
+  return (
+    <Sheet
+      open={open !== null}
+      onOpenChange={(next) => {
+        if (!next) onClose()
+      }}
+    >
+      {showing !== null && detail !== null && (
+        <TaskPanel
+          taskId={showing.taskId}
+          detail={detail}
+          loading={showing.loading}
+          failure={showing.failure}
+          onClose={onClose}
+          onTaskChanged={onTaskChanged}
+        />
+      )}
+    </Sheet>
+  )
+}
+
+/**
+ * The panel itself — split from the dialog around it, and not for tidiness.
+ *
+ * ⚠️ **`Sheet` has to be mounted *before* the task is, or nothing animates.**
+ * base-ui's `useTransitionStatus` lives in `Dialog.Root` and starts `mounted`
+ * at whatever `open` is, so a root that first appears already open never gets
+ * `data-starting-style` and never slides in; unmounting it to close skips
+ * `data-ending-style` the same way. The root above therefore renders from the
+ * first paint with `open` false, and this — which needs a task to draw at all
+ * — is what comes and goes inside it.
+ *
+ * Its own state outlives the task it was opened for, which is deliberate: how
+ * wide the panel is and whether the history is out are preferences, and
+ * re-deciding them on every task is the thing that would annoy. The one
+ * exception is a failed edit, which belongs to the task it happened on.
+ */
+function TaskPanel({
+  taskId,
+  detail,
+  loading,
+  failure,
+  onClose,
+  onTaskChanged,
+}: {
+  taskId: string
+  detail: TaskDetail
+  /** True while `detail` is the provisional version. */
+  loading: boolean
+  /** Why the rest never arrived, if it did not. */
+  failure: string | null
+  onClose: () => void
+  onTaskChanged: (task: TaskRow) => void
+}) {
   const [expanded, setExpanded] = useState(false)
   // Shut to begin with, as in the design: the fields are what somebody opened
   // a task for, and the history is what they go looking for afterwards.
   const [historyOpen, setHistoryOpen] = useState(false)
   const [editFailure, setEditFailure] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
+  const [failedFor, setFailedFor] = useState(taskId)
 
-  /**
-   * The last task that was open, kept so there is something to draw while the
-   * panel slides out.
-   *
-   * ⚠️ **This component stays mounted, and that is what makes it animate at
-   * all.** `useTransitionStatus` in base-ui starts `mounted` at whatever `open`
-   * is, so a dialog that mounts already open never gets `data-starting-style`
-   * and never slides in; taking it out of the tree to close it skips
-   * `data-ending-style` the same way. Mounted once, with `open` a boolean that
-   * changes, is the only shape both halves of the transition survive.
-   */
-  const [held, setHeld] = useState(open)
-
-  if (open !== null && open !== held) {
-    // A failure belongs to the task it happened on. Nothing else resets — the
-    // panel's width and whether the history is out are preferences, and
-    // re-deciding them on every task is the thing that would annoy.
-    if (open.taskId !== held?.taskId) setEditFailure(null)
-    setHeld(open)
+  if (failedFor !== taskId) {
+    setFailedFor(taskId)
+    setEditFailure(null)
   }
 
-  const showing = open ?? held
-
-  if (showing === null || showing.detail === null) return null
-
-  const { detail, loading, failure } = showing
   const { task, project, statuses, activity } = detail
   const status = statuses.find((one) => one.id === task.statusId) ?? null
   const names = namesFrom(activity, task.assignees)
@@ -125,222 +170,213 @@ export function TaskDrawer({
   }
 
   return (
-    <Sheet
-      open={open !== null}
-      onOpenChange={(next) => {
-        if (!next) onClose()
-      }}
+    <SheetContent
+      side="right"
+      showCloseButton={false}
+      // The width is the design's: 720px, 1060 with the history panel out,
+      // and the whole window when expanded. Every override repeats
+      // `data-[side=right]:`, which is what lets `cn` recognise it as the
+      // same utility and drop `SheetContent`'s own — a bare `w-full` would
+      // leave two width rules and let stylesheet order decide.
+      className={`gap-0 p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-none ${
+        expanded
+          ? ''
+          : historyOpen
+            ? 'data-[side=right]:lg:w-265'
+            : 'data-[side=right]:lg:w-180'
+      }`}
     >
-      <SheetContent
-        side="right"
-        showCloseButton={false}
-        // The width is the design's: 720px, 1060 with the history panel out,
-        // and the whole window when expanded. Every override repeats
-        // `data-[side=right]:`, which is what lets `cn` recognise it as the
-        // same utility and drop `SheetContent`'s own — a bare `w-full` would
-        // leave two width rules and let stylesheet order decide.
-        className={`gap-0 p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-none ${
-          expanded
-            ? ''
-            : historyOpen
-              ? 'data-[side=right]:lg:w-[1060px]'
-              : 'data-[side=right]:lg:w-[720px]'
-        }`}
-      >
-        <header className="border-divider flex shrink-0 items-center gap-1.5 border-b px-3 py-2">
-          <Button
-            variant="ghost"
-            color="neutral"
-            size="icon-sm"
-            aria-label="Close"
-            onClick={onClose}
-          >
-            <ChevronsRight />
-          </Button>
+      <header className="border-divider flex shrink-0 items-center gap-1.5 border-b px-3 py-2">
+        <Button
+          variant="ghost"
+          color="neutral"
+          size="icon-sm"
+          aria-label="Close"
+          onClick={onClose}
+        >
+          <ChevronsRight />
+        </Button>
 
-          <Button
-            variant="ghost"
-            color="neutral"
-            size="icon-sm"
-            aria-label={expanded ? 'Collapse to a drawer' : 'Expand'}
-            onClick={() => setExpanded(!expanded)}
-          >
-            {expanded ? <Minimize2 /> : <Maximize2 />}
-          </Button>
+        <Button
+          variant="ghost"
+          color="neutral"
+          size="icon-sm"
+          aria-label={expanded ? 'Collapse to a drawer' : 'Expand'}
+          onClick={() => setExpanded(!expanded)}
+        >
+          {expanded ? <Minimize2 /> : <Maximize2 />}
+        </Button>
 
-          {/* Where this task lives, for somebody who opened it from My Tasks
+        {/* Where this task lives, for somebody who opened it from My Tasks
               and has four boards in their head. */}
-          <p className="text-text-secondary body-3 flex min-w-0 flex-1 items-center gap-2">
-            <span className="truncate">{project?.name ?? '—'}</span>
-            <TaskKey>{task.key}</TaskKey>
-          </p>
+        <p className="text-text-secondary body-3 flex min-w-0 flex-1 items-center gap-2">
+          <span className="truncate">{project?.name ?? '—'}</span>
+          <TaskKey>{task.key}</TaskKey>
+        </p>
 
-          <Button
-            variant={historyOpen ? 'secondary' : 'ghost'}
-            color={historyOpen ? 'primary' : 'neutral'}
-            size="sm"
-            aria-pressed={historyOpen}
-            onClick={() => setHistoryOpen(!historyOpen)}
+        <Button
+          variant={historyOpen ? 'secondary' : 'ghost'}
+          color={historyOpen ? 'primary' : 'neutral'}
+          size="sm"
+          aria-pressed={historyOpen}
+          onClick={() => setHistoryOpen(!historyOpen)}
+        >
+          <History />
+          {loading ? '' : activity.length}
+          <span className="sr-only">Activity</span>
+        </Button>
+      </header>
+
+      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+        <div className="flex flex-1 justify-center overflow-y-auto px-6 py-6 sm:px-8">
+          <div
+            className={`flex w-full flex-col ${expanded ? 'max-w-215' : ''}`}
           >
-            <History />
-            {loading ? '' : activity.length}
-            <span className="sr-only">Activity</span>
-          </Button>
-        </header>
-
-        <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-          <div className="flex flex-1 justify-center overflow-y-auto px-6 py-6 sm:px-8">
-            <div
-              className={`flex w-full flex-col ${expanded ? 'max-w-[860px]' : ''}`}
-            >
-              {/* The dialog takes its accessible name from this heading, so
+            {/* The dialog takes its accessible name from this heading, so
                   there is one title rather than a visible one and a hidden
                   one that drift apart. */}
-              <SheetTitle render={<h2 className="mb-2.5" />}>
-                <EditableTitle
-                  title={task.title}
-                  pending={pending}
-                  onSave={(title) => edit({ title })}
-                />
-              </SheetTitle>
-
-              <EditableDescription
-                description={task.description}
+            <SheetTitle render={<h2 className="mb-2.5" />}>
+              <EditableTitle
+                title={task.title}
                 pending={pending}
-                onSave={(description) => edit({ description })}
+                onSave={(title) => edit({ title })}
               />
+            </SheetTitle>
 
-              {editFailure !== null && (
-                <p className="text-error-main body-3 mt-3" role="alert">
-                  {editFailure}
-                </p>
-              )}
+            <EditableDescription
+              description={task.description}
+              pending={pending}
+              onSave={(description) => edit({ description })}
+            />
 
-              <div className="mt-6 flex flex-col">
-                <MetaRow label="Status">
-                  {status === null ? (
-                    <Dash />
-                  ) : loading ? (
-                    // The board is not known yet, and a picker offering the
-                    // one column already in view would be a control that
-                    // cannot change anything.
-                    <StatusBadge status={status} />
-                  ) : (
-                    <StatusPicker
-                      taskId={task.id}
-                      status={status}
-                      statuses={statuses}
-                      onTaskChanged={onTaskChanged}
-                    />
-                  )}
-                </MetaRow>
+            {editFailure !== null && (
+              <p className="text-error-main body-3 mt-3" role="alert">
+                {editFailure}
+              </p>
+            )}
 
-                <MetaRow label="Assignee">
-                  <AssigneePicker
-                    projectId={task.projectId}
+            <div className="mt-6 flex flex-col">
+              <MetaRow label="Status">
+                {status === null ? (
+                  <Dash />
+                ) : loading ? (
+                  // The board is not known yet, and a picker offering the
+                  // one column already in view would be a control that
+                  // cannot change anything.
+                  <StatusBadge status={status} />
+                ) : (
+                  <StatusPicker
                     taskId={task.id}
-                    assignees={task.assignees}
-                    onAssigneesChanged={(assignees) =>
-                      onTaskChanged({ ...task, assignees })
-                    }
+                    status={status}
+                    statuses={statuses}
+                    onTaskChanged={onTaskChanged}
                   />
-                </MetaRow>
+                )}
+              </MetaRow>
 
-                <MetaRow label="Due date">
-                  <DateField
-                    variant="ghost"
-                    label="Due date"
-                    placeholder="No due date"
-                    className={`-mx-1.5 w-auto px-1.5 ${overdue ? 'text-error-main' : ''}`}
-                    value={
-                      task.dueDate === null ? '' : toCalendarDay(task.dueDate)
-                    }
-                    // 🔒 A day picked here becomes the **last** instant of
-                    // that day in the company's zone. "Due on the 30th" is
-                    // not late at breakfast on the 30th, which is what
-                    // midnight would make it — and the API refuses a date
-                    // with no offset at all (`dueDateSchema`).
-                    onChange={(day) =>
-                      edit({ dueDate: day === '' ? null : endOfDay(day) })
-                    }
-                  />
-                </MetaRow>
+              <MetaRow label="Assignee">
+                <AssigneePicker
+                  projectId={task.projectId}
+                  taskId={task.id}
+                  assignees={task.assignees}
+                  onAssigneesChanged={(assignees) =>
+                    onTaskChanged({ ...task, assignees })
+                  }
+                />
+              </MetaRow>
 
-                <MetaRow label="Priority">
-                  <PriorityPicker
-                    priority={task.priority}
-                    pending={pending}
-                    onChange={(priority) => edit({ priority })}
-                  />
-                </MetaRow>
+              <MetaRow label="Due date">
+                <DateField
+                  variant="ghost"
+                  label="Due date"
+                  placeholder="No due date"
+                  className={`-mx-1.5 w-auto px-1.5 ${overdue ? 'text-error-main' : ''}`}
+                  value={
+                    task.dueDate === null ? '' : toCalendarDay(task.dueDate)
+                  }
+                  // 🔒 A day picked here becomes the **last** instant of
+                  // that day in the company's zone. "Due on the 30th" is
+                  // not late at breakfast on the 30th, which is what
+                  // midnight would make it — and the API refuses a date
+                  // with no offset at all (`dueDateSchema`).
+                  onChange={(day) =>
+                    edit({ dueDate: day === '' ? null : endOfDay(day) })
+                  }
+                />
+              </MetaRow>
 
-                <MetaRow label="Project">
-                  {project === null ? (
-                    <Dash />
-                  ) : (
-                    <span className="text-text-primary body-2 flex items-center gap-1.5">
-                      <ProjectDot color={project.color} />
-                      {project.name}
-                    </span>
-                  )}
-                </MetaRow>
-              </div>
+              <MetaRow label="Priority">
+                <PriorityPicker
+                  priority={task.priority}
+                  pending={pending}
+                  onChange={(priority) => edit({ priority })}
+                />
+              </MetaRow>
 
-              {task.completedAt !== null && (
-                <p className="border-success-outlined-border bg-success-soft text-success-light body-3 mt-4 rounded-md border px-3 py-2">
-                  Completed
-                  {task.completedBy !== null &&
-                    names.has(task.completedBy) &&
-                    ` by ${names.get(task.completedBy)}`}{' '}
-                  · {formatDay(task.completedAt)} at{' '}
-                  {formatTimeOfDay(task.completedAt)}
-                </p>
-              )}
-
-              {failure !== null && (
-                <p className="text-warning-main body-3 mt-4" role="alert">
-                  {failure}
-                </p>
-              )}
-            </div>
-          </div>
-
-          {historyOpen && (
-            <aside className="border-divider bg-paper-elevation-0 flex min-h-0 w-full shrink-0 flex-col border-t lg:w-85 lg:border-t-0 lg:border-l">
-              <header className="border-divider flex h-10 shrink-0 items-center gap-2 border-b px-4">
-                <h3 className="subtitle-4 text-text-primary flex-1">
-                  Activity
-                </h3>
-                {!loading && (
-                  <span className="text-text-disabled body-3 font-mono">
-                    {activity.length}
+              <MetaRow label="Project">
+                {project === null ? (
+                  <Dash />
+                ) : (
+                  <span className="text-text-primary body-2 flex items-center gap-1.5">
+                    <ProjectDot color={project.color} />
+                    {project.name}
                   </span>
                 )}
-              </header>
+              </MetaRow>
+            </div>
 
-              <div className="min-h-0 flex-1 overflow-y-auto">
-                {loading ? (
-                  <div className="flex justify-center py-6">
-                    <Spinner className="text-text-disabled" />
-                  </div>
-                ) : (
-                  /* The log as it stood when the drawer opened. An edit made
+            {task.completedAt !== null && (
+              <p className="border-success-outlined-border bg-success-soft text-success-light body-3 mt-4 rounded-md border px-3 py-2">
+                Completed
+                {task.completedBy !== null &&
+                  names.has(task.completedBy) &&
+                  ` by ${names.get(task.completedBy)}`}{' '}
+                · {formatDay(task.completedAt)} at{' '}
+                {formatTimeOfDay(task.completedAt)}
+              </p>
+            )}
+
+            {failure !== null && (
+              <p className="text-warning-main body-3 mt-4" role="alert">
+                {failure}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {historyOpen && (
+          <aside className="border-divider bg-paper-elevation-0 flex min-h-0 w-full shrink-0 flex-col border-t lg:w-85 lg:border-t-0 lg:border-l">
+            <header className="border-divider flex h-10 shrink-0 items-center gap-2 border-b px-4">
+              <h3 className="subtitle-4 text-text-primary flex-1">Activity</h3>
+              {!loading && (
+                <span className="text-text-disabled body-3 font-mono">
+                  {activity.length}
+                </span>
+              )}
+            </header>
+
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              {loading ? (
+                <div className="flex justify-center py-6">
+                  <Spinner className="text-text-disabled" />
+                </div>
+              ) : (
+                /* The log as it stood when the drawer opened. An edit made
                      here does not add a line: re-reading the whole history
                      after every field change is a request per change, for a
                      sentence describing what the person just did in front of
                      it. Re-opening the task shows it. */
-                  <TaskActivity
-                    entries={activity}
-                    statuses={statuses}
-                    assignees={task.assignees}
-                  />
-                )}
-              </div>
-            </aside>
-          )}
-        </div>
-      </SheetContent>
-    </Sheet>
+                <TaskActivity
+                  entries={activity}
+                  statuses={statuses}
+                  assignees={task.assignees}
+                />
+              )}
+            </div>
+          </aside>
+        )}
+      </div>
+    </SheetContent>
   )
 }
 
