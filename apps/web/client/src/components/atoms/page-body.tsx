@@ -25,7 +25,7 @@ export function PageBody({
   className?: string
   children: React.ReactNode
 }) {
-  const cap = width === 'reading' ? 'max-w-160' : 'max-w-6xl'
+  const cap = width === 'reading' ? 'max-w-4xl' : 'max-w-6xl'
 
   return (
     <div

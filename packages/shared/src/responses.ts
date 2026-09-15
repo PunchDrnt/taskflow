@@ -129,6 +129,38 @@ export interface ActivityRow {
   actor: AssigneeRow
 }
 
+/** The organisation a session is acting for, as its settings screen draws it. */
+export interface OrganizationRow {
+  id: string
+  name: string
+  slug: string
+}
+
+/**
+ * One person in an organisation.
+ *
+ * The membership and the account, joined by the API rather than by the
+ * database: `iam.users` has no `org_id` and this module does not own it, so
+ * the names come from `UserService` and are null when the account has been
+ * anonymised while the membership row remains.
+ */
+export interface OrgMemberRow {
+  userId: string
+  role: OrgRole
+  joinedAt: IsoDateTime
+  name: string | null
+  nickname: string | null
+  email: string | null
+  avatarUrl: string | null
+  /**
+   * `active` · `deactivated`. Account-level, not per organisation — which is
+   * why switching somebody off is refused when they belong to more than one.
+   * A deactivated colleague stays in this list, and that is the whole
+   * difference between switching an account off and removing a person.
+   */
+  status: string | null
+}
+
 /**
  * A project as a sidebar, a picker or a list row draws it.
  *

@@ -1,4 +1,5 @@
-import { Check, ChevronsUpDown } from 'lucide-react'
+import { Check, ChevronsUpDown, Settings } from 'lucide-react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useTransition } from 'react'
 
@@ -92,6 +93,24 @@ export function OrgSwitcher({
             </DropdownMenuItem>
           ))}
         </DropdownMenuGroup>
+
+        {/* Here rather than in the account menu beside it, because these are
+            settings for the organisation on screen and not for the person
+            reading it — and this control is the one that says which
+            organisation that is. Shown to everybody: a member may read the
+            people and the roles, which is `read all` in `ability.ts`. */}
+        {active !== undefined && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              render={<Link href="/settings/organization" />}
+              className="flex items-center gap-2"
+            >
+              <Settings className="size-4 shrink-0" />
+              <span className="truncate">Organisation settings</span>
+            </DropdownMenuItem>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   )
