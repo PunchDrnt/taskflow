@@ -38,7 +38,7 @@ import {
   type TaskListQueryState,
   type TaskScope,
 } from '../../../lib/tasks/query'
-import type { TaskDetail } from '../../../lib/tasks/task-detail'
+import type { OpenTask, TaskDetail } from '../../../lib/tasks/task-detail'
 import { LoadMore } from '../../molecules/load-more'
 import { TaskDrawer } from '../task-drawer'
 import {
@@ -352,20 +352,16 @@ export function TaskList({
   }
 
   /**
-   * Drawn beside the list rather than inside it, and drawn in both branches
-   * below: a deep link can name a task the current filter excludes, and an
-   * empty list is exactly when somebody needs to see the one they asked for.
+   * Drawn beside the list rather than inside it, and in both branches below: a
+   * deep link can name a task the current filter excludes, and an empty list is
+   * exactly when somebody needs to see the one they asked for.
+   *
+   * Rendered whether or not anything is open, because the drawer has to stay
+   * mounted to slide in and out — see the note on `held` inside it.
    */
-  const drawer =
-    open === null || open.detail === null ? null : (
-      <TaskDrawer
-        detail={open.detail}
-        loading={open.loading}
-        failure={open.failure}
-        onClose={closeTask}
-        onTaskChanged={taskChanged}
-      />
-    )
+  const drawer = (
+    <TaskDrawer open={open} onClose={closeTask} onTaskChanged={taskChanged} />
+  )
 
   if (rows.length === 0) {
     return (
@@ -503,21 +499,6 @@ export function TaskList({
       {drawer}
     </>
   )
-}
-
-/**
- * A task the drawer is open on.
- *
- * `detail` is null only in the one case nothing can fill it: the back button
- * landing on a task whose row is no longer in the list — a filter changed
- * underneath it — where there is nothing to show until the fetch returns.
- */
-interface OpenTask {
-  taskId: string
-  detail: TaskDetail | null
-  /** True while `detail` is the provisional version, or missing entirely. */
-  loading: boolean
-  failure: string | null
 }
 
 /** A server-rendered detail, as the state the drawer is driven by. */

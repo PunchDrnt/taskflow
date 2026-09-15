@@ -16,7 +16,7 @@ import {
   formatTimeOfDay,
   toCalendarDay,
 } from '../../../lib/format/due-date'
-import type { TaskDetail, TaskPatch } from '../../../lib/tasks/task-detail'
+import type { OpenTask, TaskPatch } from '../../../lib/tasks/task-detail'
 import { ProjectDot } from '../../atoms/project-dot'
 import { StatusBadge } from '../../atoms/status-badge'
 import { TaskKey } from '../../atoms/task-key'
@@ -57,23 +57,19 @@ import {
  * version of the same fact.
  */
 export function TaskDrawer({
-  detail,
-  loading,
-  failure,
+  open,
   onClose,
   onTaskChanged,
 }: {
   /**
-   * What is known now. The caller may hand over a **provisional** detail built
-   * from the row that was clicked — the task itself, its project, the one
-   * status it is in — so the drawer opens on the spot rather than on a
-   * spinner, and replace it when the board and the feed arrive.
+   * The task to draw, or null for none.
+   *
+   * Its `detail` may be **provisional** — the task, its project and the one
+   * status it is in, all of which the clicked row already knew — so the panel
+   * opens on the spot rather than on a spinner, and is replaced when the board
+   * and the feed arrive.
    */
-  detail: TaskDetail
-  /** True while `detail` is that provisional version. */
-  loading: boolean
-  /** Why the rest never arrived, if it did not. */
-  failure: string | null
+  open: OpenTask | null
   onClose: () => void
   /** An edit made here is a row the list behind is also showing. */
   onTaskChanged: (task: TaskRow) => void
@@ -85,6 +81,32 @@ export function TaskDrawer({
   const [editFailure, setEditFailure] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
 
+  /**
+   * The last task that was open, kept so there is something to draw while the
+   * panel slides out.
+   *
+   * ⚠️ **This component stays mounted, and that is what makes it animate at
+   * all.** `useTransitionStatus` in base-ui starts `mounted` at whatever `open`
+   * is, so a dialog that mounts already open never gets `data-starting-style`
+   * and never slides in; taking it out of the tree to close it skips
+   * `data-ending-style` the same way. Mounted once, with `open` a boolean that
+   * changes, is the only shape both halves of the transition survive.
+   */
+  const [held, setHeld] = useState(open)
+
+  if (open !== null && open !== held) {
+    // A failure belongs to the task it happened on. Nothing else resets — the
+    // panel's width and whether the history is out are preferences, and
+    // re-deciding them on every task is the thing that would annoy.
+    if (open.taskId !== held?.taskId) setEditFailure(null)
+    setHeld(open)
+  }
+
+  const showing = open ?? held
+
+  if (showing === null || showing.detail === null) return null
+
+  const { detail, loading, failure } = showing
   const { task, project, statuses, activity } = detail
   const status = statuses.find((one) => one.id === task.statusId) ?? null
   const names = namesFrom(activity, task.assignees)
@@ -103,7 +125,7 @@ export function TaskDrawer({
 
   return (
     <Sheet
-      open
+      open={open !== null}
       onOpenChange={(next) => {
         if (!next) onClose()
       }}

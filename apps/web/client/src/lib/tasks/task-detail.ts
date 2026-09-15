@@ -55,3 +55,22 @@ export type TaskDetailOutcome =
 /** The whole task comes back: an edit can also stamp its completion columns. */
 export type TaskEditOutcome =
   { ok: true; task: TaskRow } | { ok: false; message: string }
+
+/**
+ * A task the detail drawer is open on, or was until a moment ago.
+ *
+ * Held by the list and handed to the drawer, rather than kept inside it,
+ * because the list is what the URL and the clicks arrive at.
+ */
+export interface OpenTask {
+  taskId: string
+  /**
+   * Null in the one case nothing can fill it: the back button landing on a
+   * task whose row is no longer in the list — a filter changed underneath it —
+   * where there is nothing to draw until the fetch returns.
+   */
+  detail: TaskDetail | null
+  /** True while `detail` is the provisional version, or missing entirely. */
+  loading: boolean
+  failure: string | null
+}
