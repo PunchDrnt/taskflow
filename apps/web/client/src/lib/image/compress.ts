@@ -1,23 +1,19 @@
+import { AVATAR_MAX_EDGE, AVATAR_QUALITY } from '@repo/shared'
+
 /**
  * Shrinking a picture in the browser, before it is uploaded.
  *
- * 🔒 **This is not an optimisation. It is the only size limit that exists.**
- * `StorageService.presignedUpload` signs a bare `PutObjectCommand` — no
- * `ContentLength`, no content-type condition — so one issued URL accepts a
- * 200MB file exactly as readily as a 30KB one, and the file never passes
- * through Node where anything could refuse it. Whatever this function emits is
- * what the bucket gets.
+ * **This is the courtesy, not the check.** It used to be the only limit in the
+ * whole path, back when the browser PUT straight to a presigned URL that
+ * carried no size or type condition. It does not any more: the file goes
+ * through `POST /v1/me/avatar`, which caps the bytes it will read and then
+ * re-encodes whatever arrives. What this buys is a 40KB upload instead of a
+ * 4MB one — worth having on a phone, and worth nothing as a defence, because
+ * it is code the caller can simply not run.
  *
- * A long edge of 512 at WebP 0.85 lands in the 30-60KB range for a photograph,
- * which is what docs/04-features/phase-1.md asks for. Avatars are drawn at
- * 24-40px; the extra resolution is for high-density screens and nothing else.
+ * The numbers come from `@repo/shared` so both ends resize to the same thing
+ * and the server's pass is a no-op on anything this produces.
  */
-
-/** The longest side that survives. Never upscaled — a small picture stays small. */
-export const AVATAR_MAX_EDGE = 512
-
-/** WebP quality. Below ~0.8 the artefacts show on faces at avatar sizes. */
-export const AVATAR_QUALITY = 0.85
 
 export interface CompressedImage {
   blob: Blob

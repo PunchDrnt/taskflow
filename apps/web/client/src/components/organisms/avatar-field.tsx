@@ -1,29 +1,24 @@
 import { ImageUp, Loader2 } from 'lucide-react'
 import { useRef, useState, useTransition } from 'react'
 
+import { AVATAR_MAX_EDGE } from '@repo/shared'
 import { Avatar, AvatarFallback, AvatarImage } from '@repo/ui/components/avatar'
 import { Button } from '@repo/ui/components/button'
 
-import { avatarUploadTarget } from '@/app/(signed-in)/(org)/settings/profile/actions'
-import {
-  AVATAR_MAX_EDGE,
-  compressForAvatar,
-  ImageTooOdd,
-} from '@/lib/image/compress'
+import { uploadAvatar } from '@/lib/api/avatar'
+import { compressForAvatar, ImageTooOdd } from '@/lib/image/compress'
 
 /**
- * Choosing a profile picture: shrink it here, PUT it to storage, keep the key.
+ * Choosing a profile picture: shrink it here, post it to the API, keep the key.
  *
- * Three steps, and the order is the point. The file is compressed **before**
- * a URL is even asked for, so nothing is signed for a picture that turns out
- * to be unreadable; then it goes straight to object storage without passing
- * through Node, which is what keeps the API from being a proxy whose memory
- * limit is the real file size limit; then only the key travels back, because
- * the bucket is private and no URL to an object keeps working.
+ * The shrink is a courtesy to whoever is on a phone — 40KB up the wire instead
+ * of 4MB — and nothing more. `POST /v1/me/avatar` caps what it will read and
+ * re-encodes whatever arrives, because this file is code the caller can
+ * decline to run. The two ends resize to the same numbers, so the server's
+ * pass changes nothing about a picture that came through here.
  *
- * 🔒 The compression is the only size limit in the whole path — the signed URL
- * carries no `ContentLength` and no content-type condition. See
- * `lib/image/compress.ts`.
+ * Only the key travels back: the bucket is private and no URL to an object
+ * keeps working. It is applied by the form's own save, not by the upload.
  *
  * The hidden input is what carries the key into the surrounding form, so the
  * picture and the rest of the profile are saved by one submission and a failed
@@ -36,8 +31,8 @@ import {
  *
  * The existing picture is drawn through `GET /v1/users/:id/avatar` rather than
  * from the stored value, which is a **storage key** and not a URL: the bucket
- * is private, so that endpoint presigning and redirecting is the only thing
- * that turns a key back into an image.
+ * is private, so that endpoint reading the object is the only thing that turns
+ * a key back into an image.
  */
 export function AvatarField({
   userId,
@@ -77,40 +72,15 @@ export function AvatarField({
         return
       }
 
-      const target = await avatarUploadTarget(shrunk.fileName)
+      const uploaded = await uploadAvatar(shrunk.blob, shrunk.fileName)
 
-      if (!target.ok) {
-        setFailure(target.message)
-
-        return
-      }
-
-      try {
-        const response = await fetch(target.uploadUrl, {
-          method: 'PUT',
-          body: shrunk.blob,
-          headers: { 'content-type': shrunk.blob.type },
-        })
-
-        if (!response.ok) {
-          setFailure(`The upload was refused (${response.status}).`)
-
-          return
-        }
-      } catch {
-        // Nothing to report a status for: the browser blocks a PUT it has no
-        // permission for before sending it, so there is no response here and
-        // no request on the other side either. The rule itself is applied by
-        // `StorageService.onModuleInit`; what it cannot supply is a route to
-        // the bucket that a browser can actually reach.
-        setFailure(
-          'The picture could not be sent to storage. Check that it is reachable from this address.',
-        )
+      if (!uploaded.ok) {
+        setFailure(uploaded.message)
 
         return
       }
 
-      setKey(target.key)
+      setKey(uploaded.key)
       setPreview(URL.createObjectURL(shrunk.blob))
       setNote(
         `${shrunk.width}×${shrunk.height}, ${Math.round(shrunk.blob.size / 1024)}KB — saved when you save the profile`,
@@ -174,8 +144,9 @@ export function AvatarField({
         )}
         {note === null && failure === null && (
           <span className="text-text-disabled body-3">
-            Shrunk to {AVATAR_MAX_EDGE}px and re-encoded here, which also strips
-            the location a phone writes into the file.
+            Shrunk to {AVATAR_MAX_EDGE}px and re-encoded, here and again on the
+            server — which also strips the location a phone writes into the
+            file.
           </span>
         )}
       </div>

@@ -4,20 +4,17 @@ import { revalidatePath } from 'next/cache'
 
 import {
   AUTH_ERROR_CODES,
-  avatarUploadSchema,
   changePasswordSchema,
   updateProfileSchema,
   type Me,
 } from '@repo/shared'
 
-import { toApiError } from '@/lib/api/errors'
 import { apiForAction } from '@/lib/api/server'
 import {
   failureOf,
   fieldErrorsOf,
   type FormState,
 } from '@/lib/forms/form-state'
-import type { UploadTarget } from '@/lib/image/upload-target'
 
 export type ProfileField =
   'username' | 'name' | 'nickname' | 'phone' | 'avatarUrl'
@@ -29,40 +26,6 @@ const FIELDS: ProfileField[] = [
   'phone',
   'avatarUrl',
 ]
-
-/**
- * Somewhere to put a new profile picture.
- *
- * The browser PUTs to the returned URL and then sends the **key** — not a URL
- * — back through `PATCH /v1/me`. The bucket is private, so there is no URL
- * that keeps working; `GET /v1/users/:id/avatar` is the one place a key turns
- * back into a picture.
- *
- * ⚠️ The signed URL carries no size or type condition, so whatever the browser
- * decides to PUT is what the bucket stores. `compressForAvatar` is the only
- * thing standing between a phone camera and a 12MB object — see its docblock.
- */
-export async function avatarUploadTarget(
-  fileName: string,
-): Promise<UploadTarget> {
-  const parsed = avatarUploadSchema.safeParse({ fileName })
-
-  if (!parsed.success) {
-    return { ok: false, message: 'That file name will not do.' }
-  }
-
-  try {
-    const api = await apiForAction()
-    const { data } = await api.post<{ uploadUrl: string; key: string }>(
-      '/me/avatar-upload',
-      parsed.data,
-    )
-
-    return { ok: true, ...data }
-  } catch (error) {
-    return { ok: false, message: toApiError(error).message }
-  }
-}
 
 /**
  * Saves the profile.

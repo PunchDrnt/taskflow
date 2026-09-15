@@ -98,26 +98,6 @@ const envSchema = z
     // "us-east-1"; a mismatch fails every request as a malformed
     // Authorization header, which does not read like a region problem.
     S3_REGION: z.string().min(1).default('us-east-1'),
-    /**
-     * Origins allowed to PUT a file straight to the bucket from a browser.
-     *
-     * Comma-separated, and normally absent: the origin doing the uploading is
-     * the app's own, so leaving it out means `APP_URL`'s origin. It exists for
-     * the deployment that serves the back-office from a second registrable
-     * domain, where one URL cannot describe both.
-     *
-     * Blank counts as absent, the way `optional` treats every value here — so
-     * there is no spelling of "allow nothing". Turning browser uploads off is
-     * not a CORS setting anyway: it is not issuing the presigned URL.
-     */
-    S3_CORS_ORIGINS: optional(
-      z.string().transform((value) =>
-        value
-          .split(',')
-          .map((origin) => origin.trim())
-          .filter((origin) => origin !== ''),
-      ),
-    ),
 
     // Error tracking. Read directly by src/instrument.ts, which runs before
     // ConfigService exists; declared here so a malformed value still stops the

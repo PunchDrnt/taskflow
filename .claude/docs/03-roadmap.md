@@ -333,7 +333,9 @@
 ### Object storage
 
 - แยก volume ของ Garage ออกจาก DB และ backup แยกกัน — ไฟล์หายกู้จาก DB ไม่ได้
-- Bucket เป็น private เข้าถึงผ่าน **presigned URL** เท่านั้น
+- Bucket เป็น private และ **browser ไม่ได้คุยกับมันเลย** — เข้า-ออกผ่าน API ทั้งสองทาง
+  ฉะนั้น store ไม่ต้อง publish port ไม่ต้องมี CORS rule (Phase 3 ไฟล์แนบเอา presigned กลับมาได้
+  แต่ต้องเป็น POST policy ที่ใส่ `content-length-range` ได้จริง — ใบเซ็น PUT เปล่าไม่จำกัดอะไรเลย)
 - `garage-ui` ถือ admin token — ผูก `127.0.0.1` เท่านั้น และไม่ขึ้นบน server (อยู่ใน `docker-compose.yml` ไม่ใช่ `deploy/compose.yml`)
 
 ### Minimum Tests

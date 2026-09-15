@@ -7,15 +7,22 @@ import {
   Patch,
   Post,
   Res,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common'
-import { ApiOperation, ApiTags } from '@nestjs/swagger'
+import { FileInterceptor } from '@nestjs/platform-express'
+import { ApiBody, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger'
 import type { Response } from 'express'
 
 import {
-  avatarUploadSchema,
+  AVATAR_MAX_BYTES,
+  AVATAR_MAX_EDGE,
+  AVATAR_MIME_TYPES,
+  AVATAR_QUALITY,
+  avatarFileNameSchema,
   setActiveOrgSchema,
   updateProfileSchema,
-  type AvatarUploadInput,
+  type AvatarMimeType,
   type Me,
   type SetActiveOrgInput,
   type UpdateProfileInput,
@@ -28,6 +35,7 @@ import { ZodValidationPipe } from '#shared/http/zod-validation.pipe'
 import { requireRequestContext } from '#shared/org-scope/request-context'
 
 import { MembershipService } from '../../organization/membership.service'
+import { toStoredImage } from '../../storage/image'
 import { StorageService } from '../../storage/storage.service'
 import { UserService } from '../user/user.service'
 import { AuthCookies } from './auth.cookies'
@@ -124,46 +132,93 @@ export class MeController {
    * else's org gets a 403 here and would get one there too.
    */
   /**
-   * Somewhere to PUT a new avatar, and the URL to record once it is there.
+   * Takes a new profile picture and stores it, answering with its key.
    *
-   * Two round trips rather than one multipart upload through the API, and
-   * worth it: the file never occupies a Node process, an abandoned upload
-   * leaves nothing but an unreferenced object, and the API does not become a
-   * proxy whose memory limit is the real file size limit.
+   * **Through the API, not straight to the bucket.** The browser used to PUT
+   * to a presigned URL, which kept the file out of Node at the price of the
+   * browser needing a route to object storage — and on the server `S3_HOST` is
+   * `garage`, a name that resolves inside one Docker network and nowhere else,
+   * so both halves of the feature only ever worked in development. Publishing
+   * the store would have meant a second public origin and a CORS rule to
+   * police it, and the signed URL still carried no size limit of its own.
+   *
+   * That last part is the real gain: `limits.fileSize` aborts the request
+   * mid-stream, so a refused upload costs the bytes read so far and not a
+   * whole file, and the type is checked against what was actually sent rather
+   * than against a filename anybody could have typed.
    *
    * `@SkipOrgScope()` because a profile picture belongs to the person, not to
    * whichever organisation they are acting for — but the key is filed under
    * the active org when there is one, so a bucket listing still groups by
    * customer. With no active org it goes under the user's own id.
    *
-   * Reading it back is `GET /v1/users/:userId/avatar`, which presigns and
-   * redirects — one place rather than a presigned URL attached to every row of
-   * every member list and every assignee chip, most of which are never drawn.
+   * The key is returned rather than saved: `PATCH /v1/me` applies it with the
+   * rest of the profile, so a picture chosen and then abandoned changes
+   * nothing. What it does leave is an unreferenced object, which is the same
+   * thing replacing a picture leaves and is swept up in neither case yet.
    */
-  @Post('avatar-upload')
+  @Post('avatar')
   @SkipOrgScope()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'A URL to upload a new profile picture to' })
-  @ApiZodBody(avatarUploadSchema)
-  async avatarUpload(
-    @Body(new ZodValidationPipe(avatarUploadSchema)) body: AvatarUploadInput,
-  ): Promise<{ uploadUrl: string; key: string }> {
+  @ApiOperation({ summary: 'Upload a new profile picture' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: { file: { type: 'string', format: 'binary' } },
+    },
+  })
+  @UseInterceptors(
+    FileInterceptor('file', {
+      // In memory, deliberately: bounded by the same limit, and a temporary
+      // file would need cleaning up on every path out of here including the
+      // ones that throw.
+      limits: { fileSize: AVATAR_MAX_BYTES, files: 1 },
+    }),
+  )
+  async uploadAvatar(
+    @UploadedFile() file: UploadedImage | undefined,
+  ): Promise<{ key: string }> {
     const { userId, orgId } = requireRequestContext()
 
+    if (file === undefined) throw ApiException.badRequest('No file was sent')
+
+    // Cheap and first, so an obvious wrong answer costs nothing. It is not the
+    // real check — a content type is a claim the sender makes about itself.
+    // `toStoredImage` decoding the bytes is the check.
+    if (!AVATAR_MIME_TYPES.includes(file.mimetype as AvatarMimeType)) {
+      throw ApiException.badRequest(
+        `A profile picture must be ${AVATAR_MIME_TYPES.join(', ')}`,
+      )
+    }
+
+    const fileName = avatarFileNameSchema.safeParse(file.originalname)
+
+    if (!fileName.success) {
+      throw ApiException.badRequest('That file name will not do')
+    }
+
+    const image = await toStoredImage(file.buffer, {
+      maxEdge: AVATAR_MAX_EDGE,
+      quality: AVATAR_QUALITY,
+    })
+
+    // Named for what it is now, not for what was sent. Everything stored here
+    // is WebP, and an object called `.png` holding WebP bytes misleads whoever
+    // opens the bucket later at no benefit.
     const key = this.storage.keyFor(
       orgId ?? userId,
       'avatar',
       userId,
-      body.fileName,
+      `${stem(fileName.data)}.webp`,
     )
 
-    return {
-      uploadUrl: await this.storage.presignedUpload(key),
-      // What to send back in `PATCH /v1/me`. The key, not a URL: the bucket
-      // is private and stays private, so there is no URL that keeps working.
-      // `GET /v1/users/:id/avatar` is what turns it back into a picture.
-      key,
-    }
+    await this.storage.put(key, image, 'image/webp')
+
+    // The key, not a URL: the bucket is private and stays private, so there is
+    // no URL that keeps working. `GET /v1/users/:id/avatar` is what turns it
+    // back into a picture.
+    return { key }
   }
 
   @Post('active-org')
@@ -190,4 +245,22 @@ export class MeController {
 
     return membership
   }
+}
+
+/**
+ * What multer hands a route, narrowed to the parts this one reads.
+ *
+ * Declared here rather than reaching for `Express.Multer.File`, which lives in
+ * a global namespace that only exists once `@types/multer` is installed — a
+ * dependency worth avoiding for four fields.
+ */
+interface UploadedImage {
+  originalname: string
+  mimetype: string
+  buffer: Buffer
+}
+
+/** A file name with its extension removed, and nothing else changed. */
+function stem(fileName: string): string {
+  return fileName.replace(/\.[^./\\]{1,12}$/, '')
 }

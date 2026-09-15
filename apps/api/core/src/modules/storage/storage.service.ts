@@ -1,22 +1,24 @@
+import type { Readable } from 'node:stream'
 import {
   CreateBucketCommand,
   DeleteObjectCommand,
   GetObjectCommand,
   HeadBucketCommand,
-  PutBucketCorsCommand,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3'
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { Injectable, Logger, type OnModuleInit } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 
 import type { Env } from '../../config/env'
 
-/** Long enough to pick a file and upload it, short enough to be worth little. */
-const UPLOAD_URL_TTL_SECONDS = 10 * 60
-/** Long enough to render a page and click through, and no longer. */
-const DOWNLOAD_URL_TTL_SECONDS = 5 * 60
+/** What `get` hands back: enough to answer an HTTP request with the object. */
+export interface StoredObject {
+  body: Readable
+  contentType: string
+  contentLength: number | undefined
+  etag: string | undefined
+}
 
 /**
  * Object storage, wrapped. The one module with no schema of its own.
@@ -25,27 +27,29 @@ const DOWNLOAD_URL_TTL_SECONDS = 5 * 60
  * the server underneath is a deployment choice: Garage in `docker-compose.yml`
  * today, and nothing here would change for SeaweedFS or S3 itself.
  *
- * The bucket is private and stays private: files reach the browser through a
- * presigned URL that expires, never through a public object. A public bucket
- * would make every attachment in every organisation readable by anyone who has
- * ever seen one URL — org scoping stops at the database.
+ * 🔒 **The browser never talks to this store.** Bytes go in through the API
+ * and come back out through the API, so the bucket needs no public route, no
+ * CORS rule and no presigned URL — and the store can sit on a private network
+ * with nothing published, which is what `deploy/compose.yml` does.
+ *
+ * It was the other way around until the deploy made the cost visible: a
+ * presigned PUT straight from the browser keeps the file out of Node, but it
+ * also means the browser must be able to *reach* the store, and `S3_HOST` on
+ * the server is `garage` — a name that resolves inside one Docker network and
+ * nowhere else. Publishing it would have meant a second public origin, a CORS
+ * rule to police it, and a signed URL that carries no size limit of its own.
+ * A 40KB avatar through Node is cheaper than all three. Phase 3's attachments
+ * are a different size of question and may want presigning back; they can have
+ * it, with a POST policy that actually constrains what may be sent.
  */
 @Injectable()
 export class StorageService implements OnModuleInit {
   private readonly logger = new Logger(StorageService.name)
   private readonly client: S3Client
   private readonly bucket: string
-  private readonly browserOrigins: string[]
 
   constructor(config: ConfigService<Env, true>) {
     this.bucket = config.get('S3_BUCKET', { infer: true })
-
-    // Absent means the app's own origin, which is the answer in every
-    // single-domain deployment: the page doing the uploading is served from
-    // `APP_URL`, so that is where the PUT comes from.
-    this.browserOrigins = config.get('S3_CORS_ORIGINS', { infer: true }) ?? [
-      new URL(config.get('APP_URL', { infer: true })).origin,
-    ]
 
     const useSsl = config.get('S3_USE_SSL', { infer: true })
     const host = config.get('S3_HOST', { infer: true })
@@ -60,10 +64,10 @@ export class StorageService implements OnModuleInit {
       // Bucket in the path, not the hostname. Virtual-host style needs
       // wildcard DNS, which a single box behind Caddy does not have.
       forcePathStyle: true,
-      // The SDK adds a CRC32 checksum to every upload by default. On a
-      // presigned URL that is a header the browser never sends, and the store
-      // rejects the PUT with "Invalid digest" — proven against Garage, and it
-      // would fail the same way from a real browser.
+      // The SDK adds a CRC32 checksum to every request by default and Garage
+      // rejects it with "Invalid digest" — measured. Kept at WHEN_REQUIRED
+      // now that the SDK is the only client, because the alternative is an
+      // upload that fails against this store and works against S3.
       requestChecksumCalculation: 'WHEN_REQUIRED',
       responseChecksumValidation: 'WHEN_REQUIRED',
       credentials: {
@@ -74,12 +78,16 @@ export class StorageService implements OnModuleInit {
   }
 
   /**
-   * Brings the bucket to the state the application needs: it exists, and a
-   * browser on our own origin may upload to it.
+   * Makes sure the bucket exists.
    *
    * Warns rather than throwing if the store cannot be reached — an outage
    * should show up as a failing readiness check, not as an API that will not
-   * start. Both steps are idempotent, so every boot re-asserts them.
+   * start. Idempotent, so every boot re-asserts it.
+   *
+   * A bucket created before the browser stopped uploading still carries the
+   * CORS rule this used to set, and it is left alone: a rule naming an origin
+   * grants nothing on its own, since every request to a private bucket still
+   * needs a signature and nothing outside this process can produce one.
    */
   async onModuleInit(): Promise<void> {
     try {
@@ -93,62 +101,7 @@ export class StorageService implements OnModuleInit {
           { err: error, bucket: this.bucket },
           'Could not reach object storage at startup; /health/ready reports it',
         )
-
-        return
       }
-    }
-
-    await this.allowBrowserUploads()
-  }
-
-  /**
-   * The CORS rule that lets an avatar go from the browser to the bucket.
-   *
-   * A profile picture is PUT straight here, so the request is cross-origin —
-   * the page comes from `APP_URL` and the upload goes to object storage. With
-   * no rule the browser's preflight is refused outright (Garage answers
-   * "403 Forbidden: This CORS request is not allowed") and the PUT is never
-   * sent, so there is no failed request in any log to explain it.
-   *
-   * Here rather than in `deploy/init/garage.sh` because this is the standard
-   * way to make the call and that script has no standard way to make it:
-   * bucket CORS is an S3 operation, Garage's admin API has no endpoint for it
-   * (`/v2/PutBucketCors` answers "Unknown API endpoint"), and the init image
-   * is a shell with curl — which would mean hand-writing SigV4. This service
-   * already holds a configured, credentialled S3 client and already creates
-   * the bucket at boot, and creating a bucket is the larger act of the two.
-   *
-   * 🔒 **Named origins, never `*`.** A wildcard would work identically for the
-   * app and hand every page on the internet something to aim a stolen
-   * presigned URL from. PUT alone, too: the download side is an `<img>`
-   * following a redirect to a presigned GET, which is not a cross-origin
-   * fetch, so allowing GET would grant what nothing asks for.
-   */
-  private async allowBrowserUploads(): Promise<void> {
-    try {
-      await this.client.send(
-        new PutBucketCorsCommand({
-          Bucket: this.bucket,
-          CORSConfiguration: {
-            CORSRules: [
-              {
-                AllowedOrigins: this.browserOrigins,
-                AllowedMethods: ['PUT'],
-                AllowedHeaders: ['content-type'],
-                MaxAgeSeconds: 3000,
-              },
-            ],
-          },
-        }),
-      )
-    } catch (error) {
-      // Not fatal: everything except uploading a picture still works, and an
-      // API that refuses to start over it would be a worse outage than the
-      // one it is reporting.
-      this.logger.warn(
-        { err: error, bucket: this.bucket, origins: this.browserOrigins },
-        'Could not set the storage CORS rule; browser uploads will be refused',
-      )
     }
   }
 
@@ -187,24 +140,54 @@ export class StorageService implements OnModuleInit {
     return `${orgId}/${entityType}/${entityId}/${crypto.randomUUID()}-${safeName}`
   }
 
-  /** A URL the browser can PUT one file to, and nothing else. */
-  presignedUpload(key: string, ttl = UPLOAD_URL_TTL_SECONDS): Promise<string> {
-    return getSignedUrl(
-      this.client,
-      new PutObjectCommand({ Bucket: this.bucket, Key: key }),
-      { expiresIn: ttl },
+  /**
+   * Stores one object. The caller has already decided the bytes are allowed —
+   * this is where they land, not where they are judged.
+   *
+   * `ContentType` is written now because it is the only chance: the object is
+   * served back with whatever is recorded here, and a picture served as
+   * `application/octet-stream` is a picture the browser offers to download.
+   */
+  async put(key: string, body: Buffer, contentType: string): Promise<void> {
+    await this.client.send(
+      new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        Body: body,
+        ContentType: contentType,
+        ContentLength: body.byteLength,
+      }),
     )
   }
 
-  presignedDownload(
-    key: string,
-    ttl = DOWNLOAD_URL_TTL_SECONDS,
-  ): Promise<string> {
-    return getSignedUrl(
-      this.client,
-      new GetObjectCommand({ Bucket: this.bucket, Key: key }),
-      { expiresIn: ttl },
-    )
+  /**
+   * Reads one object back as a stream, so a response can be piped rather than
+   * assembled in memory — the size limit is on the way in, and this side
+   * should not grow one of its own.
+   *
+   * Null when there is no such object, which is a 404 for the caller rather
+   * than a 500: a key can outlive its file, and a row pointing at a deleted
+   * object is a missing picture, not a broken server.
+   */
+  async get(key: string): Promise<StoredObject | null> {
+    try {
+      const result = await this.client.send(
+        new GetObjectCommand({ Bucket: this.bucket, Key: key }),
+      )
+
+      if (result.Body === undefined) return null
+
+      return {
+        body: result.Body as Readable,
+        contentType: result.ContentType ?? 'application/octet-stream',
+        contentLength: result.ContentLength,
+        etag: result.ETag,
+      }
+    } catch (error) {
+      if (isMissing(error)) return null
+
+      throw error
+    }
   }
 
   /**
@@ -216,4 +199,20 @@ export class StorageService implements OnModuleInit {
       new DeleteObjectCommand({ Bucket: this.bucket, Key: key }),
     )
   }
+}
+
+/**
+ * "No such key", told apart from a store that is down.
+ *
+ * The SDK raises `NoSuchKey` and some servers answer a bare 404 without one,
+ * so both are checked — mistaking an outage for a missing file would turn
+ * every avatar on the page into a silent blank while storage burned.
+ */
+function isMissing(error: unknown): boolean {
+  const shape = error as {
+    name?: string
+    $metadata?: { httpStatusCode?: number }
+  }
+
+  return shape.name === 'NoSuchKey' || shape.$metadata?.httpStatusCode === 404
 }

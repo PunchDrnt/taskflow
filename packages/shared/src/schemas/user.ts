@@ -80,13 +80,11 @@ export const updateProfileSchema = z.object({
   /**
    * Where the picture is. Null clears it.
    *
-   * Either the **storage key** the upload endpoint handed back, or an ordinary
-   * http(s) URL for a picture hosted somewhere else. Both, because the bucket
-   * is private: a key cannot be rendered directly, so `GET /v1/users/:id/avatar`
-   * presigns and redirects, while an external URL is already a picture and
-   * needs no help.
-   *
-   * The file itself never passes through the API — see `avatarUploadSchema`.
+   * Either the **storage key** `POST /v1/me/avatar` handed back, or an
+   * ordinary http(s) URL for a picture hosted somewhere else. Both, because
+   * the bucket is private: a key cannot be rendered directly, so
+   * `GET /v1/users/:id/avatar` reads the object and serves it, while an
+   * external URL is already a picture and needs no help.
    */
   avatarUrl: z
     .string()
@@ -103,18 +101,53 @@ export const updateProfileSchema = z.object({
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>
 
 /**
- * Asking for somewhere to put a new avatar.
+ * What `POST /v1/me/avatar` accepts.
  *
- * The browser PUTs the file straight to object storage and then sends the
- * resulting URL back through `PATCH /v1/me`. Two round trips rather than one
- * multipart upload through the API, and worth it: the file never occupies a
- * Node process, an upload that is abandoned halfway leaves nothing behind but
- * an unreferenced object, and the API never becomes a proxy whose memory
- * limits are the real file size limit.
+ * The file goes **through the API**, which is what makes these two constants
+ * mean anything: a limit the server enforces is a limit, and a limit the
+ * browser applies to itself is a suggestion to whoever is not using a browser.
+ * The route rejects on both counts before a byte reaches storage.
+ *
+ * Here rather than in the API so the upload control can state the same numbers
+ * it will be judged by, instead of a second copy that drifts.
  */
-export const avatarUploadSchema = z.object({
-  /** Only for the object key, so a stored file is recognisable in the bucket. */
-  fileName: z.string().trim().min(1, 'Provide a file name').max(255),
-})
+export const AVATAR_MIME_TYPES = [
+  'image/webp',
+  'image/png',
+  'image/jpeg',
+] as const
 
-export type AvatarUploadInput = z.infer<typeof avatarUploadSchema>
+export type AvatarMimeType = (typeof AVATAR_MIME_TYPES)[number]
+
+/**
+ * Comfortably above what the browser's own resize produces — a 512px WebP is
+ * 30-60KB — and far below anything worth calling an upload. The headroom is
+ * for the PNG a browser falls back to when it cannot encode WebP.
+ *
+ * Enforced by the route's own `limits.fileSize`, which aborts mid-stream: a
+ * refused upload costs the bytes read before the limit was passed, not a whole
+ * file that is then measured and thrown away.
+ */
+export const AVATAR_MAX_BYTES = 1024 * 1024
+
+/**
+ * The longest side that survives, and the WebP quality it survives at.
+ *
+ * **Both sides use these, and that is the point.** The browser resizes before
+ * uploading so the wire carries 40KB instead of 4MB; the API resizes again
+ * because what arrives is whatever the caller chose to send, and a limit only
+ * one end applies is not a limit. Same numbers, so the second pass is a
+ * no-op on anything the first pass produced.
+ *
+ * Avatars are drawn at 24-40px. The extra resolution is for high-density
+ * screens and nothing else. Below ~0.8 quality the artefacts show on faces.
+ */
+export const AVATAR_MAX_EDGE = 512
+export const AVATAR_QUALITY = 0.85
+
+/** Only for the object key, so a stored file is recognisable in the bucket. */
+export const avatarFileNameSchema = z
+  .string()
+  .trim()
+  .min(1, 'Provide a file name')
+  .max(255)

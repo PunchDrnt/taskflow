@@ -181,54 +181,59 @@ unique เต็ม · `views.sort_order` / `is_default`
         · เมนูเปลี่ยนจาก "Profile & password" เป็น **"Settings"** — ตั้งชื่อเมนูตามแท็บที่บังเอิญมีตอนนี้
           แปลว่าต้องเปลี่ยนชื่อทุกครั้งที่เพิ่มแท็บ · ชื่อกับอีเมลที่อยู่เหนือมันคือสิ่งที่บอกว่า settings ของใคร
         · แท็บ Password บอก**ก่อน**ว่าเปลี่ยนแล้วเครื่องอื่นหลุดหมด ไม่ใช่บอกหลังกดสำเร็จอย่างเดียว
-- [x] อัปโหลดรูปผ่าน `StorageService` (presigned) — เขียนรอไว้แล้ว Phase 1 ใช้จริงครั้งแรก
-      · `POST /v1/me/avatar-upload` → `{ uploadUrl, key }` · browser PUT ตรงเข้า storage แล้วส่ง key กลับมาที่ `PATCH /v1/me`
-      · ไฟล์ไม่ผ่าน Node เลย — upload ที่ทิ้งกลางคันเหลือแค่ object ที่ไม่มีใครอ้างถึง
-        และ API ไม่กลายเป็น proxy ที่ memory limit คือ file size limit จริง
-      · **เก็บ key ไม่ใช่ URL** เพราะ bucket เป็น private · `GET /v1/users/:userId/avatar` เป็นที่เดียวที่แปลงกลับเป็นรูป
-- [x] **ย่อ + บีบรูปที่ browser ก่อน PUT** — ด้านยาว 512px · WebP ~0.85 · ปกติเหลือ 30-60KB
-      · ✅ `lib/image/compress.ts` + `AvatarField` บนหน้า `/settings/profile`
-      · บีบ**ก่อน**ขอ URL — ไฟล์ที่อ่านไม่ออกจะได้ไม่มีใบเซ็นค้างไว้
-      · ชื่อไฟล์เปลี่ยนนามสกุลตามที่ encode จริง (`.webp`) — มันป้อน `keyFor` อย่างเดียว ไม่มีใครตรวจ
-        object ชื่อ `.jpg` ที่ข้างในเป็น WebP หลอกคนที่มาเปิด bucket ทีหลังฟรีๆ
-      · `toBlob` คืน null เวลา encode ไม่ได้ ไม่ throw · บาง browser แอบให้ PNG มาแทน
-        เลยอ่านนามสกุลจาก `blob.type` ที่ได้จริง ไม่ใช่จากที่ขอไป
-      · ⚠️ **ไม่ใช่แค่ optimisation — เป็นด่านเดียวที่มี** `presignedUpload` เซ็น `PutObjectCommand` เปล่า
-        ไม่มี `ContentLength` ไม่มีเงื่อนไข content-type · URL ใบเดียวรับ 200MB ได้พอๆ กับรับ 30KB
-      · EXIF orientation — canvas ทิ้ง EXIF ทั้งก้อน ไม่อ่านก่อนรูปตะแคง
-        · `createImageBitmap(blob, { imageOrientation: 'from-image' })`
-      · re-encode ทิ้ง EXIF = ทิ้ง GPS ของรูปจากมือถือไปด้วย ซึ่งเป็นเรื่องที่ต้องการอยู่แล้ว
-      · ส่ง `fileName` ให้ลงท้ายตรงกับที่ encode จริง — มันป้อน `keyFor` อย่างเดียว ไม่มีใครตรวจ
-- [x] **CORS rule บน bucket** — browser PUT ตรงเข้า storage ได้แล้วใน dev
-      · เดิม preflight ตอบ `403 Forbidden: This CORS request is not allowed.` เพราะไม่มี rule เลย
-      · ✅ **`StorageService.onModuleInit` ตั้งเองตอน boot** ด้วย `PutBucketCorsCommand` จาก AWS SDK
-        · **ที่นี่ไม่ใช่ `garage.sh`** เพราะ CORS เป็น S3 operation ไม่ใช่ admin API
-          (ลองแล้ว: `/v2/PutBucketCors` ตอบ `Unknown API endpoint` · `GetBucketInfo` ไม่มี field CORS)
-          init image เป็น shell + curl → จะต้องเขียน SigV4 มือ ซึ่งไม่ใช่ท่ามาตรฐาน
-          · ⚠️ **ลองท่า SigV4 มือไปแล้วรอบนึงและ revert ทิ้ง** — ใช้ได้จริงแต่เป็น crypto ในเชลล์
-            ที่ไม่มีใครอยาก debug · service ตัวนี้มี S3 client ที่ config ครบอยู่แล้ว
-            **และสร้าง bucket ตอน boot อยู่แล้ว** ซึ่งเป็นการกระทำที่ใหญ่กว่าการตั้ง CORS
-      · `S3_CORS_ORIGINS` **ปกติไม่ต้องตั้ง** — ว่างไว้ = origin ของ `APP_URL`
-        ซึ่งคือคำตอบของทุก deployment โดเมนเดียว · มีไว้เผื่อ back-office คนละ registrable domain
-      · **PUT อย่างเดียว** ฝั่งดาวน์โหลดเป็น `<img>` ตาม 302 ไป presigned GET ซึ่ง browser
-        ไม่ถือเป็น cross-origin fetch · เปิด GET ด้วยคือให้สิทธิ์ที่ไม่มีใครขอ
-      · 🔒 **ไม่ใช้ `*`** — origin อื่น 403, method อื่น 403 (ยิงจริงทั้งคู่)
-      · ล้มแล้ว **warn ไม่ throw** — API ที่ boot ไม่ขึ้นเพราะตั้ง CORS ไม่ได้ คือ outage
-        ที่ใหญ่กว่าเรื่องที่มันกำลังรายงาน · ทุกอย่างยกเว้นอัปรูปยังใช้ได้
-      · test ใน `storage.spec.ts` ยิง preflight แบบเดียวกับ browser
-        · **พิสูจน์ว่า service เป็นคนเขียนจริง ไม่ใช่อ่าน rule เก่าที่ค้าง** — รันด้วย origin อื่น
-          แล้ว localhost:3000 พลิกเป็น 403 / origin ใหม่เป็น 200 แล้วรันกลับ พลิกกลับทั้งคู่
-- [ ] 🔴 **production ยังต้องเปิดทางให้ browser ถึง garage — รอตัดสิน**
-      · rule อนุญาต origin **แต่ไม่ได้เปิด port ให้** — คนละเรื่องกัน
-      · `S3_HOST: garage` เป็นชื่อใน docker network เฉยๆ และ `deploy/config/Caddyfile` ไม่มี route ไป garage
-        · Caddy เป็นตัวเดียวที่ publish port → browser resolve host ไม่ได้ตั้งแต่แรก
-      · ทางเลือก (ไม่ตัดสินเอง เพราะเป็นการเปิด object storage ออกสู่ public):
-        1. `handle_path /s3/*` → `garage:3900` ใน Caddyfile + `S3_HOST` เป็น public host
-           → **ได้ same-origin ฟรี CORS rule ข้างบนกลายเป็นไม่จำเป็น** (แต่ไม่เสียหาย)
-           ตรงกับเหตุผลที่ Caddyfile เขียนไว้เองว่าทำไมไม่แยก api.domain.com
-        2. เปิด garage เป็น subdomain แยก → ตั้ง `S3_CORS_ORIGINS` เป็น origin ของเว็บ
-        3. ให้ API เป็น proxy รับ multipart — **ขัดกับเหตุผลที่เลือก presigned ตั้งแต่แรก**
-           (memory limit กลายเป็น file size limit จริง)
+- [x] **อัปรูปผ่าน API ไม่ใช่ presigned PUT ตรงเข้า bucket** — `POST /v1/me/avatar` (multipart)
+      · ⚠️ **กลับท่าจากที่ docs เคยเขียนไว้ — แก้ [04-features/phase-1.md](../docs/04-features/phase-1.md#auth--users) แล้วในชุดเดียวกัน**
+      · เดิม: `POST /v1/me/avatar-upload` → `{uploadUrl, key}` แล้ว browser PUT ตรงเข้า Garage
+        เหตุผลเดิมยังจริงอยู่ (ไฟล์ไม่ผ่าน Node · upload ที่ทิ้งกลางคันเหลือแค่ object ลอย)
+        แต่ **ราคาที่ไม่ได้คิดคือ browser ต้องไปถึง store ให้ได้**
+        · `S3_HOST` บน server = `garage` ซึ่งเป็นชื่อใน docker network เท่านั้น
+        · **พังทั้งสองทาง ไม่ใช่แค่ขาอัป** — `GET /users/:id/avatar` ก็ตอบ 302 ไป `garage:3900` เหมือนกัน
+          แปลว่าใน production รูปไม่ขึ้นด้วย ไม่ใช่แค่อัปไม่ได้
+        · จะแก้ต้องเปิด object storage ออก public + CORS rule คุม + ใบเซ็นที่ยังไม่มี size limit
+          → รูป 40KB วิ่งผ่าน Node ถูกกว่าทั้งสามอย่าง
+      · **ปิดข้อ 🔴 ที่ค้างอยู่ด้านล่างไปด้วย** — bucket ไม่ต้องมีทางออก public อีกแล้ว
+      · Phase 3 ไฟล์แนบเป็นคนละขนาดของคำถาม จะเอา presigned กลับมาก็ได้ —
+        แต่ต้องเป็น POST policy ที่ใส่ `content-length-range` ได้จริง
+- [x] **key ไม่ใช่ URL** เพราะ bucket เป็น private · `GET /v1/users/:userId/avatar` เป็นที่เดียวที่แปลงกลับเป็นรูป
+      · **อ่าน object แล้ว pipe ออกไป ไม่ใช่ 302 ไป presigned GET อีกแล้ว** — ด้วยเหตุผลข้อบน
+      · pipe ไม่ buffer — ด่านขนาดอยู่ขาเข้า ขาออกไม่ต้องมีของตัวเอง
+      · `cache-control: private, max-age=60` — URL ไม่เปลี่ยนตอนเปลี่ยนรูป (key เปลี่ยน แต่ path เดิม)
+        นานกว่านี้ = คนเพิ่งเปลี่ยนรูปมองเห็นรูปเก่า · สั้นกว่านี้ = ลิสต์สมาชิก 30 หน้า = 30 request ต่อการกดหนึ่งครั้ง
+      · object หายแต่ row ยังชี้อยู่ → `get` คืน null → 404 ไม่ใช่ 500
+
+- [x] **ย่อ + บีบรูปสองฝั่ง** — ด้านยาว 512px · WebP ~0.85 · ปกติเหลือ 30-60KB
+      · ✅ ฝั่ง browser `lib/image/compress.ts` + `AvatarField` · ฝั่ง API `modules/storage/image.ts` (sharp)
+      · 🔒 **ฝั่ง API คือด่าน ฝั่ง browser คือมารยาท** — ไฟล์ compress.ts เป็นโค้ดที่ผู้เรียกเลือกไม่รันก็ได้
+        สิ่งที่ browser ซื้อให้คือส่งขึ้นไป 40KB แทน 4MB ซึ่งมีค่าบนมือถือ และไม่มีค่าในฐานะการป้องกัน
+      · ค่าคงที่อยู่ที่ `@repo/shared` ทั้งคู่ (`AVATAR_MAX_EDGE` · `AVATAR_QUALITY` · `AVATAR_MAX_BYTES`)
+        → รอบสองบน server เป็น no-op กับรูปที่ผ่านรอบแรกมา ไม่ใช่การย่อซ้ำจนเละ
+      · **สามอย่างที่ได้จากการ decode+re-encode ที่ server ซึ่ง size limit อย่างเดียวให้ไม่ได้**
+        1. ของที่ลงถังเป็นรูปแน่ๆ — ไฟล์ที่เป็นรูปตอนต้นแล้วเป็นอย่างอื่นตอนท้าย decode ไม่ผ่าน
+           จึงไม่มีทางถูกเสิร์ฟกลับออกมาใต้ content-type ที่ browser เอาไปรัน
+        2. EXIF หายรวม GPS — รูปจากมือถือพกพิกัดบ้านมาด้วย · `rotate()` ก่อน resize อ่าน orientation
+           ตอนที่ tag ยังอยู่ ไม่งั้นรูปตั้งกลายเป็นรูปนอน
+        3. ขนาดที่เก็บเป็นของเรา format เดียว เพดานเดียว ไม่ว่าส่งอะไรมา
+      · `limits.fileSize` ตัดกลางสตรีม — upload ที่ถูกปฏิเสธจ่ายแค่ไบต์ที่อ่านไปแล้ว ไม่ใช่ทั้งไฟล์
+      · `limitInputPixels` กัน decompression bomb — ไฟล์เล็กที่บรรยาย bitmap มหึมา คือทางเดียวที่ผ่านด่านไบต์ไปได้
+      · **sharp เป็น native dep** → `.yarnrc.yml` ต้องมี `supportedArchitectures` ครบ
+        (darwin/linux · arm64/x64 · glibc/musl) ไม่งั้น lockfile ที่เขียนบน Mac ทำให้
+        `yarn install --immutable` ใน image หา binary ของตัวเองไม่เจอ
+        · ✅ พิสูจน์แล้ว: build ถึง stage `prod-deps` ผ่าน และ `require('sharp')` ใน image รันได้ (libvips 8.18.6)
+
+- [x] ~~**CORS rule บน bucket**~~ — **ถอดออกแล้ว พร้อม `S3_CORS_ORIGINS`**
+      · เคยมีเพราะ browser PUT ตรงเข้า bucket · ตอนนี้ browser ไม่คุยกับ store เลย rule เลยไม่ได้คุมอะไร
+      · bucket ที่สร้างไว้ก่อนหน้านี้ยังมี rule เก่าค้างอยู่ และ**ไม่ได้ลบให้** — rule ที่ระบุ origin
+        ไม่ได้ให้สิทธิ์อะไรด้วยตัวเอง request เข้า private bucket ยังต้องมีลายเซ็น และไม่มีอะไรนอก process นี้เซ็นได้
+      · test preflight ใน `storage.spec.ts` ถอดออกด้วย — มันเทสต์สิ่งที่ไม่มีแล้ว
+        · ที่ใส่แทน: round-trip `put`/`get` · object ยิงตรงโดยไม่มี credential ต้องไม่ได้ (🔒)
+          · object หายต้องคืน null ไม่ใช่ throw · re-encode ต้องปฏิเสธไบต์ที่ไม่ใช่รูป (🔒)
+- [x] ~~🔴 **production ยังต้องเปิดทางให้ browser ถึง garage**~~ — **ไม่ต้องแล้ว**
+      · เลือกทางที่ 3 ในสามทางที่เคยลิสต์ไว้ (API รับ multipart) ซึ่งตอนนั้นเขียนกำกับว่า
+        "ขัดกับเหตุผลที่เลือก presigned ตั้งแต่แรก (memory limit กลายเป็น file size limit จริง)"
+        · **ข้อค้านนั้นถูก แต่ชั่งน้ำหนักผิด** — มันจริงกับไฟล์แนบ Phase 3 ไม่ใช่กับ avatar 40KB
+          ที่คนอัปคนละครั้ง · และ `limits.fileSize` ทำให้ memory limit ไม่ใช่ file size limit จริงๆ อยู่ดี
+      · ที่ได้กลับมาคือ: Garage ไม่ต้อง publish port · Caddyfile ไม่ต้องมี route ไป store ·
+        ไม่มี origin สาธารณะที่สอง · และมี size limit ฝั่ง server เป็นครั้งแรก
 - [x] Deactivate / Reactivate (admin/owner กด) — assign งานใหม่ให้ไม่ได้ งานเก่ายังอยู่
       · `POST|DELETE /v1/org/members/:userId/deactivate` · ยังอยู่ในลิสต์สมาชิก (`status` บอกว่า deactivated)
       · assign งานใหม่ → 409 `USER_INACTIVE` · assignee picker ไม่เสนอชื่อ · **งานที่ถืออยู่ไม่ขยับ**
