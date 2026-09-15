@@ -1,7 +1,7 @@
 import type { ConfigService } from '@nestjs/config'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { Env } from '../../config/env'
+import type { Env } from '../../../config/env'
 import { EmailTransport } from './email.transport'
 
 const { send } = vi.hoisted(() => ({ send: vi.fn() }))

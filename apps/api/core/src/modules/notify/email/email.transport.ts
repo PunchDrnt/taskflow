@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { Resend } from 'resend'
 
-import type { Env } from '../../config/env'
+import type { Env } from '../../../config/env'
 
 export interface OutgoingEmail {
   to: string

@@ -15,7 +15,7 @@ import { requireOrgContext } from '#shared/org-scope/request-context'
 
 import { AuditService } from '../audit/audit.service'
 import { ACTIVE_USER_STATUS, UserService } from '../iam/user/user.service'
-import { MemberService } from '../organization/member.service'
+import { MemberService } from '../organization/member/member.service'
 import { ProjectMember } from './project-member.entity'
 import { ProjectService } from './project.service'
 

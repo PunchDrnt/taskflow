@@ -15,10 +15,10 @@ import { OrgScopedRepository } from '#shared/org-scope/org-scoped.repository'
 import { requireOrgContext } from '#shared/org-scope/request-context'
 import { between } from '#shared/sort-order'
 
-import { AuditService } from '../audit/audit.service'
-import { changesBetween } from '../audit/changes'
-import { TasksInStatusService } from '../task/tasks-in-status.service'
-import { ProjectService } from './project.service'
+import { AuditService } from '../../audit/audit.service'
+import { changesBetween } from '../../audit/changes'
+import { TasksInStatusService } from '../../task/tasks-in-status.service'
+import { ProjectService } from '../project.service'
 import { Status } from './status.entity'
 
 /** A status as the board and the settings screen need it. */

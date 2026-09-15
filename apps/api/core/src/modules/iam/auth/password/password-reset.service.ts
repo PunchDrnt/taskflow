@@ -12,7 +12,7 @@ import { OrgScopedRepository } from '#shared/org-scope/org-scoped.repository'
 import { SYSTEM_USER_ID } from '#shared/system-user'
 
 import type { Env } from '../../../../config/env'
-import { EmailService } from '../../../notify/email.service'
+import { EmailService } from '../../../notify/email/email.service'
 import { ACTIVE_USER_STATUS, UserService } from '../../user/user.service'
 import { AuthService } from '../auth.service'
 import { SessionService } from '../session/session.service'

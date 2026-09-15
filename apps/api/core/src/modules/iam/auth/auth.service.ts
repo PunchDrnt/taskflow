@@ -23,7 +23,7 @@ import {
   MembershipService,
   resolveActiveOrg,
   type Membership,
-} from '../../organization/membership.service'
+} from '../../organization/member/membership.service'
 import { ACTIVE_USER_STATUS, UserService } from '../user/user.service'
 import { LockoutService } from './lockout.service'
 import { PasswordService } from './password/password.service'

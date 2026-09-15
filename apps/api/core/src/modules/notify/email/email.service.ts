@@ -4,7 +4,7 @@ import type { EntityManager } from 'typeorm'
 import { requireOrgContext } from '#shared/org-scope/request-context'
 import { SYSTEM_USER_ID } from '#shared/system-user'
 
-import { Outbox } from './outbox.entity'
+import { Outbox } from '../outbox/outbox.entity'
 
 export interface Notification {
   recipientId: string

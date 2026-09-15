@@ -867,7 +867,7 @@ CREATE TABLE audit.logs_2026_08 PARTITION OF audit.logs
 
 #### Redis / Queue — ยังไม่มี และเงื่อนไขที่จะมี
 
-**ไม่ใช้กับ email / notification** — [`EmailService.enqueue(manager, …)`](../../apps/api/core/src/modules/notify/email.service.ts) รับ transaction ของ caller เข้าไป แถวใน `notify.outbox` จึง commit พร้อมกับสิ่งที่มันประกาศ · Redis กับ Postgres commit ร่วมกันไม่ได้ ย้ายไป `queue.add()` เมื่อไหร่ได้ **dual write** ทันที — rollback แล้วเมลออก หรือ commit แล้ว job หาย โดยไม่มี error ที่ไหนเลย
+**ไม่ใช้กับ email / notification** — [`EmailService.enqueue(manager, …)`](../../apps/api/core/src/modules/notify/email/email.service.ts) รับ transaction ของ caller เข้าไป แถวใน `notify.outbox` จึง commit พร้อมกับสิ่งที่มันประกาศ · Redis กับ Postgres commit ร่วมกันไม่ได้ ย้ายไป `queue.add()` เมื่อไหร่ได้ **dual write** ทันที — rollback แล้วเมลออก หรือ commit แล้ว job หาย โดยไม่มี error ที่ไหนเลย
 
 วิธีแก้มาตรฐานของ dual write คือเขียนลง DB ให้ commit ก่อนแล้วค่อย relay เข้า queue ซึ่งก็คือ outbox ที่มีอยู่แล้ว — queue จึง**เพิ่มชั้นให้ ไม่ได้แทนที่** วันที่เอามาจริง `OutboxWorker` เปลี่ยนจาก "ส่งเอง" เป็น "โยนเข้า queue" ส่วน `EmailService` ไม่ต้องแก้
 

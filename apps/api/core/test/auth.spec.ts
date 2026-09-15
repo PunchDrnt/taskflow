@@ -35,8 +35,8 @@ import { TotpService } from '../src/modules/iam/auth/two-factor/totp.service'
 import { TwoFactorService } from '../src/modules/iam/auth/two-factor/two-factor.service'
 import { User } from '../src/modules/iam/user/user.entity'
 import { UserService } from '../src/modules/iam/user/user.service'
-import { OrganizationMember } from '../src/modules/organization/member.entity'
-import { MembershipService } from '../src/modules/organization/membership.service'
+import { OrganizationMember } from '../src/modules/organization/member/member.entity'
+import { MembershipService } from '../src/modules/organization/member/membership.service'
 import { createMigratedTestDataSource, hasTestDatabase } from './database'
 
 const MAX_ATTEMPTS = 3

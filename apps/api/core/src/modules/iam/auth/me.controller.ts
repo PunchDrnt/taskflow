@@ -34,7 +34,7 @@ import { SkipOrgScope } from '#shared/http/route-metadata'
 import { ZodValidationPipe } from '#shared/http/zod-validation.pipe'
 import { requireRequestContext } from '#shared/org-scope/request-context'
 
-import { MembershipService } from '../../organization/membership.service'
+import { MembershipService } from '../../organization/member/membership.service'
 import { storageKey } from '../../storage/storage-key'
 import { StorageService } from '../../storage/storage.service'
 import { toStoredImage } from '../../storage/stored-image'

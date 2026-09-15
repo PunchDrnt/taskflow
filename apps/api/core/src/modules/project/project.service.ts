@@ -27,11 +27,11 @@ import { actorForProject, actorFromContext } from '../../permission/actor'
 import { PermissionService } from '../../permission/permission.service'
 import { AuditService } from '../audit/audit.service'
 import { changesBetween } from '../audit/changes'
-import type { Membership } from '../organization/membership.service'
-import { DEFAULT_STATUSES } from './default-statuses'
+import type { Membership } from '../organization/member/membership.service'
 import { ProjectMember } from './project-member.entity'
 import { Project } from './project.entity'
-import { Status } from './status.entity'
+import { DEFAULT_STATUSES } from './status/default-statuses'
+import { Status } from './status/status.entity'
 
 /** A project as a screen needs it. */
 export interface ProjectView {

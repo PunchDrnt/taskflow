@@ -2,8 +2,8 @@ import type { ConfigService } from '@nestjs/config'
 import type { DataSource } from 'typeorm'
 import { describe, expect, it, vi } from 'vitest'
 
-import type { Env } from '../../config/env'
-import type { EmailTransport } from './email.transport'
+import type { Env } from '../../../config/env'
+import type { EmailTransport } from '../email/email.transport'
 import { OutboxWorker } from './outbox.worker'
 
 describe('OutboxWorker and JOBS_ENABLED', () => {

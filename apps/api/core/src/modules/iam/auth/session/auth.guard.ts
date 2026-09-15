@@ -13,7 +13,7 @@ import { ApiException } from '#shared/http/api-exception'
 import { IS_PUBLIC, SKIP_ORG_SCOPE } from '#shared/http/route-metadata'
 import { openRequestContext } from '#shared/org-scope/request-context'
 
-import { resolveActiveOrg } from '../../../organization/membership.service'
+import { resolveActiveOrg } from '../../../organization/member/membership.service'
 import { AuthService } from '../auth.service'
 import {
   ACCESS_TOKEN_COOKIE,

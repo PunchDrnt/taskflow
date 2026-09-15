@@ -23,7 +23,7 @@ The URL the browser asks for is `/api/v1/...`; Caddy strips `/api` and
 | `users`                        | `modules/iam/user/user-avatar.controller.ts`              |
 | `org`                          | `modules/organization/organization.controller.ts`         |
 | `projects`                     | `modules/project/project.controller.ts`                   |
-| `projects/:projectId/statuses` | `modules/project/status.controller.ts`                    |
+| `projects/:projectId/statuses` | `modules/project/status/status.controller.ts`             |
 | `projects/:projectId/tasks`    | `modules/task/project-task.controller.ts`                 |
 | `tasks`                        | `modules/task/task.controller.ts`                         |
 | `health`                       | `health/health.controller.ts`                             |
@@ -68,6 +68,11 @@ migrated, and the feature is a later phase. The second kind is marked, so
 | `field/`        | tables only | Custom field definitions — Phase 4                                |
 | `view/`         | tables only | Saved views and their columns — Phase 4                           |
 
+A module splits into directories once its files stop fitting on a screen, and
+always by subject rather than by kind — a `services/` beside an `entities/`
+would file `status.entity.ts` and `status.service.ts` apart, which is the
+opposite of what somebody reading about statuses wants.
+
 Inside `iam/`:
 
 - `auth/` — signing in and out, and `/me`: the controller, `AuthService`,
@@ -80,10 +85,23 @@ Inside `iam/`:
 - `user/` — the account itself, and the avatar endpoint
 - `system/` — system-level RBAC tables. Ours, crossing organisations
 
-`auth/` is the one directory deep enough to need this, and the split is by
-subject rather than by kind: a `services/` beside an `entities/` would put
-`session.entity.ts` and `session.service.ts` in different places, which is the
-opposite of what somebody reading about sessions wants.
+Inside the rest:
+
+- `organization/member/` — the org's people. `MemberService` lists who is in
+  one organisation, `MembershipService` lists which organisations one person is
+  in: the same table read in opposite directions, which is why they are named
+  so alike and why they sit together
+- `organization/team/` — the team tables. Phase 2; nothing reads them yet
+- `project/status/` — the per-project statuses, their controller, and the set
+  a new project starts with
+- `notify/email/` — composing and sending: the service that queues, the
+  transport that talks to Resend, the templates
+- `notify/outbox/` — the `notify.outbox` row and the worker that drains it,
+  which runs on a schedule rather than in a request
+
+`task/` stays flat at ten files on purpose. Its three controllers answer three
+different URL shapes (`/tasks`, `/projects/:id/tasks`, `/me/tasks`) but they
+are one subject, and the only division available would be by kind.
 
 ## `shared/`
 

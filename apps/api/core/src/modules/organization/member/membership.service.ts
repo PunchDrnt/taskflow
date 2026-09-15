@@ -5,8 +5,8 @@ import type { Membership, OrgRole } from '@repo/shared'
 import { InjectOrgRepository } from '#shared/org-scope/org-repository.provider'
 import { OrgScopedRepository } from '#shared/org-scope/org-scoped.repository'
 
+import { Organization } from '../organization.entity'
 import { OrganizationMember } from './member.entity'
-import { Organization } from './organization.entity'
 
 // `Membership` is declared in @repo/shared, not here: the web client names
 // the same shape, and one contract with two declarations drifts the first
@@ -34,6 +34,12 @@ export interface ActiveOrg {
 
 /**
  * Which organisations a person may act for.
+ *
+ * Beside `MemberService`, and the two read `organization.members` in opposite
+ * directions: that one lists the people in one organisation, this one lists
+ * the organisations one person is in. Hence the near-identical names, which
+ * are worth tolerating only because the pair sits in one directory — each is
+ * the obvious name for its own question, and the other is right there.
  *
  * Lives here rather than in `iam/user/` — the plan's first home for it —
  * because `organization.members` and `organization.organizations` are this

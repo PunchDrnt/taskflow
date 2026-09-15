@@ -41,15 +41,15 @@ import { AuditService } from '../audit/audit.service'
 import { changesBetween } from '../audit/changes'
 import type { AuditLog } from '../audit/log.entity'
 import { ACTIVE_USER_STATUS, UserService } from '../iam/user/user.service'
-import { EmailService } from '../notify/email.service'
-import { MembershipService } from '../organization/membership.service'
+import { EmailService } from '../notify/email/email.service'
+import { MembershipService } from '../organization/member/membership.service'
 import { ProjectMemberService } from '../project/project-member.service'
 import { Project } from '../project/project.entity'
 import {
   ProjectService,
   type ProjectAcrossOrgs,
 } from '../project/project.service'
-import { StatusService } from '../project/status.service'
+import { StatusService } from '../project/status/status.service'
 import { Assignee } from './assignee.entity'
 import { Task } from './task.entity'
 
@@ -817,7 +817,7 @@ export class TaskService {
    * when it is sent: `OutboxWorker` renders it long after this request, with
    * no organisation context. Storing a template name and a payload rather
    * than a rendered subject and body is what lets wording be corrected
-   * afterwards — see `templates.ts`.
+   * afterwards — see `notify/email/templates.ts`.
    *
    * The link is by task id, not by key. Keys are allowed to repeat across
    * projects (docs/04-features/phase-1.md#task-key), so `WEB-12` in a URL

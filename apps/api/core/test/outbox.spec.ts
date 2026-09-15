@@ -12,13 +12,13 @@ import {
 import { runWithRequestContext } from '#shared/org-scope/request-context'
 import { SYSTEM_USER_ID } from '#shared/system-user'
 
-import { EmailService } from '../src/modules/notify/email.service'
-import type { EmailTransport } from '../src/modules/notify/email.transport'
+import { EmailService } from '../src/modules/notify/email/email.service'
+import type { EmailTransport } from '../src/modules/notify/email/email.transport'
 import {
   BACKOFF_BASE_SECONDS,
   MAX_ATTEMPTS,
   OutboxWorker,
-} from '../src/modules/notify/outbox.worker'
+} from '../src/modules/notify/outbox/outbox.worker'
 import { createMigratedTestDataSource, hasTestDatabase } from './database'
 
 /**

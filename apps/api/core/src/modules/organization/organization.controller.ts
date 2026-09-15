@@ -32,7 +32,7 @@ import { ZodValidationPipe } from '#shared/http/zod-validation.pipe'
 
 import { RequirePermission } from '../../permission/require-permission.decorator'
 import { UserService } from '../iam/user/user.service'
-import { MemberService, type OrgMember } from './member.service'
+import { MemberService, type OrgMember } from './member/member.service'
 import {
   OrganizationService,
   type OrganizationView,

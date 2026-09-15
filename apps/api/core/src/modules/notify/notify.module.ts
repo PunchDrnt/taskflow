@@ -1,8 +1,8 @@
 import { Global, Module } from '@nestjs/common'
 
-import { EmailService } from './email.service'
-import { EmailTransport } from './email.transport'
-import { OutboxWorker } from './outbox.worker'
+import { EmailService } from './email/email.service'
+import { EmailTransport } from './email/email.transport'
+import { OutboxWorker } from './outbox/outbox.worker'
 
 /**
  * Global because nearly every module ends up announcing something, and the

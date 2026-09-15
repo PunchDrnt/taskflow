@@ -11,9 +11,9 @@ import { ProjectMemberService } from './project-member.service'
 import { ProjectController } from './project.controller'
 import { Project } from './project.entity'
 import { ProjectService } from './project.service'
-import { StatusController } from './status.controller'
-import { Status } from './status.entity'
-import { StatusService } from './status.service'
+import { StatusController } from './status/status.controller'
+import { Status } from './status/status.entity'
+import { StatusService } from './status/status.service'
 
 /**
  * Projects, their members and their statuses.

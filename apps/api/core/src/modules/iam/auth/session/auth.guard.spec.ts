@@ -12,7 +12,7 @@ import { IS_PUBLIC, SKIP_ORG_SCOPE } from '#shared/http/route-metadata'
 import { openRequestContext } from '#shared/org-scope/request-context'
 
 import type { Env } from '../../../../config/env'
-import type { Membership } from '../../../organization/membership.service'
+import type { Membership } from '../../../organization/member/membership.service'
 import type { AuthenticatedUser, AuthService } from '../auth.service'
 import {
   ACCESS_TOKEN_COOKIE,

@@ -19,7 +19,7 @@ import {
 
 import { AuditService } from '../audit/audit.service'
 import { changesBetween } from '../audit/changes'
-import { OrganizationMember } from './member.entity'
+import { OrganizationMember } from './member/member.entity'
 import { Organization } from './organization.entity'
 
 /** The organisation as a screen needs it. */
