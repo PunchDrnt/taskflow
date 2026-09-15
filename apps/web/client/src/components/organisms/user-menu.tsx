@@ -54,8 +54,13 @@ export function UserMenu({ me }: { me: Me }) {
           <p className="text-text-secondary body-3 truncate">{me.email}</p>
         </div>
 
+        {/* "Settings", not "Profile & password": the screen behind it is
+            tabbed now, and naming a menu entry after the tabs it happens to
+            have is a name that has to change every time one is added. The
+            name and address directly above it are what say *whose* settings
+            these are — the organisation's live in the sidebar. */}
         <DropdownMenuItem render={<Link href="/settings/profile" />}>
-          Profile &amp; password
+          Settings
         </DropdownMenuItem>
 
         <DropdownMenuSeparator />
