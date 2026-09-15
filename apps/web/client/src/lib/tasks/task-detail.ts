@@ -57,6 +57,12 @@ export type TaskEditOutcome =
   { ok: true; task: TaskRow } | { ok: false; message: string }
 
 /**
+ * Nothing comes back from a delete, and nothing needs to: the API answers 204
+ * and the only thing the screen does with it is stop drawing the row.
+ */
+export type TaskDeleteOutcome = { ok: true } | { ok: false; message: string }
+
+/**
  * A task the detail drawer is open on, or was until a moment ago.
  *
  * Held by the list and handed to the drawer, rather than kept inside it,

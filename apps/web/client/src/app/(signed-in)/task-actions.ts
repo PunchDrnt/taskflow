@@ -8,6 +8,7 @@ import { fetchTaskDetail, fetchTasks, lookupsFor } from '@/lib/api/tasks'
 import type { MoreTasks } from '@/lib/tasks/more-tasks'
 import { parseTaskQuery, type TaskScope } from '@/lib/tasks/query'
 import type {
+  TaskDeleteOutcome,
   TaskDetailOutcome,
   TaskEditOutcome,
   TaskPatch,
@@ -148,6 +149,39 @@ export async function editTask(
 
     return { ok: true, task: data }
   } catch (error) {
+    return { ok: false, message: toApiError(error).message }
+  }
+}
+
+/**
+ * Throwing a task away, from the drawer's confirmation.
+ *
+ * Not `revalidatePath`, like the rest of this file: the list removes the row
+ * it was already holding, which costs nothing and keeps the scroll position
+ * and every page Load more has added. Re-rendering the server would also pull
+ * a fresh first page and quietly reshuffle what somebody is looking at.
+ *
+ * ⚠️ **The refusal is the API's own sentence, not a rewrite of it.** A member
+ * who may edit but not delete gets a 403, and the drawer only draws this
+ * button for a project admin — so a 403 arriving here means the caller's role
+ * changed under them, which is exactly the thing they need told rather than
+ * flattened into "could not delete".
+ */
+export async function deleteTask(taskId: string): Promise<TaskDeleteOutcome> {
+  if (!idSchema('Invalid task id').safeParse(taskId).success) {
+    return { ok: false, message: 'That task does not exist.' }
+  }
+
+  try {
+    const api = await apiForAction()
+    await api.delete(`/tasks/${taskId}`)
+
+    return { ok: true }
+  } catch (error) {
+    if (error instanceof ApiError && error.isNetworkFailure) {
+      return { ok: false, message: 'Could not reach the server. Try again.' }
+    }
+
     return { ok: false, message: toApiError(error).message }
   }
 }

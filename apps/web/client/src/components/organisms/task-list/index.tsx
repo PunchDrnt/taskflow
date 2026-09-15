@@ -314,6 +314,19 @@ export function TaskList({
     )
   }
 
+  /**
+   * A deleted task leaves the list and takes the drawer with it.
+   *
+   * The address is pushed without `task` rather than popped, for the reason
+   * `closeTask` gives — and it must be pushed at all: leaving `?task=<id>` in
+   * the bar would make a refresh ask for a task that is gone, and the back
+   * button re-open a drawer with nothing behind it.
+   */
+  function taskDeleted(taskId: string) {
+    setRows((held) => held.filter((task) => task.id !== taskId))
+    closeTask()
+  }
+
   const context: TaskCellContext = {
     scope,
     onTaskChanged: taskChanged,
@@ -354,7 +367,12 @@ export function TaskList({
    * mounted to slide in and out — see the note on `held` inside it.
    */
   const drawer = (
-    <TaskDrawer open={open} onClose={closeTask} onTaskChanged={taskChanged} />
+    <TaskDrawer
+      open={open}
+      onClose={closeTask}
+      onTaskChanged={taskChanged}
+      onTaskDeleted={taskDeleted}
+    />
   )
 
   if (rows.length === 0) {

@@ -23,6 +23,7 @@ import {
 import type { OpenTask, TaskDetail, TaskPatch } from '@/lib/tasks/task-detail'
 
 import { namesFrom, TaskActivity } from './activity'
+import { DeleteTask } from './delete-task'
 import {
   EditableDescription,
   EditableTitle,
@@ -59,6 +60,7 @@ export function TaskDrawer({
   open,
   onClose,
   onTaskChanged,
+  onTaskDeleted,
 }: {
   /**
    * The task to draw, or null for none.
@@ -72,6 +74,8 @@ export function TaskDrawer({
   onClose: () => void
   /** An edit made here is a row the list behind is also showing. */
   onTaskChanged: (task: TaskRow) => void
+  /** A delete made here is a row the list behind has to stop showing. */
+  onTaskDeleted: (taskId: string) => void
 }) {
   /**
    * The last task that was open, kept so there is something to draw while the
@@ -99,6 +103,7 @@ export function TaskDrawer({
           failure={showing.failure}
           onClose={onClose}
           onTaskChanged={onTaskChanged}
+          onTaskDeleted={onTaskDeleted}
         />
       )}
     </Sheet>
@@ -128,6 +133,7 @@ function TaskPanel({
   failure,
   onClose,
   onTaskChanged,
+  onTaskDeleted,
 }: {
   taskId: string
   detail: TaskDetail
@@ -137,6 +143,7 @@ function TaskPanel({
   failure: string | null
   onClose: () => void
   onTaskChanged: (task: TaskRow) => void
+  onTaskDeleted: (taskId: string) => void
 }) {
   const [expanded, setExpanded] = useState(false)
   // Shut to begin with, as in the design: the fields are what somebody opened
@@ -156,6 +163,16 @@ function TaskPanel({
   const names = namesFrom(activity, task.assignees)
   const overdue =
     task.completedAt === null && dueBucket(task.dueDate) === 'overdue'
+  /**
+   * Who gets the delete button, mirroring `ability.ts`: a project admin, or
+   * somebody seeing the project because they run the organisation — which is
+   * what a null role means on a project they can nonetheless open. A project
+   * member may create and edit and not delete.
+   *
+   * `project` is null when the caller has been removed from it since the row
+   * was drawn, which is not a case for offering to delete anything.
+   */
+  const mayDelete = project !== null && project.role !== 'member'
 
   function edit(patch: TaskPatch) {
     setEditFailure(null)
@@ -211,6 +228,14 @@ function TaskPanel({
           <span className="truncate">{project?.name ?? '—'}</span>
           <TaskKey>{task.key}</TaskKey>
         </p>
+
+        {mayDelete && (
+          <DeleteTask
+            taskId={task.id}
+            taskKey={task.key}
+            onDeleted={onTaskDeleted}
+          />
+        )}
 
         <Button
           variant={historyOpen ? 'secondary' : 'ghost'}
