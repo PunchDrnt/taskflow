@@ -12,6 +12,7 @@ import { SYSTEM_USER_ID } from '#shared/system-user'
 
 import { RetentionService } from '../src/maintenance/retention.service'
 import { Project } from '../src/modules/project/project.entity'
+import { StorageService } from '../src/modules/storage/storage.service'
 import { createMigratedTestDataSource, hasTestDatabase } from './database'
 
 /**
@@ -366,7 +367,11 @@ describe.skipIf(!hasTestDatabase)('cascade soft delete', () => {
           WHERE deleted_at IS NOT NULL`,
       )
 
-      const retention = new RetentionService(dataSource)
+      // Storage is never reached: `purgeSoftDeleted` deletes rows, and the
+      // only policy that owns an object is the user anonymisation.
+      const retention = new RetentionService(dataSource, {
+        remove: () => Promise.resolve(),
+      } as unknown as StorageService)
 
       await retention.purgeSoftDeleted()
 

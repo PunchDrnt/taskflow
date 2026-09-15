@@ -4,6 +4,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Logger,
   Patch,
   Post,
   Res,
@@ -35,7 +36,7 @@ import { ZodValidationPipe } from '#shared/http/zod-validation.pipe'
 import { requireRequestContext } from '#shared/org-scope/request-context'
 
 import { MembershipService } from '../../organization/member/membership.service'
-import { storageKey } from '../../storage/storage-key'
+import { isStorageKey, storageKey } from '../../storage/storage-key'
 import { StorageService } from '../../storage/storage.service'
 import { toStoredImage } from '../../storage/stored-image'
 import { UserService } from '../user/user.service'
@@ -63,6 +64,8 @@ export class MeController {
     private readonly cookies: AuthCookies,
     private readonly storage: StorageService,
   ) {}
+
+  private readonly logger = new Logger(MeController.name)
 
   /**
    * Everything the shell needs to draw itself: who you are, which
@@ -121,9 +124,60 @@ export class MeController {
   ): Promise<Me> {
     const { userId } = requireRequestContext()
 
+    // Read before the write, so the object a replacement leaves behind still
+    // has a name. The row is the only record of where the old picture is.
+    const previous = (await this.users.findById(userId))?.avatarUrl ?? null
+
     await this.users.updateProfile(userId, body)
 
+    await this.discardAvatar(previous, body.avatarUrl)
+
     return this.me()
+  }
+
+  /**
+   * The picture that has just been replaced, taken out of the bucket.
+   *
+   * Without this, changing a profile picture ten times left ten objects and
+   * nine of them unreachable — nothing points at them, nothing lists them, and
+   * they are paid for forever. The row is the only index of the bucket, so the
+   * moment it stops naming an object is the only moment that object can still
+   * be found.
+   *
+   * **After the update, not before, and never inside a transaction with it.**
+   * A delete that cannot be rolled back has no business running before the
+   * write that makes it correct: if the profile save fails, the old picture is
+   * still the picture. The cost of this order is the opposite failure — the
+   * row is saved and the delete does not happen — which leaves exactly the
+   * orphan this method exists to avoid, and that is the cheaper of the two.
+   *
+   * A failure is therefore logged rather than thrown. The caller asked to
+   * change their name and picture; both happened. Storage the API could not
+   * tidy is not their problem to be told about.
+   *
+   * ⚠️ **Still not swept: a picture uploaded and then abandoned** — the form
+   * closed without saving, so no row ever named the key and nothing here can
+   * know it exists. That one needs a listing over `storagePrefix({ user })`
+   * compared against the row, which `StorageService` has no `list` for yet.
+   */
+  private async discardAvatar(
+    previous: string | null,
+    next: string | null,
+  ): Promise<void> {
+    // Unchanged, never set, or somebody else's URL — which is not ours to
+    // delete and would not be a key to delete by anyway.
+    if (previous === null || previous === next || !isStorageKey(previous)) {
+      return
+    }
+
+    try {
+      await this.storage.remove(previous)
+    } catch (error) {
+      this.logger.warn(
+        { err: error, key: previous },
+        'Could not remove the replaced profile picture',
+      )
+    }
   }
 
   /**

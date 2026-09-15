@@ -72,6 +72,23 @@ export function storageKey({
 }
 
 /**
+ * Whether a stored value names an object of ours, or a picture somewhere else.
+ *
+ * `users.avatar_url` holds either: a key this module wrote, or an ordinary
+ * http(s) URL for a picture hosted elsewhere. Every caller has to tell them
+ * apart — serving one means reading the bucket and the other means redirecting
+ * — and the one that matters most is deletion, where mistaking an external URL
+ * for a key would send a `DeleteObject` for a path nobody owns.
+ *
+ * A scheme is the whole test. A key produced by `storageKey` starts `org/` or
+ * `user/` and `safeName` cannot introduce a colon, so the two shapes cannot be
+ * confused in either direction.
+ */
+export function isStorageKey(value: string): boolean {
+  return !/^https?:\/\//.test(value)
+}
+
+/**
  * The prefix holding everything one owner has, for the day something deletes
  * them. The trailing slash is not decoration: without it `org/<id>` also
  * matches `org/<id>-something`, and a listing meant to delete one customer's

@@ -213,6 +213,26 @@ unique เต็ม · `views.sort_order` / `is_default`
         ชื่อตรงกับ `discussion.attachments.entity_type` ที่ Phase 3 จะเขียนคู่กัน
       · **ของเก่าใน bucket ไม่ต้อง migrate** — key เป็นตำแหน่งทึบที่ row เก็บไว้ ไม่มีใคร parse
         `get(key)` ดึงของที่อยู่ตรงนั้น · เปลี่ยนแค่ทรงของอันที่เขียนใหม่
+- [x] **object ที่ไม่มีใครอ้างถึงแล้ว ถูกลบ** — เดิม `storage.remove()` เขียนไว้แต่ไม่มีใครเรียกในโค้ดแอปเลย
+      เปลี่ยนรูป 10 ครั้ง = 10 ก้อน อ้างถึงก้อนเดียว จ่ายค่าเก็บตลอดไป
+      · **row คือ index เดียวของ bucket** — ไม่มี listing ไม่มีตารางไฟล์ · วินาทีที่ row เลิกชี้ไปที่ object
+        คือวินาทีสุดท้ายที่หามันเจอ ทั้งสองจุดข้างล่างจึงอ่านค่าเก่า **ก่อน** เขียนทับ
+      · `PATCH /v1/me` ลบรูปเก่าหลังบันทึกสำเร็จ (`MeController.discardAvatar`)
+        · **หลัง ไม่ใช่ก่อน และไม่อยู่ใน transaction เดียวกัน** — ลบแล้วย้อนไม่ได้ ถ้า save พัง รูปเก่าคือรูปที่ถูกต้องอยู่
+        · ราคาของลำดับนี้คือความพลาดฝั่งตรงข้าม (save ผ่าน ลบไม่ผ่าน) = orphan หนึ่งก้อน ซึ่งถูกกว่า
+        · ลบพลาด → log ไม่ throw · คนขอเปลี่ยนชื่อกับรูป ทั้งสองอย่างสำเร็จแล้ว
+      · retention anonymise ลบไฟล์ด้วย — เคลียร์ `avatar_url` แล้วทิ้ง object ไว้ไม่ใช่ anonymise
+        มันคือเก็บรูปถ่ายไว้หลังเผาชื่อทิ้ง
+        · ⚠️ **อ่าน key จาก CTE ไม่ใช่ `RETURNING`** — `RETURNING` ของ UPDATE คืนแถว**ใหม่**
+          ซึ่งคือแถวที่เพิ่ง `avatar_url = NULL` ไป → ได้ null ทุกคน เงียบๆ · `WITH victims AS (… FOR UPDATE)`
+          ถ่ายค่าเก่าไว้ก่อน
+        · ⚠️ TypeORM คืน `[rows, affectedCount]` สำหรับ UPDATE เสมอ มี RETURNING หรือไม่ก็ตาม
+          cast เป็น row[] ตรงๆ ผ่าน type-check แล้วไปนับ tuple ได้ 2 ทุกครั้ง
+      · `isStorageKey()` อยู่ที่ `storage-key.ts` ที่เดียว — `^https?://` เคยเขียนซ้ำใน `user-avatar.controller.ts`
+        · เดาผิดทางไหนก็ตามในจุดลบ = ส่ง DeleteObject ด้วย path ที่ไม่ใช่ของเรา
+      · 🔴 **ยังเหลือ: รูปที่อัปแล้วทิ้ง** — ปิดฟอร์มโดยไม่ save → ไม่มี row ไหนเคยรู้จัก key นั้น
+        ไม่มีทางรู้จากฝั่ง row · ต้อง list `storagePrefix({user})` เทียบกับ row ซึ่ง `StorageService`
+        ยังไม่มี `list` · เป็นงานของ sweep ไม่ใช่ของ request
       · **bucket เดียวต่อ environment ไม่ใช่ต่อ org** — bucket ต่อ org = การสร้าง org มีขั้นตอน
         provisioning ที่ล้มกลางทางได้ · lifecycle rule คูณจำนวนลูกค้า · งานที่ข้าม org กลายเป็น N call
         · จะแยก bucket เมื่อมีของที่ public จริงๆ (เช่นโลโก้ org บนหน้า login) — ตอนนั้นค่อยสร้าง

@@ -10,6 +10,7 @@ import {
   resolvePurgeOrder,
 } from '../src/maintenance/retention.policy'
 import { RetentionService } from '../src/maintenance/retention.service'
+import { StorageService } from '../src/modules/storage/storage.service'
 import { createMigratedTestDataSource, hasTestDatabase } from './database'
 
 /**
@@ -28,13 +29,30 @@ describe.skipIf(!hasTestDatabase)('retention', () => {
   let retention: RetentionService
   let auditPartitions: AuditPartitionService
 
+  /**
+   * Object storage, recorded rather than reached.
+   *
+   * The interesting assertion is *which keys the sweep asked for*, and a real
+   * bucket would make that a round trip per user and would skip the whole
+   * suite wherever S3 is not configured — which is exactly where this rule
+   * would then rot.
+   */
+  const removed: string[] = []
+  const storage = {
+    remove: (key: string) => {
+      removed.push(key)
+
+      return Promise.resolve()
+    },
+  } as unknown as StorageService
+
   /** Rows are dated by hand: the suite cannot wait ninety days. */
   const daysAgo = (days: number): string =>
     `now() - make_interval(days => ${days})`
 
   beforeAll(async () => {
     dataSource = await createMigratedTestDataSource()
-    retention = new RetentionService(dataSource)
+    retention = new RetentionService(dataSource, storage)
     auditPartitions = new AuditPartitionService(dataSource)
   }, 60_000)
 
@@ -249,6 +267,7 @@ describe.skipIf(!hasTestDatabase)('retention', () => {
       email: string,
       status: string,
       requestedDaysAgo: number,
+      avatarUrl: string | null = null,
     ): Promise<string> => {
       const requestedAt =
         status === 'pending_deletion' ? daysAgo(requestedDaysAgo) : 'NULL'
@@ -256,10 +275,10 @@ describe.skipIf(!hasTestDatabase)('retention', () => {
       const [user] = (await dataSource.query(
         `INSERT INTO iam.users
            (email, username, name, nickname, status, deletion_requested_at,
-            created_by, updated_by)
-         VALUES ($1, $2, 'Somchai', 'Som', $3, ${requestedAt}, $4, $4)
+            avatar_url, created_by, updated_by)
+         VALUES ($1, $2, 'Somchai', 'Som', $3, ${requestedAt}, $5, $4, $4)
          RETURNING id`,
-        [email, usernameFor(email), status, SYSTEM_USER_ID],
+        [email, usernameFor(email), status, SYSTEM_USER_ID, avatarUrl],
       )) as { id: string }[]
       return user.id
     }
@@ -315,6 +334,37 @@ describe.skipIf(!hasTestDatabase)('retention', () => {
       // No request context out here, so the job names its actor itself.
       expect(user.deleted_by).toBe(SYSTEM_USER_ID)
       expect(user.updated_by).toBe(SYSTEM_USER_ID)
+    })
+
+    it('🔒 takes the profile picture with the rest of them', async () => {
+      // Clearing avatar_url and leaving the object is not anonymisation: the
+      // row is the only thing that knew where the picture was, so the moment
+      // it stops naming it is the last moment anything can find it.
+      removed.length = 0
+
+      const key = 'user/some-id/avatar/abc-face.webp'
+      await seedUser('face@example.com', 'pending_deletion', 45, key)
+
+      await retention.anonymisePendingDeletionUsers()
+
+      expect(removed).toContain(key)
+    })
+
+    it('leaves a picture hosted somewhere else alone', async () => {
+      // An http(s) value is a URL, not a key. Sending it to DeleteObject would
+      // ask the bucket to remove a path nobody owns.
+      removed.length = 0
+
+      await seedUser(
+        'linked@example.com',
+        'pending_deletion',
+        45,
+        'https://example.com/me.png',
+      )
+
+      await retention.anonymisePendingDeletionUsers()
+
+      expect(removed).toEqual([])
     })
 
     it('frees the email address for reuse', async () => {

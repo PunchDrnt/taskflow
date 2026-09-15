@@ -6,6 +6,8 @@ import { LOCK_KEYS, withAdvisoryLock } from '#shared/jobs/advisory-lock'
 import { alertsFor } from '#shared/jobs/alert'
 import { SYSTEM_USER_ID } from '#shared/system-user'
 
+import { isStorageKey } from '../modules/storage/storage-key'
+import { StorageService } from '../modules/storage/storage.service'
 import {
   PURGE_BATCH_SIZE,
   resolvePurgeOrder,
@@ -30,7 +32,12 @@ const alerts = alertsFor('maintenance')
 export class RetentionService {
   private readonly logger = new Logger(RetentionService.name)
 
-  constructor(@InjectDataSource() private readonly dataSource: DataSource) {}
+  constructor(
+    @InjectDataSource() private readonly dataSource: DataSource,
+    // `StorageModule` is global: a row deleted here can own an object, and
+    // nothing else runs late enough to notice it stopped being referenced.
+    private readonly storage: StorageService,
+  ) {}
 
   /**
    * Runs every policy, at most once across the cluster. One failing step does
@@ -135,8 +142,21 @@ export class RetentionService {
    */
   async anonymisePendingDeletionUsers(): Promise<number> {
     const result = (await this.dataSource.query(
-      `UPDATE iam.users
-          SET email         = 'deleted-' || id || '@deleted.invalid',
+      // ⚠️ The picture's key is read in a CTE, not by RETURNING. `RETURNING`
+      // on an UPDATE hands back the **new** row, and the new row is the one
+      // whose `avatar_url` this statement has just set to NULL — so asking it
+      // for the key returns nothing, silently, for every user. `victims`
+      // snapshots the old values before the write lands on them.
+      `WITH victims AS (
+         SELECT id, avatar_url
+           FROM iam.users
+          WHERE status = 'pending_deletion'
+            AND deletion_requested_at < now() - make_interval(days => $2)
+            AND NOT is_system
+            FOR UPDATE
+       )
+       UPDATE iam.users AS u
+          SET email         = 'deleted-' || u.id || '@deleted.invalid',
               name          = 'Deleted user',
               nickname      = 'deleted',
               avatar_url    = NULL,
@@ -149,13 +169,24 @@ export class RetentionService {
               deleted_by    = $1,
               updated_at    = now(),
               updated_by    = $1
-        WHERE status = 'pending_deletion'
-          AND deletion_requested_at < now() - make_interval(days => $2)
-          AND NOT is_system`,
+         FROM victims AS v
+        WHERE u.id = v.id
+      RETURNING v.avatar_url AS "avatarUrl"`,
       [SYSTEM_USER_ID, RETENTION_DAYS.pendingDeletionUser],
-    )) as [unknown[], number]
+      // ⚠️ An UPDATE comes back as `[rows, affectedCount]` whether or not it
+      // has a RETURNING clause — the rows half is simply empty without one. A
+      // cast straight to the row type therefore type-checks and then counts
+      // the tuple, which is 2 for every sweep that anonymised anybody at all.
+    )) as [{ avatarUrl: string | null }[], number]
 
-    const anonymised = result[1]
+    const [rows, anonymised] = result
+
+    // `RETURNING` rather than the count alone: the picture is the one piece of
+    // this person that is not in the database, and this statement is the last
+    // moment anything knows where it was. Clearing `avatar_url` and leaving
+    // the object is not anonymisation — it is keeping the photograph after
+    // burning the name.
+    await this.discardAvatars(rows)
     if (anonymised > 0) {
       this.logger.log(
         { anonymised },
@@ -164,6 +195,31 @@ export class RetentionService {
     }
 
     return anonymised
+  }
+
+  /**
+   * The objects those rows used to point at.
+   *
+   * One at a time and never fatally: a bucket that is down must not stop a
+   * sweep whose database half has already committed, and each failure is
+   * logged with its key so it can be removed by hand. External http(s) values
+   * are somebody else's picture and are skipped.
+   */
+  private async discardAvatars(
+    rows: { avatarUrl: string | null }[],
+  ): Promise<void> {
+    for (const { avatarUrl } of rows) {
+      if (avatarUrl === null || !isStorageKey(avatarUrl)) continue
+
+      try {
+        await this.storage.remove(avatarUrl)
+      } catch (error) {
+        this.logger.warn(
+          { err: error, key: avatarUrl },
+          'Could not remove an anonymised user profile picture',
+        )
+      }
+    }
   }
 
   /**

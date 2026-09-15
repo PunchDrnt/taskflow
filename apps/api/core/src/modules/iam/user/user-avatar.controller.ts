@@ -7,6 +7,7 @@ import { memberUserIdSchema } from '@repo/shared'
 import { ApiException } from '#shared/http/api-exception'
 import { ZodValidationPipe } from '#shared/http/zod-validation.pipe'
 
+import { isStorageKey } from '../../storage/storage-key'
 import { StorageService } from '../../storage/storage.service'
 import { UserService } from './user.service'
 
@@ -62,7 +63,7 @@ export class UserAvatarController {
 
     if (!user?.avatarUrl) throw ApiException.notFound('No profile picture')
 
-    if (/^https?:\/\//.test(user.avatarUrl)) {
+    if (!isStorageKey(user.avatarUrl)) {
       // 302, not 301: somebody else's server, and what it holds is not ours to
       // declare permanent.
       response.redirect(302, user.avatarUrl)
