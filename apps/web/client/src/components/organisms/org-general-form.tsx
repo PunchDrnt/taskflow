@@ -17,12 +17,11 @@ import {
   renameOrganization,
   type OrgField,
 } from '@/app/(signed-in)/(org)/settings/organization/actions'
-import { APP_TIME_ZONE } from '@/lib/format/due-date'
 import { blankForm } from '@/lib/forms/form-state'
 
 /**
- * What the organisation is called, and the two facts about it that are not
- * settings yet.
+ * What the organisation is called, and the one fact about it that is not a
+ * setting yet.
  *
  * 🔒 **Owner only.** `ability.ts` gives an admin `manage all` and then takes
  * back exactly two things, and `update Organization` is one of them — so an
@@ -30,16 +29,20 @@ import { blankForm } from '@/lib/forms/form-state'
  * refused. The design's own permission table disagrees and puts a tick under
  * Admin here; the code is what ships, and the Roles tab states the code.
  *
- * The slug and the time zone are shown and not offered, for the reason
- * `ProjectGeneralForm` shows the key prefix as text: a control nobody may use
- * invites a click and then refuses it. The slug has no route reading it today,
- * so changing it would alter a string nobody sees while creating a link to
- * break later; the zone is pinned company-wide and is the same fact
- * `formatDay` renders every date through.
+ * The slug is shown and not offered, for the reason `ProjectGeneralForm`
+ * shows the key prefix as text: a control nobody may use invites a click and
+ * then refuses it. No route reads it today, so changing it would alter a
+ * string nobody sees while creating a link to break later.
+ *
+ * The design's time zone row is gone. It was true — `APP_TIME_ZONE` pins every
+ * date this app renders to `Asia/Bangkok`, viewer's clock ignored — but a row
+ * stating a constant is a row that reads as a setting and answers a question
+ * nobody in one country asks. The pinning is explained where it is decided, in
+ * `lib/format/due-date.ts`; this screen is for things somebody can change.
  *
  * The design's logo upload, week-start and per-organisation project defaults
- * are absent: nothing stores any of them. A switch that forgets is worse than
- * a setting that is not offered yet.
+ * are absent too: nothing stores any of them. A switch that forgets is worse
+ * than a setting that is not offered yet.
  */
 export function OrgGeneralForm({
   organization,
@@ -114,18 +117,6 @@ export function OrgGeneralForm({
               </FieldDescription>
             </Field>
           </div>
-
-          <Field>
-            <FieldLabel>Time zone</FieldLabel>
-            <p className="text-text-primary text-body-lg md:text-body-md flex h-8 items-center">
-              {APP_TIME_ZONE}
-            </p>
-            <FieldDescription>
-              Every due date and every timestamp is read in this zone, for
-              everybody. Per-person zones need a column on the account that does
-              not exist yet.
-            </FieldDescription>
-          </Field>
         </FieldGroup>
       </div>
 
